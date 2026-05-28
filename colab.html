@@ -262,6 +262,7 @@ function colorFromId(id){
 function createSync(){
   const handlers = {};
   let bc = null, fb = null;
+  let pendingMsgs = []; // buffer pra mensagens antes do Firebase carregar
 
   try { bc = new BroadcastChannel(SYNC_CHANNEL); } catch(_){}
 
@@ -272,7 +273,6 @@ function createSync(){
     };
   }
 
-  // Firebase (opcional) — carrega só se config válida
   if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
     loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js').then(() =>
       loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js')
@@ -280,14 +280,17 @@ function createSync(){
       try {
         firebase.initializeApp(FIREBASE_CONFIG);
         fb = firebase.database().ref('vammo/events');
-        // Escuta novos eventos
-        const startTime = Date.now() - 30000;
+        const startTime = Date.now() - 5 * 60 * 1000;
         fb.orderByKey().limitToLast(50).on('child_added', (snap) => {
           const m = snap.val();
           if(!m || m._from === me?.id) return;
           if(m.ts && m.ts < startTime) return;
           if(m.type && handlers[m.type]) handlers[m.type].forEach(fn => fn(m.data, m));
         });
+        // FLUSH pendentes
+        console.log('[sync] Firebase pronto, flushando', pendingMsgs.length, 'msgs');
+        for(const msg of pendingMsgs){ fb.push(msg).catch(e => console.warn('flush fail:', e)); }
+        pendingMsgs = [];
         document.getElementById('syncdot').classList.add('ok');
       } catch(err){ console.warn('Firebase init failed:', err); }
     }).catch(err => console.warn('Firebase load failed:', err));
@@ -298,7 +301,11 @@ function createSync(){
     send(type, data){
       const msg = { type, data, ts: Date.now(), _from: me?.id || 'anon' };
       if(bc) bc.postMessage(msg);
-      if(fb) fb.push(msg).catch(e => console.warn('fb push fail', e));
+      if(fb){
+        fb.push(msg).catch(e => console.warn('fb push fail:', e));
+      } else if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
+        pendingMsgs.push(msg);
+      }
     }
   };
 }

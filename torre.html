@@ -699,6 +699,7 @@ const STORE = (() => {
 function createSync(){
   const handlers = {};
   let bc = null, fb = null;
+  let pendingMsgs = []; // buffer: mensagens enviadas ANTES do Firebase carregar
 
   try { bc = new BroadcastChannel(SYNC_CHANNEL); } catch(_){}
   if(bc){
@@ -716,13 +717,19 @@ function createSync(){
       try {
         firebase.initializeApp({ apiKey: cfg.fbKey, databaseURL: cfg.fbUrl });
         fb = firebase.database().ref('vammo/events');
-        const startTime = Date.now() - 30000; // só eventos dos últimos 30s ou novos
+        const startTime = Date.now() - 5 * 60 * 1000; // janela de 5min
         fb.orderByKey().limitToLast(50).on('child_added', (snap) => {
           const m = snap.val();
           if(!m || m._from === 'torre') return;
-          if(m.ts && m.ts < startTime) return; // ignora histórico antigo
+          if(m.ts && m.ts < startTime) return;
           if(m.type && handlers[m.type]) handlers[m.type].forEach(fn => fn(m.data, m));
         });
+        // FLUSH: envia tudo que ficou pendente (motorista:login, primeiras atribuições, etc)
+        console.log('[sync] Firebase pronto, flushando', pendingMsgs.length, 'msgs pendentes');
+        for(const msg of pendingMsgs){
+          fb.push(msg).catch(e => console.warn('flush fail:', e));
+        }
+        pendingMsgs = [];
         setSyncIndicator('ok', 'firebase + local');
       } catch(err){ console.warn('FB err', err); setSyncIndicator('err', 'erro firebase'); }
     });
@@ -733,7 +740,12 @@ function createSync(){
     send(t, d){
       const msg = { type:t, data:d, ts:Date.now(), _from:'torre' };
       if(bc) bc.postMessage(msg);
-      if(fb) fb.push(msg).catch(e => console.warn(e));
+      if(fb){
+        fb.push(msg).catch(e => console.warn('fb push fail:', e));
+      } else if(cfg.fbUrl && cfg.fbKey){
+        // Firebase ainda carregando — segura pro flush
+        pendingMsgs.push(msg);
+      }
     }
   };
 }

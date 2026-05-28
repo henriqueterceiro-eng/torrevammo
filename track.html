@@ -416,7 +416,7 @@ if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
     try {
       firebase.initializeApp(FIREBASE_CONFIG);
       fb = firebase.database().ref('vammo/events');
-      const startTime = Date.now() - 30000;
+      const startTime = Date.now() - 5 * 60 * 1000;
       fb.orderByKey().limitToLast(100).on('child_added', (snap) => {
         const m = snap.val();
         if(!m) return;
