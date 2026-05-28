@@ -658,10 +658,18 @@ const STORE = (() => {
     try {
       fb = firebase.database().ref('vammo');
       initialized = true;
-      fb.child('chamados').on('child_added', s => { const v = s.val(); if(v && handlers.onChamadoAdded) handlers.onChamadoAdded(v); });
-      fb.child('chamados').on('child_changed', s => { const v = s.val(); if(v && handlers.onChamadoChanged) handlers.onChamadoChanged(v); });
-      fb.child('chamados').on('child_removed', s => { if(handlers.onChamadoRemoved) handlers.onChamadoRemoved(s.key); });
-      fb.child('queues').on('value', s => { if(handlers.onQueuesChanged) handlers.onQueuesChanged(s.val() || {}); });
+      // 'value' é mais robusto que child_* contra background/reconexão
+      // Snapshot completo a cada mudança — o consumer faz o diff
+      fb.child('chamados').on('value', s => {
+        const data = s.val() || {};
+        console.log('[STORE] chamados sync', Object.keys(data).length, 'no banco');
+        if(handlers.onChamadosSnapshot) handlers.onChamadosSnapshot(data);
+      });
+      fb.child('queues').on('value', s => {
+        const data = s.val() || {};
+        console.log('[STORE] queues sync', Object.keys(data).length, 'motoristas');
+        if(handlers.onQueuesChanged) handlers.onQueuesChanged(data);
+      });
       return true;
     } catch(e){ console.warn('STORE init err:', e); return false; }
   }
@@ -2195,51 +2203,46 @@ function setupSyncListeners(){
 // ============== STORE LISTENERS (multi-gestor) ==============
 function setupStoreListeners(){
   STORE.setHandlers({
-    onChamadoAdded: (ch) => {
-      // Recebido do Firebase — outro gestor criou ou estamos no boot
-      if(!chamados.find(x => x.id === ch.id)){
-        chamados.unshift(ch);
-        // Atualiza cache local
-        const list = loadDemoChamados();
-        if(!list.find(x => x.id === ch.id)){
-          list.unshift(ch);
-          saveDemoChamados(list);
+    onChamadosSnapshot: (data) => {
+      // data = { id1: chamado1, id2: chamado2, ... }
+      const ids = Object.keys(data);
+      const novosArr = Object.values(data);
+      // Reconstrói chamados mantendo ordem por ts desc
+      const byTs = novosArr.slice().sort((a,b) => (b.ts||0) - (a.ts||0));
+      // Detecta novos pra mostrar toast (não inunda no primeiro carregamento)
+      if(window._chamadosSeen){
+        for(const ch of byTs){
+          if(!window._chamadosSeen.has(ch.id)){
+            // Chamado novo vindo de outro gestor — quando não estamos no primeiro load
+            if(window._initialSyncDone){
+              showToast(`📥 Novo chamado: ${ch.cliente || '?'}`);
+            }
+          }
         }
-        renderAll();
       }
-    },
-    onChamadoChanged: (ch) => {
-      // Outro gestor mudou algo (status, atribuição, arrived, etc)
-      const idx = chamados.findIndex(x => x.id === ch.id);
-      if(idx >= 0){
-        chamados[idx] = { ...chamados[idx], ...ch };
-      } else {
-        chamados.unshift(ch);
+      window._chamadosSeen = new Set(ids);
+      window._initialSyncDone = true;
+      chamados = byTs;
+      // Sync caches locais
+      saveDemoChamados(byTs);
+      const sm = {}; const a = {};
+      for(const ch of byTs){
+        if(ch.status) sm[ch.id] = ch.status;
+        if(ch.motoristaId) a[ch.id] = ch.motoristaId;
       }
-      // Sync caches locais (status, asgn)
-      const sm = loadStatusMap(); sm[ch.id] = ch.status; saveStatusMap(sm);
-      const a = loadAsgn();
-      if(ch.motoristaId) a[ch.id] = ch.motoristaId; else delete a[ch.id];
+      saveStatusMap(sm);
       saveAsgn(a);
-      // Atualiza cache de chamado
-      const list = loadDemoChamados();
-      const li = list.findIndex(x => x.id === ch.id);
-      if(li >= 0){ list[li] = ch; saveDemoChamados(list); }
+      // Limpa selId se chamado sumiu
+      if(selId && !data[selId]) selId = null;
+      // Remove markers órfãos
+      for(const mid in chamadoMarkers){
+        if(!data[mid]){ map.removeLayer(chamadoMarkers[mid]); delete chamadoMarkers[mid]; }
+      }
       recountMotoristas();
-      renderAll();
-    },
-    onChamadoRemoved: (id) => {
-      chamados = chamados.filter(c => c.id !== id);
-      saveDemoChamados(loadDemoChamados().filter(c => c.id !== id));
-      const sm = loadStatusMap(); delete sm[id]; saveStatusMap(sm);
-      const a = loadAsgn(); delete a[id]; saveAsgn(a);
-      if(selId === id) selId = null;
-      // Remove marker e rota
-      if(chamadoMarkers[id]){ map.removeLayer(chamadoMarkers[id]); delete chamadoMarkers[id]; }
+      updateAllRoutes();
       renderAll();
     },
     onQueuesChanged: (newQueues) => {
-      // Outro gestor reorganizou as filas
       saveQueues(newQueues || {});
       recountMotoristas();
       updateAllRoutes();
@@ -2247,6 +2250,15 @@ function setupStoreListeners(){
     }
   });
 }
+
+// Quando o tab volta do background (mobile pausa JS), força ressync
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden && STORE.ready()){
+    console.log('[STORE] tab visible — forçando ressync');
+    try { firebase.database().ref('vammo/chamados').once('value'); } catch(_){}
+    try { firebase.database().ref('vammo/queues').once('value'); } catch(_){}
+  }
+});
 
 // ============== TTL CHECK ==============
 function checkMotoristasTTL(){

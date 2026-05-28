@@ -319,70 +319,91 @@ function createSync(){
 function setupChamadosListener(){
   if(typeof firebase === 'undefined' || !firebase.apps.length) return;
   const ref = firebase.database().ref('vammo/chamados');
-
-  ref.on('child_added', s => onChamadoState(s.key, s.val(), 'added'));
-  ref.on('child_changed', s => onChamadoState(s.key, s.val(), 'changed'));
-  ref.on('child_removed', s => {
-    const idx = fila.findIndex(c => c.id === s.key);
-    if(idx >= 0){
-      const wasActive = idx === 0;
-      fila.splice(idx, 1);
-      if(fila.length === 0) setStatus('online');
-      showToast(wasActive ? 'Chamado removido pela torre' : 'Chamado removido da fila');
-      afterFilaChange();
-    }
+  // Usa 'value' (snapshot completo) pra ser robusto contra background/reconexão
+  ref.on('value', snap => {
+    const data = snap.val() || {};
+    console.log('[colab] vammo/chamados sync:', Object.keys(data).length, 'chamados');
+    syncFilaFromSnapshot(data);
   });
 }
 
-function onChamadoState(id, ch, kind){
-  if(!ch || !me) return;
-  const isMine = ch.motoristaId === me.id;
-  const idxInFila = fila.findIndex(c => c.id === id);
+function syncFilaFromSnapshot(data){
+  if(!me) return;
+  // Chamados que SÃO meus e ainda abertos
+  const meusAbertos = Object.entries(data)
+    .filter(([id, ch]) => ch && ch.motoristaId === me.id && ch.status !== 'concluido' && ch.status !== 'cancelado')
+    .map(([id, ch]) => ({ id, ...ch }));
 
-  if(isMine && idxInFila < 0){
-    // Chamado novo pra mim — adiciona na fila
-    if(ch.status === 'concluido' || ch.status === 'cancelado') return;
-    const item = {
-      id: id,
-      cliente: ch.cliente,
-      motivo: ch.motivo,
-      endereco: ch.endereco,
-      placa: ch.placa,
-      comentario: ch.comentario,
-      icon: ch.icon || iconFromMotivo(ch.motivo),
-      lat: ch.lat,
-      lng: ch.lng,
-      status: ch.status || 'novo',
-      arrived: ch.arrived || false,
-      assignedAt: ch.assignedAt || Date.now()
-    };
-    fila.push(item);
-    vibrate([100, 50, 100, 50, 200]);
-    playBeep();
-    showToast(fila.length === 1 ? `🔔 Novo chamado: ${ch.cliente || ''}` : `📍 +1 na fila (${fila.length}): ${ch.cliente || ''}`);
-    afterFilaChange();
-  } else if(!isMine && idxInFila >= 0){
-    // Foi tirado de mim
-    const wasActive = idxInFila === 0;
-    fila.splice(idxInFila, 1);
-    if(fila.length === 0) setStatus('online');
-    showToast(wasActive ? 'Chamado removido pela torre' : 'Chamado tirado da fila');
-    afterFilaChange();
-  } else if(isMine && idxInFila >= 0){
-    // Já tava — atualiza dados (status, arrived, etc)
-    const local = fila[idxInFila];
-    if(ch.status && ch.status !== local.status) local.status = ch.status;
-    if(ch.arrived && !local.arrived){
-      local.arrived = true;
-      local.arrivedAt = ch.arrivedAt || Date.now();
+  // Detecta novos (que não estavam na fila)
+  const fila_ids = new Set(fila.map(c => c.id));
+  const novos = meusAbertos.filter(ch => !fila_ids.has(ch.id));
+  // Detecta removidos (que estavam mas não são mais meus / foram fechados)
+  const novos_ids = new Set(meusAbertos.map(c => c.id));
+  const removidos = fila.filter(c => !novos_ids.has(c.id));
+
+  if(novos.length > 0 || removidos.length > 0){
+    // Reconstrói fila: existentes (ordem mantida) + novos (ordem do Firebase)
+    const novaFila = [];
+    // Mantém ordem dos existentes
+    for(const c of fila){
+      if(novos_ids.has(c.id)){
+        const fromFb = meusAbertos.find(x => x.id === c.id);
+        novaFila.push({
+          ...c,
+          ...fromFb,
+          icon: c.icon || iconFromMotivo(fromFb.motivo)
+        });
+      }
     }
-    if(ch.status === 'concluido' || ch.status === 'cancelado'){
-      fila.splice(idxInFila, 1);
+    // Adiciona novos no final
+    for(const ch of novos){
+      novaFila.push({
+        ...ch,
+        icon: ch.icon || iconFromMotivo(ch.motivo),
+        status: ch.status || 'novo',
+        arrived: ch.arrived || false,
+        assignedAt: ch.assignedAt || Date.now()
+      });
+    }
+    const wasEmpty = fila.length === 0;
+    fila = novaFila;
+
+    // Notificações
+    if(novos.length > 0){
+      vibrate([100, 50, 100, 50, 200]);
+      playBeep();
+      if(novos.length === 1){
+        const ch = novos[0];
+        showToast(wasEmpty ? `🔔 Novo chamado: ${ch.cliente || ''}` : `📍 +1 na fila: ${ch.cliente || ''}`);
+      } else {
+        showToast(`🔔 ${novos.length} novos chamados atribuídos`);
+      }
+    } else if(removidos.length > 0){
+      showToast(`Chamado(s) removido${removidos.length>1?'s':''} pela torre`);
       if(fila.length === 0) setStatus('online');
     }
+
     afterFilaChange();
+  } else {
+    // Sem mudança de quantidade — pode ter mudado status/arrived
+    let anyChange = false;
+    for(const c of fila){
+      const fb = data[c.id];
+      if(!fb) continue;
+      if(fb.status && fb.status !== c.status){ c.status = fb.status; anyChange = true; }
+      if(fb.arrived && !c.arrived){ c.arrived = true; c.arrivedAt = fb.arrivedAt || Date.now(); anyChange = true; }
+    }
+    if(anyChange) afterFilaChange();
   }
 }
+
+// Re-sync quando tab volta do background
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden && typeof firebase !== 'undefined' && firebase.apps?.length){
+    console.log('[colab] tab visible — ressync chamados');
+    try { firebase.database().ref('vammo/chamados').once('value'); } catch(_){}
+  }
+});
 
 function iconFromMotivo(motivo){
   if(!motivo) return '🔧';
