@@ -416,8 +416,12 @@ if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
     try {
       firebase.initializeApp(FIREBASE_CONFIG);
       fb = firebase.database().ref('vammo/events');
-      fb.limitToLast(100).on('child_added', (snap) => {
-        handleEvent(snap.val());
+      const startTime = Date.now() - 30000;
+      fb.orderByKey().limitToLast(100).on('child_added', (snap) => {
+        const m = snap.val();
+        if(!m) return;
+        if(m.ts && m.ts < startTime) return;
+        handleEvent(m);
       });
     } catch(e){ console.warn('FB init err:', e); }
   });

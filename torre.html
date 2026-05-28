@@ -665,9 +665,11 @@ function createSync(){
       try {
         firebase.initializeApp({ apiKey: cfg.fbKey, databaseURL: cfg.fbUrl });
         fb = firebase.database().ref('vammo/events');
-        fb.limitToLast(50).on('child_added', (snap) => {
+        const startTime = Date.now() - 30000; // só eventos dos últimos 30s ou novos
+        fb.orderByKey().limitToLast(50).on('child_added', (snap) => {
           const m = snap.val();
           if(!m || m._from === 'torre') return;
+          if(m.ts && m.ts < startTime) return; // ignora histórico antigo
           if(m.type && handlers[m.type]) handlers[m.type].forEach(fn => fn(m.data, m));
         });
         setSyncIndicator('ok', 'firebase + local');

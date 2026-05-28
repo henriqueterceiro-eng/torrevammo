@@ -281,9 +281,11 @@ function createSync(){
         firebase.initializeApp(FIREBASE_CONFIG);
         fb = firebase.database().ref('vammo/events');
         // Escuta novos eventos
-        fb.limitToLast(50).on('child_added', (snap) => {
+        const startTime = Date.now() - 30000;
+        fb.orderByKey().limitToLast(50).on('child_added', (snap) => {
           const m = snap.val();
-          if(!m || m._from === me?.id) return; // ignora próprios
+          if(!m || m._from === me?.id) return;
+          if(m.ts && m.ts < startTime) return;
           if(m.type && handlers[m.type]) handlers[m.type].forEach(fn => fn(m.data, m));
         });
         document.getElementById('syncdot').classList.add('ok');
