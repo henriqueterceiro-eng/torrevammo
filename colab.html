@@ -292,6 +292,8 @@ function createSync(){
         for(const msg of pendingMsgs){ fb.push(msg).catch(e => console.warn('flush fail:', e)); }
         pendingMsgs = [];
         document.getElementById('syncdot').classList.add('ok');
+        // Listener no node /chamados — pesca atribuições diretamente do estado
+        setupChamadosListener();
       } catch(err){ console.warn('Firebase init failed:', err); }
     }).catch(err => console.warn('Firebase load failed:', err));
   }
@@ -310,6 +312,89 @@ function createSync(){
       }
     }
   };
+}
+
+// Listener direto no nó dos chamados — fonte da verdade
+// Quando torre atribui, motoristaId muda no Firebase → cai aqui sem depender de eventos
+function setupChamadosListener(){
+  if(typeof firebase === 'undefined' || !firebase.apps.length) return;
+  const ref = firebase.database().ref('vammo/chamados');
+
+  ref.on('child_added', s => onChamadoState(s.key, s.val(), 'added'));
+  ref.on('child_changed', s => onChamadoState(s.key, s.val(), 'changed'));
+  ref.on('child_removed', s => {
+    const idx = fila.findIndex(c => c.id === s.key);
+    if(idx >= 0){
+      const wasActive = idx === 0;
+      fila.splice(idx, 1);
+      if(fila.length === 0) setStatus('online');
+      showToast(wasActive ? 'Chamado removido pela torre' : 'Chamado removido da fila');
+      afterFilaChange();
+    }
+  });
+}
+
+function onChamadoState(id, ch, kind){
+  if(!ch || !me) return;
+  const isMine = ch.motoristaId === me.id;
+  const idxInFila = fila.findIndex(c => c.id === id);
+
+  if(isMine && idxInFila < 0){
+    // Chamado novo pra mim — adiciona na fila
+    if(ch.status === 'concluido' || ch.status === 'cancelado') return;
+    const item = {
+      id: id,
+      cliente: ch.cliente,
+      motivo: ch.motivo,
+      endereco: ch.endereco,
+      placa: ch.placa,
+      comentario: ch.comentario,
+      icon: ch.icon || iconFromMotivo(ch.motivo),
+      lat: ch.lat,
+      lng: ch.lng,
+      status: ch.status || 'novo',
+      arrived: ch.arrived || false,
+      assignedAt: ch.assignedAt || Date.now()
+    };
+    fila.push(item);
+    vibrate([100, 50, 100, 50, 200]);
+    playBeep();
+    showToast(fila.length === 1 ? `🔔 Novo chamado: ${ch.cliente || ''}` : `📍 +1 na fila (${fila.length}): ${ch.cliente || ''}`);
+    afterFilaChange();
+  } else if(!isMine && idxInFila >= 0){
+    // Foi tirado de mim
+    const wasActive = idxInFila === 0;
+    fila.splice(idxInFila, 1);
+    if(fila.length === 0) setStatus('online');
+    showToast(wasActive ? 'Chamado removido pela torre' : 'Chamado tirado da fila');
+    afterFilaChange();
+  } else if(isMine && idxInFila >= 0){
+    // Já tava — atualiza dados (status, arrived, etc)
+    const local = fila[idxInFila];
+    if(ch.status && ch.status !== local.status) local.status = ch.status;
+    if(ch.arrived && !local.arrived){
+      local.arrived = true;
+      local.arrivedAt = ch.arrivedAt || Date.now();
+    }
+    if(ch.status === 'concluido' || ch.status === 'cancelado'){
+      fila.splice(idxInFila, 1);
+      if(fila.length === 0) setStatus('online');
+    }
+    afterFilaChange();
+  }
+}
+
+function iconFromMotivo(motivo){
+  if(!motivo) return '🔧';
+  const m = motivo.toLowerCase();
+  if(m.includes('acidente')) return '🚨';
+  if(m.includes('não liga') || m.includes('nao liga')) return '🔌';
+  if(m.includes('pneu')) return '🛞';
+  if(m.includes('bateria')) return '🔋';
+  if(m.includes('freio')) return '🛑';
+  if(m.includes('travada') || m.includes('travado')) return '🔒';
+  if(m.includes('devolu')) return '📦';
+  return '🔧';
 }
 
 function cleanForFb(obj){
