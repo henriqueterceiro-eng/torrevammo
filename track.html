@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#00B4E5">
+<title>Vammo · Acompanhe seu guincho</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+:root{
+  --bg:#f5f7fa;
+  --surf:#ffffff;
+  --bdr:#e4e8ed;
+  --txt:#111827;
+  --txt2:#6b7280;
+  --txt3:#9ca3af;
+  --acc:#00B4E5;
+  --acc2:#0099c4;
+  --on:#10b981;
+  --off:#6b7280;
+  --warn:#d97706;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100vh;height:100dvh;overflow:hidden;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px}
+button{font-family:inherit;cursor:pointer;border:none;font-weight:600}
+a{color:var(--acc);text-decoration:none}
+
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+
+/* TOP BAR com logo */
+#topbar{flex:0 0 auto;background:#fff;padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.04);z-index:10}
+#topbar .lg{height:28px;color:var(--acc);display:block}
+#topbar .lg svg{height:100%;width:auto;display:block}
+#topbar .ti{flex:1;min-width:0}
+#topbar .ti .h{font-weight:700;font-size:13px;line-height:1.2}
+#topbar .ti .s{color:var(--txt2);font-size:11px;margin-top:2px}
+#topbar .pulse{width:10px;height:10px;border-radius:50%;background:var(--on);position:relative;flex:0 0 10px}
+#topbar .pulse::before{content:'';position:absolute;inset:-4px;border-radius:50%;background:var(--on);opacity:0.3;animation:pulse 1.6s infinite}
+@keyframes pulse{0%{transform:scale(1);opacity:0.4}100%{transform:scale(2.5);opacity:0}}
+
+/* MAP */
+#map{flex:1;position:relative;background:#0a1428;min-height:0}
+#mapcanvas{width:100%;height:100%}
+
+/* Markers */
+.veh-marker{background:transparent !important;border:none !important}
+.veh-marker .body{width:54px;height:54px;border-radius:50%;background:var(--acc);border:3px solid #fff;box-shadow:0 4px 16px rgba(0,180,229,0.5),0 0 0 5px rgba(0,180,229,0.15);display:flex;align-items:center;justify-content:center;font-size:28px;position:relative}
+.veh-marker .body::after{content:'';position:absolute;inset:-8px;border:2px solid var(--acc);border-radius:50%;opacity:0.4;animation:pulse2 2s ease-out infinite}
+@keyframes pulse2{0%{transform:scale(1);opacity:0.4}100%{transform:scale(1.6);opacity:0}}
+
+.dest-marker{background:transparent !important;border:none !important}
+.dest-marker .pin{width:42px;height:54px;position:relative;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.3))}
+.dest-marker .pin .body{position:absolute;top:0;left:0;width:42px;height:42px;background:#dc2626;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center}
+.dest-marker .pin .em{transform:rotate(45deg);font-size:18px}
+
+.osrm-route{filter:drop-shadow(0 0 6px rgba(0,180,229,0.5));animation:dashflow 1.5s linear infinite}
+@keyframes dashflow{to{stroke-dashoffset:-30}}
+.leaflet-container{background:#0a1428 !important}
+
+/* CARD INFO embaixo */
+#info{flex:0 0 auto;background:#fff;border-top:1px solid var(--bdr);padding:16px 18px;padding-bottom:max(16px,env(safe-area-inset-bottom));box-shadow:0 -4px 24px rgba(0,0,0,0.08);max-height:65vh;overflow:auto;border-radius:18px 18px 0 0;margin-top:-12px;position:relative;z-index:5}
+
+#info .statusbar{display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--bdr);margin-bottom:14px}
+#info .statusbar .stbadge{padding:5px 11px;border-radius:14px;font-weight:700;font-size:11px;letter-spacing:0.3px;text-transform:uppercase}
+.st-wait{background:#fef3c7;color:#92400e}
+.st-onroute{background:#dbeafe;color:#1e40af}
+.st-arrived{background:#d1fae5;color:#065f46;animation:pulseGreen 1.5s infinite}
+.st-done{background:#d1fae5;color:#065f46}
+@keyframes pulseGreen{0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,0.4)}50%{box-shadow:0 0 0 6px rgba(16,185,129,0)}}
+#info .eta{flex:1;text-align:right}
+#info .eta .v{font-size:22px;font-weight:800;color:var(--txt);font-variant-numeric:tabular-nums}
+#info .eta .l{font-size:10px;color:var(--txt2);letter-spacing:0.4px;text-transform:uppercase;font-weight:600}
+#info .eta .v.late{color:var(--warn)}
+
+#info .driver{display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:12px;margin-bottom:12px}
+#info .driver .av{width:48px;height:48px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;flex:0 0 48px}
+#info .driver .info{flex:1;min-width:0}
+#info .driver .name{font-weight:700;font-size:14px}
+#info .driver .car{color:var(--txt2);font-size:11px;margin-top:2px;font-family:'SF Mono',monospace}
+#info .driver .calltel{padding:10px 12px;border-radius:24px;background:var(--on);color:#fff;font-weight:700;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px}
+
+#info .row{display:flex;align-items:flex-start;gap:8px;font-size:12px;padding:6px 0;color:var(--txt)}
+#info .row .ic{font-size:14px;flex:0 0 18px}
+#info .row .lbl{color:var(--txt2);font-size:11px;font-weight:600;flex:0 0 76px}
+#info .row .val{flex:1;line-height:1.4;word-break:break-word}
+
+#info .timeline{margin-top:14px;display:flex;justify-content:space-between;align-items:center;padding:0 4px}
+.tstep{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative}
+.tstep::after{content:'';position:absolute;top:11px;left:55%;right:-45%;height:2px;background:var(--bdr);z-index:0}
+.tstep:last-child::after{display:none}
+.tstep .dot{width:24px;height:24px;border-radius:50%;background:var(--bdr);color:var(--txt3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;z-index:1;border:2px solid var(--bg)}
+.tstep.active .dot{background:var(--acc);color:#fff;box-shadow:0 0 0 4px rgba(0,180,229,0.2)}
+.tstep.done .dot{background:var(--on);color:#fff}
+.tstep.done::after{background:var(--on)}
+.tstep .l{font-size:9px;color:var(--txt2);font-weight:600;letter-spacing:0.3px;text-align:center}
+.tstep.active .l{color:var(--acc);font-weight:700}
+.tstep.done .l{color:var(--on);font-weight:700}
+
+#info .footer{margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr);text-align:center;font-size:10px;color:var(--txt3)}
+#info .footer .vbrand{color:var(--acc);font-weight:700}
+
+/* ESTADOS */
+#nodata{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;background:rgba(255,255,255,0.92);z-index:20}
+#nodata.hide{display:none}
+#nodata .ic{font-size:48px;margin-bottom:12px;opacity:0.5}
+#nodata h1{font-size:18px;margin-bottom:6px}
+#nodata p{color:var(--txt2);font-size:12px;line-height:1.5}
+
+/* Done overlay (chamado já concluído) */
+#donebox{display:none;text-align:center;padding:24px 16px;background:linear-gradient(135deg,#d1fae5,#a7f3d0);border-radius:14px;margin-top:8px}
+#donebox.show{display:block}
+#donebox .ic{font-size:48px;margin-bottom:8px}
+#donebox h2{font-size:16px;color:#065f46;margin-bottom:4px}
+#donebox p{font-size:12px;color:#047857}
+
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:3px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="lg">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo">
+        <path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/>
+        <path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/>
+        <path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/>
+        <path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/>
+      </svg>
+    </div>
+    <div class="ti">
+      <div class="h" id="tbh">Acompanhe seu guincho</div>
+      <div class="s" id="tbs">Atualizando em tempo real</div>
+    </div>
+    <div class="pulse" title="Sincronizando ao vivo"></div>
+  </div>
+
+  <div id="map">
+    <div id="mapcanvas"></div>
+  </div>
+
+  <div id="info">
+    <div class="statusbar">
+      <span class="stbadge st-wait" id="stbadge">Aguardando</span>
+      <div class="eta">
+        <div class="v" id="etav">—</div>
+        <div class="l" id="etal">ETA</div>
+      </div>
+    </div>
+
+    <div class="driver" id="driver" style="display:none">
+      <div class="av" id="drav">?</div>
+      <div class="info">
+        <div class="name" id="drnome">—</div>
+        <div class="car" id="drplaca">—</div>
+      </div>
+    </div>
+
+    <div class="row"><div class="ic">📍</div><div class="lbl">Destino</div><div class="val" id="vend">—</div></div>
+    <div class="row"><div class="ic">🔧</div><div class="lbl">Atendimento</div><div class="val" id="vmotivo">—</div></div>
+    <div class="row" id="rowloc" style="display:none"><div class="ic">🚛</div><div class="lbl">Guincho em</div><div class="val" id="vloc">—</div></div>
+
+    <div class="timeline">
+      <div class="tstep done" id="ts1"><div class="dot">✓</div><div class="l">Solicitado</div></div>
+      <div class="tstep" id="ts2"><div class="dot">2</div><div class="l">A caminho</div></div>
+      <div class="tstep" id="ts3"><div class="dot">3</div><div class="l">No local</div></div>
+      <div class="tstep" id="ts4"><div class="dot">4</div><div class="l">Concluído</div></div>
+    </div>
+
+    <div id="donebox">
+      <div class="ic">✅</div>
+      <h2>Atendimento concluído</h2>
+      <p>Obrigado por usar a Vammo. Tenha um ótimo dia!</p>
+    </div>
+
+    <div class="footer">
+      Atendimento <span class="vbrand">Vammo</span> · localização atualizada em tempo real
+    </div>
+  </div>
+
+  <div id="nodata">
+    <div class="ic">🔍</div>
+    <h1>Procurando seu chamado…</h1>
+    <p>Aguarde, estamos localizando seu atendimento.<br>Esta página atualiza sozinha.</p>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
+const SYNC_CHANNEL = 'vammo-fase1';
+
+// Lê id do chamado da URL: ?id=xxx
+const params = new URLSearchParams(location.search);
+const CHAMADO_ID = params.get('id') || params.get('c') || '';
+
+let map = null;
+let vehMarker = null;
+let destMarker = null;
+let routeLine = null;
+let dadosChamado = null;
+let dadosMotorista = null;
+let lastRouteFetch = 0;
+
+// ============== MAP ==============
+function initMap(){
+  map = L.map('mapcanvas', {
+    zoomControl: false,
+    attributionControl: false
+  }).setView([-23.5505, -46.6333], 13);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  if(TOMTOM_KEY){
+    L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, {
+      maxZoom: 22, attribution: '© TomTom'
+    }).addTo(map);
+  } else {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd', maxZoom: 19
+    }).addTo(map);
+  }
+}
+
+function updateVehicle(lat, lng){
+  if(!vehMarker){
+    const icon = L.divIcon({
+      className: 'veh-marker',
+      html: '<div class="body">🚛</div>',
+      iconSize: [54,54],
+      iconAnchor: [27,27]
+    });
+    vehMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(map);
+  } else {
+    vehMarker.setLatLng([lat, lng]);
+  }
+}
+
+function updateDest(lat, lng, label){
+  if(!destMarker){
+    const icon = L.divIcon({
+      className: 'dest-marker',
+      html: '<div class="pin"><div class="body"><div class="em">📍</div></div></div>',
+      iconSize: [42,54],
+      iconAnchor: [21,52]
+    });
+    destMarker = L.marker([lat, lng], { icon }).addTo(map);
+  } else {
+    destMarker.setLatLng([lat, lng]);
+  }
+  if(label) destMarker.bindTooltip(label, { direction:'top', offset:[0,-50] });
+}
+
+function fitBoth(){
+  if(!vehMarker || !destMarker) return;
+  const bounds = L.latLngBounds([vehMarker.getLatLng(), destMarker.getLatLng()]);
+  map.fitBounds(bounds, { padding:[60,60], maxZoom: 15 });
+}
+
+async function refreshRoute(){
+  if(!vehMarker || !destMarker) return;
+  // Só refaz a cada 20s
+  if(Date.now() - lastRouteFetch < 20000) return;
+  lastRouteFetch = Date.now();
+  const v = vehMarker.getLatLng(), d = destMarker.getLatLng();
+  try {
+    const url = `https://api.tomtom.com/routing/1/calculateRoute/${v.lat},${v.lng}:${d.lat},${d.lng}/json?routeType=fastest&traffic=true&travelMode=car&key=${TOMTOM_KEY}`;
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('rt');
+    const data = await r.json();
+    const route = data.routes[0];
+    const coords = [];
+    for(const leg of route.legs){ for(const p of leg.points){ coords.push([p.latitude, p.longitude]); } }
+    if(routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline(coords, {
+      color: '#00B4E5', weight: 5, opacity: 0.85,
+      dashArray: '14,10', lineCap: 'round',
+      className: 'osrm-route'
+    }).addTo(map);
+    // ETA
+    const min = Math.round(route.summary.travelTimeInSeconds / 60);
+    const delayMin = Math.round((route.summary.trafficDelayInSeconds||0)/60);
+    document.getElementById('etav').textContent = min + ' min';
+    document.getElementById('etav').className = 'v' + (delayMin > 5 ? ' late' : '');
+    document.getElementById('etal').textContent = delayMin > 0 ? `ETA · +${delayMin}min trânsito` : 'ETA até você';
+  } catch(e){
+    console.warn('Route err:', e);
+  }
+}
+
+async function reverseGeocode(lat, lng){
+  if(!TOMTOM_KEY) return null;
+  try {
+    const r = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?language=pt-BR&key=${TOMTOM_KEY}`);
+    if(!r.ok) return null;
+    const d = await r.json();
+    if(!d.addresses?.length) return null;
+    return d.addresses[0].address;
+  } catch(_){ return null; }
+}
+
+// ============== STATE / UI ==============
+function setStatus(state){
+  // states: wait, onroute, arrived, done, cancel
+  const el = document.getElementById('stbadge');
+  const ts = [
+    document.getElementById('ts1'),
+    document.getElementById('ts2'),
+    document.getElementById('ts3'),
+    document.getElementById('ts4')
+  ];
+  ts.forEach(t => t.classList.remove('active','done'));
+  if(state === 'wait'){
+    el.className = 'stbadge st-wait';
+    el.textContent = '⏳ Procurando guincho';
+    ts[0].classList.add('done');
+    document.getElementById('etav').textContent = '—';
+    document.getElementById('etal').textContent = 'Aguardando colaborador';
+  } else if(state === 'onroute'){
+    el.className = 'stbadge st-onroute';
+    el.textContent = '🚛 A caminho';
+    ts[0].classList.add('done');
+    ts[1].classList.add('active');
+  } else if(state === 'arrived'){
+    el.className = 'stbadge st-arrived';
+    el.textContent = '✅ Chegou no local';
+    ts[0].classList.add('done');
+    ts[1].classList.add('done');
+    ts[2].classList.add('active');
+    document.getElementById('etav').textContent = '✓';
+    document.getElementById('etal').textContent = 'Guincho no local';
+  } else if(state === 'done'){
+    el.className = 'stbadge st-done';
+    el.textContent = '✓ Concluído';
+    ts.forEach(t => t.classList.add('done'));
+    document.getElementById('donebox').classList.add('show');
+    document.getElementById('etav').textContent = '✓';
+    document.getElementById('etal').textContent = 'Finalizado';
+  } else if(state === 'cancel'){
+    el.className = 'stbadge';
+    el.style.background = '#fee2e2';
+    el.style.color = '#991b1b';
+    el.textContent = '✕ Cancelado';
+  }
+}
+
+function setDriver(mot){
+  if(!mot){
+    document.getElementById('driver').style.display = 'none';
+    return;
+  }
+  document.getElementById('driver').style.display = 'flex';
+  document.getElementById('drav').textContent = (mot.nome||'?').charAt(0).toUpperCase();
+  document.getElementById('drav').style.background = mot.color || '#00B4E5';
+  document.getElementById('drnome').textContent = mot.nome || 'Colaborador Vammo';
+  document.getElementById('drplaca').textContent = (mot.placa || '—') + (mot.veiculo ? ' · ' + mot.veiculo : '');
+}
+
+function setChamado(c){
+  if(!c) return;
+  dadosChamado = { ...dadosChamado, ...c };
+  document.getElementById('vend').textContent = c.endereco || '—';
+  document.getElementById('vmotivo').textContent = c.motivo || 'Atendimento';
+  document.getElementById('tbh').textContent = c.cliente ? 'Olá, ' + c.cliente.split(' ')[0] + '!' : 'Acompanhe seu guincho';
+  document.getElementById('nodata').classList.add('hide');
+  if(c.lat && c.lng){
+    updateDest(c.lat, c.lng, c.cliente || '');
+    if(!vehMarker) map.setView([c.lat, c.lng], 14);
+  }
+  // Status
+  const st = c.status || 'novo';
+  if(c.arrived) setStatus('arrived');
+  else if(st === 'em_rota') setStatus('onroute');
+  else if(st === 'concluido') setStatus('done');
+  else if(st === 'cancelado') setStatus('cancel');
+  else setStatus('wait');
+}
+
+// Atualiza posição do guincho
+function setVehiclePos(lat, lng){
+  updateVehicle(lat, lng);
+  fitBoth();
+  refreshRoute();
+  // Reverse geocode pra mostrar onde tá
+  reverseGeocode(lat, lng).then(addr => {
+    if(!addr) return;
+    document.getElementById('rowloc').style.display = 'flex';
+    document.getElementById('vloc').textContent = (addr.streetName || addr.municipalitySubdivision || 'localizado') + (addr.municipalitySubdivision && addr.streetName ? ' · ' + addr.municipalitySubdivision : '');
+  });
+}
+
+// ============== SYNC ==============
+let bc = null;
+try { bc = new BroadcastChannel(SYNC_CHANNEL); } catch(_){}
+
+if(bc){
+  bc.onmessage = (e) => handleEvent(e.data);
+}
+
+// Recupera estado do localStorage (se na mesma origin)
+function recoverFromStorage(){
+  try {
+    // Tenta encontrar o chamado nas estruturas do torre
+    const demo = JSON.parse(localStorage.getItem('vammo_demo_ch') || '[]');
+    const ch = demo.find(x => x.id === CHAMADO_ID || x.id.endsWith(CHAMADO_ID));
+    if(!ch) return;
+    const sm = JSON.parse(localStorage.getItem('vammo_smap2') || '{}');
+    const asgn = JSON.parse(localStorage.getItem('vammo_asgn2') || '{}');
+    ch.status = sm[ch.id] || ch.status;
+    ch.motoristaId = asgn[ch.id] || null;
+    setChamado(ch);
+  } catch(_){}
+}
+
+function handleEvent(msg){
+  if(!msg || !msg.type) return;
+  if(msg.type === 'motorista:posicao'){
+    // Se o motorista é o assignado ao meu chamado
+    if(dadosChamado && dadosChamado.motoristaId === msg.data.id){
+      dadosMotorista = { ...dadosMotorista, ...msg.data };
+      setDriver(dadosMotorista);
+      setVehiclePos(msg.data.lat, msg.data.lng);
+    }
+  } else if(msg.type === 'motorista:login'){
+    if(dadosChamado && dadosChamado.motoristaId === msg.data.id){
+      dadosMotorista = msg.data;
+      setDriver(msg.data);
+    }
+  } else if(msg.type === 'chamado:atribuir'){
+    if(matchChamado(msg.data.chamadoId)){
+      dadosChamado = { ...dadosChamado, ...msg.data };
+      dadosChamado.motoristaId = msg.data.motoristaId;
+      dadosChamado.status = 'em_rota';
+      setChamado(dadosChamado);
+    }
+  } else if(msg.type === 'chamado:status' || msg.type === 'chamado:status_torre'){
+    if(matchChamado(msg.data.chamadoId)){
+      dadosChamado.status = msg.data.status;
+      setChamado(dadosChamado);
+    }
+  } else if(msg.type === 'chamado:chegou'){
+    if(matchChamado(msg.data.chamadoId)){
+      dadosChamado.arrived = true;
+      setStatus('arrived');
+    }
+  } else if(msg.type === 'chamado:desatribuir'){
+    if(matchChamado(msg.data.chamadoId)){
+      dadosChamado.motoristaId = null;
+      setDriver(null);
+      if(vehMarker){ map.removeLayer(vehMarker); vehMarker = null; }
+      if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+      setStatus('wait');
+    }
+  }
+}
+
+function matchChamado(id){
+  if(!CHAMADO_ID || !id) return false;
+  return id === CHAMADO_ID || id.endsWith(CHAMADO_ID);
+}
+
+// ============== INIT ==============
+if(!CHAMADO_ID){
+  document.getElementById('nodata').innerHTML = `
+    <div class="ic">❓</div>
+    <h1>Link inválido</h1>
+    <p>Este link de acompanhamento não tem um chamado associado.<br>Verifique o link recebido.</p>
+  `;
+} else {
+  initMap();
+  recoverFromStorage();
+  // Polling do localStorage a cada 5s pra pegar mudanças (BroadcastChannel só pega eventos em tempo real)
+  setInterval(recoverFromStorage, 5000);
+  // Refresh ETA a cada 20s
+  setInterval(() => { lastRouteFetch = 0; refreshRoute(); }, 20000);
+}
+</script>
+</body>
+</html>

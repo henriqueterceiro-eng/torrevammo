@@ -1,0 +1,21 @@
+# Configuração Netlify — Vammo Torre
+# Site estático puro: sem build, sem framework. Só serve os HTMLs.
+
+[build]
+  publish = "."
+
+# Página default = torre (gestor). Cliente acessa /track.html?id=X, colab /colab.html
+[[redirects]]
+  from = "/"
+  to = "/torre.html"
+  status = 302
+
+# Headers de segurança razoáveis pra app PWA-ready
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # Permite geolocation no colab + clipboard no torre
+    Permissions-Policy = "geolocation=(self), clipboard-write=(self)"

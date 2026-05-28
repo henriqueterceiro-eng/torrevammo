@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#00B4E5">
+<title>Vammo · Colaborador</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+:root{
+  --bg:#0a1428;
+  --surf:#152339;
+  --surf2:#1e3050;
+  --bdr:#2d3f55;
+  --txt:#e8eef8;
+  --txt2:#9aa8bd;
+  --txt3:#6b7a91;
+  --acc:#00B4E5;
+  --novo:#dc2626;
+  --rota:#d97706;
+  --conc:#16a34a;
+  --canc:#6b7280;
+  --on:#10b981;
+  --busy:#f59e0b;
+  --off:#6b7280;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100vh;height:100dvh;overflow:hidden;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px}
+button{font-family:inherit;cursor:pointer;border:none;color:var(--txt);font-weight:600}
+input{font-family:inherit;font-size:16px;padding:14px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt);width:100%;border-radius:10px}
+input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transparent}
+
+/* ===== LOGIN ===== */
+#login{position:fixed;inset:0;background:linear-gradient(135deg,#0a1428 0%,#1e3050 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:100}
+#login.hide{display:none}
+#login .logo{height:54px;color:var(--acc);margin-bottom:8px;display:flex;align-items:center;justify-content:center}
+#login .logo svg{height:100%;width:auto;filter:drop-shadow(0 4px 16px rgba(0,180,229,0.4))}
+#login .sub{color:var(--txt2);font-size:13px;margin-bottom:36px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600}
+#login form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
+#login button{padding:16px;border-radius:10px;background:var(--acc);color:#001823;font-size:16px;font-weight:700;margin-top:8px}
+#login button:active{transform:scale(0.98)}
+#login .hint{margin-top:18px;font-size:11px;color:var(--txt3);text-align:center;line-height:1.5}
+
+/* ===== APP ===== */
+#app{display:none;flex-direction:column;height:100vh;height:100dvh}
+#app.show{display:flex}
+
+#topbar{flex:0 0 auto;background:var(--surf);border-bottom:1px solid var(--bdr);padding:12px 14px;display:flex;align-items:center;gap:10px;padding-top:max(12px,env(safe-area-inset-top))}
+#topbar .av{width:36px;height:36px;border-radius:50%;background:var(--acc);color:#001823;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex:0 0 36px}
+#topbar .info{flex:1;min-width:0}
+#topbar .nm{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#topbar .pl{color:var(--txt2);font-size:11px;display:flex;align-items:center;gap:6px}
+#topbar .stbtn{padding:6px 10px;border-radius:20px;font-size:11px;font-weight:700;background:var(--on);color:#001823;letter-spacing:0.5px}
+#topbar .stbtn.busy{background:var(--busy)}
+#topbar .stbtn.off{background:var(--off);color:var(--txt)}
+#topbar .out{padding:6px 8px;border-radius:6px;background:transparent;color:var(--txt2);font-size:18px}
+
+#map{flex:1;position:relative;background:#0a1428;min-height:0}
+#mapcanvas{width:100%;height:100%}
+
+.osrm-route{filter:drop-shadow(0 0 6px rgba(0,180,229,0.7));animation:dashflow 1.2s linear infinite;stroke-dasharray:14,10}
+@keyframes dashflow{to{stroke-dashoffset:-24}}
+
+/* GPS marker pulse */
+.gps-marker{background:transparent !important;border:none !important}
+.gps-marker .dot{width:18px;height:18px;border-radius:50%;background:var(--acc);border:3px solid #fff;box-shadow:0 0 0 4px rgba(0,180,229,0.3);position:relative}
+.gps-marker .dot::before{content:'';position:absolute;inset:-4px;border-radius:50%;background:var(--acc);opacity:0.4;animation:pulseGps 2s ease-out infinite}
+@keyframes pulseGps{0%{transform:scale(1);opacity:0.5}100%{transform:scale(2.5);opacity:0}}
+
+.chamado-marker{background:transparent !important;border:none !important}
+.chamado-marker .pin{width:34px;height:42px;position:relative;filter:drop-shadow(0 3px 5px rgba(0,0,0,0.5))}
+.chamado-marker .pin .body{position:absolute;top:0;left:0;width:34px;height:34px;background:var(--rota);border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center}
+.chamado-marker .pin .em{transform:rotate(45deg);font-size:16px}
+.chamado-marker .pin .num{position:absolute;top:-6px;right:-6px;width:22px;height:22px;background:#fff;color:#001823;border-radius:50%;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--acc);z-index:2}
+.chamado-marker.active .pin .body{background:var(--novo);box-shadow:0 0 0 3px rgba(220,38,38,0.4)}
+.chamado-marker.active .pin .num{background:var(--acc);color:#001823;border-color:#fff;animation:numpulse 1.5s ease-out infinite}
+@keyframes numpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+.chamado-marker.done .pin .body{background:var(--conc);opacity:0.5}
+.chamado-marker.arrived .pin .body{background:var(--conc);box-shadow:0 0 0 4px rgba(22,163,74,0.45);animation:arrivedPulse 1.2s infinite}
+@keyframes arrivedPulse{0%,100%{box-shadow:0 0 0 4px rgba(22,163,74,0.45)}50%{box-shadow:0 0 0 12px rgba(22,163,74,0)}}
+
+#chamadocard.arrived{border-top-color:var(--conc)}
+#chamadocard .arrivedbanner{background:linear-gradient(135deg,#10b981,#16a34a);color:#fff;padding:12px 14px;border-radius:10px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px;box-shadow:0 4px 12px rgba(16,185,129,0.3);animation:slideIn .3s ease-out}
+#chamadocard .arrivedbanner .ic{font-size:24px}
+#chamadocard .arrivedbanner .ti{flex:1}
+#chamadocard .arrivedbanner .ti .l1{font-size:14px}
+#chamadocard .arrivedbanner .ti .l2{font-size:11px;opacity:0.9;font-weight:500;margin-top:2px}
+@keyframes slideIn{from{transform:scale(0.95);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* GPS Status overlay */
+#gpsstatus{position:absolute;top:12px;left:12px;background:rgba(10,20,40,0.9);padding:8px 12px;border-radius:8px;font-size:11px;color:var(--txt2);display:flex;align-items:center;gap:6px;z-index:500;backdrop-filter:blur(8px)}
+#gpsstatus .ind{width:8px;height:8px;border-radius:50%;background:var(--txt3)}
+#gpsstatus.ok .ind{background:var(--on);box-shadow:0 0 6px var(--on)}
+#gpsstatus.err .ind{background:var(--novo);box-shadow:0 0 6px var(--novo)}
+
+/* Recenter */
+#recenter{position:absolute;bottom:24px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid var(--bdr);box-shadow:0 4px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:22px;z-index:500;color:var(--acc)}
+
+/* ===== CARD CHAMADO ===== */
+#chamadocard{flex:0 0 auto;background:var(--surf);border-top:2px solid var(--acc);padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));max-height:50vh;overflow:auto;display:none;animation:slideUp 0.3s ease-out}
+#chamadocard.show{display:block}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
+#chamadocard .head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+#chamadocard .icon{width:42px;height:42px;border-radius:10px;background:var(--surf2);display:flex;align-items:center;justify-content:center;font-size:22px;flex:0 0 42px}
+#chamadocard .head .ti{flex:1;min-width:0}
+#chamadocard .cli{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chamadocard .mt{color:var(--txt2);font-size:12px;margin-top:2px}
+#chamadocard .badge{background:var(--novo);color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.5px;align-self:flex-start}
+#chamadocard .badge.rota{background:var(--rota)}
+#chamadocard .badge.conc{background:var(--conc)}
+
+#chamadocard .row{display:flex;gap:8px;font-size:12px;margin-top:8px;color:var(--txt2);align-items:flex-start}
+#chamadocard .row .lbl{flex:0 0 16px;text-align:center}
+#chamadocard .row .val{flex:1;color:var(--txt);line-height:1.4;word-break:break-word}
+
+#chamadocard .extras{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+#chamadocard .extras a{flex:1;min-width:120px;padding:8px;border-radius:8px;background:var(--surf2);color:var(--acc);text-decoration:none;text-align:center;font-size:12px;font-weight:600;border:1px solid var(--bdr)}
+
+#chamadocard .actions{display:flex;gap:8px;margin-top:14px}
+#chamadocard .actions button{flex:1;padding:14px 10px;border-radius:10px;font-size:13px;font-weight:700;background:var(--surf2);color:var(--txt);border:1px solid var(--bdr)}
+#chamadocard .actions button.go{background:var(--rota);border-color:var(--rota);color:#fff}
+#chamadocard .actions button.done{background:var(--conc);border-color:var(--conc);color:#fff}
+#chamadocard .actions button.canc{background:transparent;color:var(--txt3);font-size:12px;flex:0 0 auto;padding:14px 14px}
+#chamadocard .actions button:active{transform:scale(0.97)}
+
+/* Fila — header e próximos */
+#chamadocard .queuehead{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bdr)}
+#chamadocard .queuehead .pos{background:var(--acc);color:#001823;padding:4px 10px;border-radius:14px;font-weight:800;font-size:12px}
+#chamadocard .queuehead .lbl{color:var(--txt2);font-size:11px;letter-spacing:0.4px;text-transform:uppercase;font-weight:600;flex:1}
+#chamadocard .queuehead .total{color:var(--txt2);font-size:11px;font-weight:600}
+
+#chamadocard .proximos{margin-top:14px;padding-top:12px;border-top:1px dashed var(--bdr)}
+#chamadocard .proximos .ph{color:var(--txt2);font-size:10px;letter-spacing:0.5px;text-transform:uppercase;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+#chamadocard .prox{display:flex;align-items:center;gap:10px;padding:8px;background:var(--surf2);border-radius:8px;margin-bottom:6px}
+#chamadocard .prox .pnum{width:26px;height:26px;background:var(--bdr);color:var(--txt);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:0 0 26px}
+#chamadocard .prox .picon{font-size:18px;flex:0 0 24px;text-align:center}
+#chamadocard .prox .pinfo{flex:1;min-width:0}
+#chamadocard .prox .pcli{font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chamadocard .prox .pmt{color:var(--txt2);font-size:10px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chamadocard .prox .pdist{font-size:10px;color:var(--acc);font-weight:700;font-family:'IBM Plex Mono',monospace;flex:0 0 auto}
+
+/* ===== Empty state ===== */
+#empty{position:absolute;left:0;right:0;bottom:24px;text-align:center;color:var(--txt2);font-size:12px;pointer-events:none;z-index:400}
+#empty.hide{display:none}
+#empty .ic{font-size:32px;margin-bottom:6px;opacity:0.5}
+
+/* ===== Toast ===== */
+#toast{position:fixed;top:max(60px,env(safe-area-inset-top));left:50%;transform:translateX(-50%) translateY(-200%);background:var(--acc);color:#001823;padding:12px 18px;border-radius:30px;font-weight:700;font-size:13px;z-index:1000;box-shadow:0 8px 32px rgba(0,180,229,0.4);transition:transform 0.3s ease-out;max-width:90vw}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--novo);color:#fff}
+
+/* ===== Sync indicator ===== */
+#syncdot{width:8px;height:8px;border-radius:50%;background:var(--txt3);display:inline-block}
+#syncdot.ok{background:var(--on)}
+</style>
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<div id="login">
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo">
+      <path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/>
+      <path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/>
+      <path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/>
+      <path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/>
+    </svg>
+  </div>
+  <div class="sub">Painel do Colaborador</div>
+  <form id="loginform">
+    <input type="text" id="lognome" placeholder="Seu nome" autocomplete="name" required>
+    <input type="text" id="logplaca" placeholder="Placa do guincho (ex: ABC1D23)" autocomplete="off" maxlength="8">
+    <button type="submit">Entrar no turno</button>
+  </form>
+  <div class="hint">
+    Ao entrar, vamos compartilhar sua localização<br>com a torre de controle em tempo real.
+  </div>
+</div>
+
+<!-- APP PRINCIPAL -->
+<div id="app">
+  <div id="topbar">
+    <div class="av" id="tbav">?</div>
+    <div class="info">
+      <div class="nm" id="tbnome">—</div>
+      <div class="pl"><span id="syncdot"></span><span id="tbplaca">—</span></div>
+    </div>
+    <button class="stbtn" id="ststatus">ONLINE</button>
+    <button class="out" id="btlogout" title="Sair">⏻</button>
+  </div>
+
+  <div id="map">
+    <div id="mapcanvas"></div>
+    <div id="gpsstatus"><span class="ind"></span><span id="gpstxt">Buscando GPS…</span></div>
+    <button id="recenter" title="Centralizar em mim">📍</button>
+    <div id="empty">
+      <div class="ic">🛵</div>
+      <div>Aguardando chamado…</div>
+      <div style="font-size:10px;margin-top:4px;color:var(--txt3)">Você está visível para a torre</div>
+    </div>
+  </div>
+
+  <div id="chamadocard"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ====================== CONFIG ======================
+const FIREBASE_CONFIG = {
+  apiKey: '',
+  databaseURL: '',
+  projectId: ''
+};
+
+// Chave TomTom — pra rota com trânsito real. Deixa vazio → cai pro OSRM gratuito.
+const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
+
+const SYNC_CHANNEL = 'vammo-fase1';
+const GPS_MIN_INTERVAL = 3000;     // ms entre updates
+const GPS_MIN_DELTA_M  = 5;         // metros
+const MARKER_TTL_MS = 30 * 1000;    // 30s sem update = fora do ar (para a torre)
+
+// ====================== STATE ======================
+let me = null;                      // {id, nome, placa, status}
+let myPos = null;                   // {lat, lng, accuracy, ts}
+let lastSentPos = null;
+let watchId = null;
+let fila = [];                      // fila de chamados — primeiro é o ativo
+let chamadoMarkers = {};            // {chamadoId: L.marker}
+let meMarker = null;
+let routeLine = null;
+let map = null;
+let sync = null;
+let lastSentAt = 0;
+
+const STATUS_ORDER = ['online','busy','off'];
+const STATUS_LBL = {online:'ONLINE', busy:'EM ROTA', off:'OFFLINE'};
+
+// ====================== STORAGE ======================
+function loadMe(){
+  try { return JSON.parse(localStorage.getItem('vammo_colab_me') || 'null'); } catch(_){ return null; }
+}
+function saveMe(m){ localStorage.setItem('vammo_colab_me', JSON.stringify(m)); }
+function clearMe(){ localStorage.removeItem('vammo_colab_me'); }
+
+function genId(){
+  return 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2,8);
+}
+function colorFromId(id){
+  const colors = ['#f59e0b','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16'];
+  let h = 0;
+  for(let i=0;i<id.length;i++) h = (h*31 + id.charCodeAt(i)) >>> 0;
+  return colors[h % colors.length];
+}
+
+// ====================== SYNC LAYER ======================
+function createSync(){
+  const handlers = {};
+  let bc = null, fb = null;
+
+  try { bc = new BroadcastChannel(SYNC_CHANNEL); } catch(_){}
+
+  if(bc){
+    bc.onmessage = (e) => {
+      const m = e.data;
+      if(m && m.type && handlers[m.type]) handlers[m.type].forEach(fn => fn(m.data, m));
+    };
+  }
+
+  // Firebase (opcional) — carrega só se config válida
+  if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
+    loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js').then(() =>
+      loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js')
+    ).then(() => {
+      try {
+        firebase.initializeApp(FIREBASE_CONFIG);
+        fb = firebase.database().ref('vammo/events');
+        // Escuta novos eventos
+        fb.limitToLast(50).on('child_added', (snap) => {
+          const m = snap.val();
+          if(!m || m._from === me?.id) return; // ignora próprios
+          if(m.type && handlers[m.type]) handlers[m.type].forEach(fn => fn(m.data, m));
+        });
+        document.getElementById('syncdot').classList.add('ok');
+      } catch(err){ console.warn('Firebase init failed:', err); }
+    }).catch(err => console.warn('Firebase load failed:', err));
+  }
+
+  return {
+    on(type, fn){ (handlers[type] = handlers[type] || []).push(fn); },
+    send(type, data){
+      const msg = { type, data, ts: Date.now(), _from: me?.id || 'anon' };
+      if(bc) bc.postMessage(msg);
+      if(fb) fb.push(msg).catch(e => console.warn('fb push fail', e));
+    }
+  };
+}
+
+function loadScript(src){
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+// ====================== GEO ======================
+function haversine(a, b){
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI/180;
+  const dLng = (b.lng - a.lng) * Math.PI/180;
+  const la1 = a.lat * Math.PI/180, la2 = b.lat * Math.PI/180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+// Distância de um ponto até um segmento (planar — ok pra <1km)
+function pointToSegmentMeters(p, a, b){
+  const cosLat = Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+  const mPerDegLat = 111000;
+  const ax = a.lng * cosLat * mPerDegLat;
+  const ay = a.lat * mPerDegLat;
+  const bx = b.lng * cosLat * mPerDegLat;
+  const by = b.lat * mPerDegLat;
+  const px = p.lng * cosLat * mPerDegLat;
+  const py = p.lat * mPerDegLat;
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx*dx + dy*dy;
+  if(len2 < 0.001) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+function distFromRoute(pos, coords){
+  if(!coords || coords.length < 2) return Infinity;
+  let min = Infinity;
+  for(let i = 0; i < coords.length - 1; i++){
+    const d = pointToSegmentMeters(pos,
+      { lat: coords[i][0], lng: coords[i][1] },
+      { lat: coords[i+1][0], lng: coords[i+1][1] });
+    if(d < min) min = d;
+    if(min < 20) return min; // early exit, já tá perto
+  }
+  return min;
+}
+
+function checkOffRoute(){
+  if(!routeCoords || !myPos || fila.length === 0) return;
+  const ativo = fila[0];
+  if(!ativo || ativo.status !== 'em_rota') return; // só checa se já iniciou a rota
+  const d = distFromRoute(myPos, routeCoords);
+  if(d > OFF_ROUTE_THRESHOLD_M){
+    if(!offRouteSince) offRouteSince = Date.now();
+    else if(!offRouteAlerted && Date.now() - offRouteSince > OFF_ROUTE_TIME_MS){
+      offRouteAlerted = true;
+      vibrate([200, 100, 200]);
+      playBeep();
+      showToast('⚠ Você parece estar fora da rota. Recalculando…', true);
+      // Avisa torre
+      sync.send('colab:fora-rota', {
+        motoristaId: me.id,
+        chamadoId: ativo.id,
+        distFromRoute: Math.round(d),
+        pos: { lat: myPos.lat, lng: myPos.lng }
+      });
+      // Força recalcular rota
+      routeFromQueueIds = '';
+      updateRoute();
+    }
+  } else {
+    offRouteSince = null;
+    offRouteAlerted = false;
+  }
+}
+
+function checkArrived(){
+  if(!myPos || fila.length === 0) return;
+  const ativo = fila[0];
+  if(!ativo || !ativo.lat || !ativo.lng) return;
+  if(ativo.status !== 'em_rota' || ativo.arrived) return;
+  const d = haversine(myPos, { lat: ativo.lat, lng: ativo.lng });
+  if(d < ARRIVED_THRESHOLD_M){
+    if(!nearDestSince[ativo.id]) nearDestSince[ativo.id] = Date.now();
+    else if(Date.now() - nearDestSince[ativo.id] > ARRIVED_TIME_MS){
+      // CHEGOU!
+      ativo.arrived = true;
+      ativo.arrivedAt = Date.now();
+      vibrate([100, 50, 100, 50, 300]);
+      playBeep();
+      setTimeout(playBeep, 250);
+      showToast('🎯 Você chegou no local!');
+      sync.send('chamado:chegou', {
+        chamadoId: ativo.id,
+        motoristaId: me.id,
+        cliente: ativo.cliente,
+        pos: { lat: myPos.lat, lng: myPos.lng }
+      });
+      renderChamadoCard();
+      updateChamadoMarkers();
+    }
+  } else {
+    delete nearDestSince[ativo.id];
+  }
+}
+
+function startGPS(){
+  if(!navigator.geolocation){
+    setGpsStatus('err', 'GPS indisponível neste device');
+    return;
+  }
+  setGpsStatus('', 'Buscando GPS…');
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      const newPos = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        ts: Date.now()
+      };
+      onGPSUpdate(newPos);
+    },
+    (err) => {
+      setGpsStatus('err', 'Erro GPS: ' + err.message);
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+
+function onGPSUpdate(pos){
+  myPos = pos;
+  setGpsStatus('ok', `GPS ±${Math.round(pos.accuracy)}m`);
+  updateMeMarker();
+  if(!lastSentPos){ map.setView([pos.lat, pos.lng], 15); }
+  const now = Date.now();
+  const movedEnough = !lastSentPos || haversine(lastSentPos, pos) >= GPS_MIN_DELTA_M;
+  const timeEnough = (now - lastSentAt) >= GPS_MIN_INTERVAL;
+  if(movedEnough && timeEnough){ sendPos(pos); }
+  // Detecção de desvio + auto-chegada
+  checkOffRoute();
+  checkArrived();
+}
+
+function sendPos(pos){
+  if(!me) return;
+  sync.send('motorista:posicao', {
+    id: me.id,
+    nome: me.nome,
+    placa: me.placa,
+    color: me.color,
+    status: me.status,
+    lat: pos.lat,
+    lng: pos.lng,
+    accuracy: pos.accuracy
+  });
+  lastSentPos = pos;
+  lastSentAt = Date.now();
+}
+
+function setGpsStatus(cls, txt){
+  const el = document.getElementById('gpsstatus');
+  el.className = cls;
+  document.getElementById('gpstxt').textContent = txt;
+}
+
+// ====================== MAP ======================
+function initMap(){
+  map = L.map('mapcanvas', {
+    zoomControl: false,
+    attributionControl: false
+  }).setView([-23.5505, -46.6333], 12);
+  L.control.zoom({ position: 'topright' }).addTo(map);
+  // TomTom Maps Display se tem chave (estilo Google), CARTO como fallback
+  if(TOMTOM_KEY){
+    L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/night/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, {
+      maxZoom: 22, attribution: '© TomTom'
+    }).addTo(map);
+    // Overlay de trânsito ao vivo (subtil)
+    L.tileLayer(`https://api.tomtom.com/traffic/map/4/tile/flow/relative-delay/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, {
+      maxZoom: 22, opacity: 0.7, attribution: ''
+    }).addTo(map);
+  } else {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd', maxZoom: 19, attribution: '© OSM · CARTO'
+    }).addTo(map);
+  }
+}
+
+function updateMeMarker(){
+  if(!myPos) return;
+  if(!meMarker){
+    const icon = L.divIcon({
+      className: 'gps-marker',
+      html: '<div class="dot"></div>',
+      iconSize: [18,18],
+      iconAnchor: [9,9]
+    });
+    meMarker = L.marker([myPos.lat, myPos.lng], { icon, zIndexOffset: 1000 }).addTo(map);
+  } else {
+    meMarker.setLatLng([myPos.lat, myPos.lng]);
+  }
+  if(fila.length > 0) updateRoute();
+}
+
+function updateChamadoMarkers(){
+  // Limpa todos
+  for(const id in chamadoMarkers){ map.removeLayer(chamadoMarkers[id]); }
+  chamadoMarkers = {};
+  fila.forEach((c, i) => {
+    if(!c.lat || !c.lng) return;
+    const num = i + 1;
+    let cls = 'chamado-marker';
+    if(i === 0) cls += c.arrived ? ' arrived' : ' active';
+    const emoji = c.arrived ? '✓' : (c.icon || '🔧');
+    const icon = L.divIcon({
+      className: cls,
+      html: `<div class="pin">
+        <div class="num">${num}</div>
+        <div class="body"><div class="em">${emoji}</div></div>
+      </div>`,
+      iconSize: [34,42],
+      iconAnchor: [17,40]
+    });
+    chamadoMarkers[c.id] = L.marker([c.lat, c.lng], { icon }).addTo(map);
+  });
+  updateRoute();
+  fitToFila();
+}
+
+let routeInfo = null;     // {distance, duration, legs:[{distance,duration}]} — pernas individuais
+let routeFromPos = null;  // posição usada na última requisição
+let routeFromQueueIds = ''; // hash dos ids da fila pra invalidar cache se mudou
+let routeCoords = null;   // coordenadas da rota desenhada [[lat,lng], ...] pra detectar desvio
+
+// Detecção de desvio + geofence
+const OFF_ROUTE_THRESHOLD_M = 100;       // distância pra considerar fora da rota
+const OFF_ROUTE_TIME_MS = 30 * 1000;     // tempo fora antes de alertar
+const ARRIVED_THRESHOLD_M = 60;          // distância pra considerar "chegou"
+const ARRIVED_TIME_MS = 8 * 1000;        // tempo perto antes de marcar chegada
+let offRouteSince = null;
+let offRouteAlerted = false;
+let nearDestSince = {};                  // {chamadoId: ts}
+
+async function fetchTomtomRoute(from, stops){
+  const all = [from, ...stops];
+  const coordStr = all.map(p => `${p.lat},${p.lng}`).join(':');
+  const url = `https://api.tomtom.com/routing/1/calculateRoute/${coordStr}/json?routeType=fastest&traffic=true&travelMode=car&key=${TOMTOM_KEY}`;
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('TT ' + r.status);
+  const data = await r.json();
+  if(!data.routes || !data.routes.length) throw new Error('Sem rota');
+  const route = data.routes[0];
+  const coords = [];
+  for(const leg of route.legs){ for(const p of leg.points){ coords.push([p.latitude, p.longitude]); } }
+  return {
+    coords,
+    distance: route.summary?.lengthInMeters || 0,
+    duration: route.summary?.travelTimeInSeconds || 0,
+    trafficDelay: route.summary?.trafficDelayInSeconds || 0,
+    legs: (route.legs || []).map(l => ({
+      distance: l.summary.lengthInMeters,
+      duration: l.summary.travelTimeInSeconds,
+      trafficDelay: l.summary.trafficDelayInSeconds || 0
+    }))
+  };
+}
+
+async function fetchOsrmRoute(from, stops){
+  // Fallback: OSRM gratuito (sem trânsito)
+  if(TOMTOM_KEY){
+    try { return await fetchTomtomRoute(from, stops); }
+    catch(e){ console.warn('TT falhou, fallback OSRM:', e.message); }
+  }
+  const all = [from, ...stops];
+  const coordStr = all.map(p => `${p.lng},${p.lat}`).join(';');
+  const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson&steps=false`;
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('OSRM ' + r.status);
+  const data = await r.json();
+  if(!data.routes || !data.routes.length) throw new Error('Sem rota');
+  return {
+    coords: data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]),
+    distance: data.routes[0].distance,
+    duration: data.routes[0].duration,
+    trafficDelay: 0,
+    legs: (data.routes[0].legs || []).map(l => ({ distance: l.distance, duration: l.duration, trafficDelay: 0 }))
+  };
+}
+
+async function updateRoute(){
+  if(fila.length === 0 || !myPos){
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    routeInfo = null;
+    return;
+  }
+  const validStops = fila.filter(c => c.lat && c.lng);
+  if(validStops.length === 0){
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    routeInfo = null;
+    return;
+  }
+  // Cache: refaz se moveu >100m OU se a fila mudou
+  const queueHash = validStops.map(c => c.id).join('|');
+  if(routeFromPos && haversine(routeFromPos, myPos) < 100 && routeLine && queueHash === routeFromQueueIds) return;
+  // Linha reta provisória enquanto OSRM responde
+  if(!routeLine){
+    const fallback = [[myPos.lat, myPos.lng], ...validStops.map(c => [c.lat, c.lng])];
+    routeLine = L.polyline(fallback, { color: '#00B4E5', weight: 3, dashArray: '6,8', opacity: 0.5 }).addTo(map);
+  }
+  try {
+    const route = await fetchOsrmRoute(myPos, validStops);
+    if(routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline(route.coords, {
+      color: '#00B4E5', weight: 5, opacity: 0.9, lineCap: 'round',
+      className: 'osrm-route'
+    }).addTo(map);
+    routeInfo = { distance: route.distance, duration: route.duration, legs: route.legs, trafficDelay: route.trafficDelay || 0 };
+    routeCoords = route.coords;
+    routeFromPos = { lat: myPos.lat, lng: myPos.lng };
+    routeFromQueueIds = queueHash;
+    // Reset desvio quando recalculou rota
+    offRouteSince = null; offRouteAlerted = false;
+    renderChamadoCard();
+  } catch(err){
+    console.warn('OSRM err:', err.message);
+  }
+}
+
+function fitToFila(){
+  if(fila.length === 0 || !myPos) return;
+  const pts = [[myPos.lat, myPos.lng]];
+  for(const c of fila){ if(c.lat && c.lng) pts.push([c.lat, c.lng]); }
+  if(pts.length < 2) return;
+  map.fitBounds(L.latLngBounds(pts), { padding: [80, 80], maxZoom: 15 });
+}
+
+// ====================== UI ======================
+function showLogin(){
+  document.getElementById('login').classList.remove('hide');
+  document.getElementById('app').classList.remove('show');
+}
+function showApp(){
+  document.getElementById('login').classList.add('hide');
+  document.getElementById('app').classList.add('show');
+  setTimeout(() => map && map.invalidateSize(), 100);
+}
+
+function renderTopBar(){
+  if(!me) return;
+  document.getElementById('tbnome').textContent = me.nome;
+  document.getElementById('tbplaca').textContent = me.placa || 'sem placa';
+  document.getElementById('tbav').textContent = me.nome.charAt(0).toUpperCase();
+  document.getElementById('tbav').style.background = me.color;
+  document.getElementById('tbav').style.color = '#fff';
+  const stbtn = document.getElementById('ststatus');
+  stbtn.textContent = STATUS_LBL[me.status];
+  stbtn.className = 'stbtn ' + (me.status === 'busy' ? 'busy' : me.status === 'off' ? 'off' : '');
+}
+
+function renderChamadoCard(){
+  const el = document.getElementById('chamadocard');
+  const empty = document.getElementById('empty');
+  if(fila.length === 0){
+    el.classList.remove('show');
+    empty.classList.remove('hide');
+    return;
+  }
+  empty.classList.add('hide');
+  const c = fila[0];
+  const proximos = fila.slice(1);
+  const statusLbl = c.status === 'em_rota' ? '<span class="badge rota">EM ROTA</span>'
+    : c.status === 'concluido' ? '<span class="badge conc">CONCLUÍDO</span>'
+    : '<span class="badge">NOVO</span>';
+
+  const dest = c.lat && c.lng ? `${c.lat},${c.lng}` : encodeURIComponent((c.endereco || '') + ', São Paulo, SP');
+  const origin = myPos ? `${myPos.lat},${myPos.lng}` : '';
+  // Waypoints intermediários no Google Maps (passa pelos próximos antes do destino final, exceto o último que é destino)
+  let waypoints = '';
+  if(proximos.length > 0){
+    const wps = proximos.slice(0, -1).filter(c => c.lat && c.lng).map(c => `${c.lat},${c.lng}`);
+    if(wps.length > 0) waypoints = '&waypoints=' + wps.join('|');
+    // Se tem mais de 1 próximo, o destino vira o último da fila
+    const last = proximos[proximos.length-1];
+    if(last && last.lat && last.lng){
+      // Reconstroi com destino sendo o último, waypoints sendo os intermediários (incluindo o ativo!)
+      const middle = [c, ...proximos.slice(0, -1)].filter(x => x.lat && x.lng).map(x => `${x.lat},${x.lng}`);
+      const newDest = `${last.lat},${last.lng}`;
+      const wpStr = middle.length ? '&waypoints=' + middle.join('|') : '';
+      var gmaps = `https://www.google.com/maps/dir/?api=1&destination=${newDest}${origin?'&origin='+origin:''}${wpStr}&travelmode=driving&dir_action=navigate`;
+    } else {
+      var gmaps = `https://www.google.com/maps/dir/?api=1&destination=${dest}${origin?'&origin='+origin:''}${waypoints}&travelmode=driving&dir_action=navigate`;
+    }
+  } else {
+    var gmaps = `https://www.google.com/maps/dir/?api=1&destination=${dest}${origin?'&origin='+origin:''}&travelmode=driving&dir_action=navigate`;
+  }
+  const waze = c.lat && c.lng ? `https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes` : (c.endereco ? `https://waze.com/ul?q=${encodeURIComponent(c.endereco)}&navigate=yes` : '');
+  const tel = c.telefone ? `tel:${c.telefone.replace(/\D/g,'')}` : '';
+
+  // Info de rota total (todos os stops) + ETA até o ativo (primeira leg)
+  let routeBlock = '';
+  if(routeInfo){
+    const totalKm = (routeInfo.distance/1000).toFixed(1);
+    const totalMin = Math.round(routeInfo.duration/60);
+    let firstLegHtml = '';
+    if(routeInfo.legs && routeInfo.legs.length > 0 && fila.length > 1){
+      const leg = routeInfo.legs[0];
+      const lKm = (leg.distance/1000).toFixed(1);
+      const lMin = Math.round(leg.duration/60);
+      firstLegHtml = `<div style="color:var(--txt2);font-size:10px;margin-top:3px">▶ até <strong style="color:var(--txt)">${esc(c.cliente)}</strong>: ${lKm}km · ${lMin}min</div>`;
+    }
+    const delayMin = Math.round((routeInfo.trafficDelay||0)/60);
+    const provider = TOMTOM_KEY ? 'c/ trânsito' : 'OSM';
+    routeBlock = `
+      <div style="margin-top:10px;padding:10px 12px;background:rgba(0,180,229,0.12);border:1px solid var(--acc);border-radius:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:22px">🚗</div>
+          <div style="flex:1">
+            <div style="color:var(--acc);font-weight:700;font-size:13px">${fila.length > 1 ? 'Rota total: ' : ''}${totalKm} km · ${totalMin} min ${delayMin>0?`<span style="color:#fbbf24">+${delayMin}min trânsito</span>`:''}</div>
+            <div style="color:var(--txt2);font-size:10px;margin-top:2px">${fila.length} parada${fila.length>1?'s':''} · ${provider}</div>
+            ${firstLegHtml}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // Header da fila (sempre, mesmo com 1 chamado)
+  const queueHead = `
+    <div class="queuehead">
+      <div class="pos">📍 ${1}</div>
+      <div class="lbl">Chamado ativo</div>
+      ${fila.length > 1 ? `<div class="total">de ${fila.length}</div>` : ''}
+    </div>`;
+
+  // Lista dos próximos
+  let proxHtml = '';
+  if(proximos.length > 0){
+    proxHtml = `<div class="proximos">
+      <div class="ph">⏭ Próximos na fila (${proximos.length})</div>
+      ${proximos.map((p, i) => {
+        let dist = '';
+        if(routeInfo && routeInfo.legs && routeInfo.legs[i+1]){
+          dist = `<div class="pdist">+${(routeInfo.legs[i+1].distance/1000).toFixed(1)}km</div>`;
+        }
+        return `<div class="prox">
+          <div class="pnum">${i+2}</div>
+          <div class="picon">${p.icon || '🔧'}</div>
+          <div class="pinfo">
+            <div class="pcli">${esc(p.cliente || '?')}</div>
+            <div class="pmt">${esc(p.motivo || '')}${p.endereco ? ' · '+esc(p.endereco.split(',')[0]) : ''}</div>
+          </div>
+          ${dist}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // Banner de chegada
+  const arrivedBanner = c.arrived ? `
+    <div class="arrivedbanner">
+      <div class="ic">🎯</div>
+      <div class="ti">
+        <div class="l1">VOCÊ CHEGOU!</div>
+        <div class="l2">Atenda o cliente e conclua quando terminar</div>
+      </div>
+    </div>
+  ` : '';
+
+  el.classList.toggle('arrived', !!c.arrived);
+
+  el.innerHTML = `
+    ${queueHead}
+    ${arrivedBanner}
+    <div class="head">
+      <div class="icon">${c.icon || '🔧'}</div>
+      <div class="ti">
+        <div class="cli">${esc(c.cliente || 'Cliente')}</div>
+        <div class="mt">${esc(c.motivo || 'Chamado')}</div>
+      </div>
+      ${statusLbl}
+    </div>
+    ${c.endereco ? `<div class="row"><div class="lbl">📍</div><div class="val">${esc(c.endereco)}</div></div>` : ''}
+    ${c.placa ? `<div class="row"><div class="lbl">🏍</div><div class="val">${esc(c.placa)}</div></div>` : ''}
+    ${c.comentario ? `<div class="row"><div class="lbl">💬</div><div class="val">${esc(c.comentario)}</div></div>` : ''}
+    ${routeBlock}
+    <div class="extras">
+      <a href="${gmaps}" target="_blank" rel="noopener" style="background:#4285F4;color:#fff;border-color:#4285F4">🗺 ${fila.length > 1 ? 'Navegar rota completa' : 'Navegar Google Maps'}</a>
+      ${waze ? `<a href="${waze}" target="_blank" rel="noopener">🚗 Waze (1ª parada)</a>` : ''}
+      ${tel ? `<a href="${tel}">📞 Ligar</a>` : ''}
+    </div>
+    <div class="actions">
+      ${c.status === 'novo' ? '<button class="go" data-act="em_rota">▶ Iniciar rota</button>' : ''}
+      ${c.status === 'em_rota' ? `<button class="done" data-act="concluido">✓ Concluir${fila.length>1?' → Próximo':''}</button>` : ''}
+      <button class="canc" data-act="recusar">Recusar este</button>
+    </div>
+    ${proxHtml}
+  `;
+  el.classList.add('show');
+  el.querySelectorAll('button[data-act]').forEach(b => {
+    b.onclick = () => handleAction(b.dataset.act);
+  });
+}
+
+function handleAction(act){
+  if(fila.length === 0) return;
+  const ativo = fila[0];
+
+  if(act === 'recusar'){
+    if(!confirm(`Recusar "${ativo.cliente}"? Ele volta para a torre.`)) return;
+    sync.send('chamado:recusar', { chamadoId: ativo.id, motoristaId: me.id });
+    fila.shift();
+    afterFilaChange(`Chamado removido${fila.length>0?` · próximo: ${fila[0].cliente}`:''}`);
+    return;
+  }
+
+  if(act === 'em_rota'){
+    ativo.status = 'em_rota';
+    setStatus('busy');
+    vibrate(50);
+    sync.send('chamado:status', { chamadoId: ativo.id, status: 'em_rota', motoristaId: me.id });
+    renderChamadoCard();
+    updateChamadoMarkers();
+    return;
+  }
+
+  if(act === 'concluido'){
+    sync.send('chamado:status', { chamadoId: ativo.id, status: 'concluido', motoristaId: me.id });
+    vibrate([50, 30, 50]);
+    fila.shift();
+    if(fila.length === 0){
+      setStatus('online');
+      afterFilaChange('✓ Todos chamados concluídos!');
+    } else {
+      const next = fila[0];
+      next.status = 'novo'; // próximo começa como novo
+      setStatus('busy');    // continua busy porque ainda tem fila
+      playBeep();
+      afterFilaChange(`✓ Concluído! Próximo: ${next.cliente}`);
+    }
+    return;
+  }
+}
+
+function afterFilaChange(msg){
+  updateChamadoMarkers();
+  renderChamadoCard();
+  // Força refresh da rota
+  routeFromQueueIds = '';
+  if(myPos && fila.length > 0) updateRoute();
+  if(msg) showToast(msg);
+}
+
+function setStatus(s){
+  me.status = s;
+  saveMe(me);
+  renderTopBar();
+  sync.send('motorista:status', { id: me.id, status: s });
+}
+
+function showToast(msg, isError){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isError ? 'err show' : 'show';
+  clearTimeout(showToast._to);
+  showToast._to = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function vibrate(p){ if(navigator.vibrate) navigator.vibrate(p); }
+
+function esc(s){
+  if(s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ====================== EVENT HANDLERS ======================
+function setupSyncListeners(){
+  // Torre atribui chamado a mim — ADICIONA NA FILA
+  sync.on('chamado:atribuir', (data) => {
+    if(!me || data.motoristaId !== me.id) return;
+    // Evita duplicar se for re-atribuição
+    if(fila.find(x => x.id === data.chamadoId)) return;
+    const ch = {
+      id: data.chamadoId,
+      cliente: data.cliente,
+      motivo: data.motivo,
+      endereco: data.endereco,
+      placa: data.placa,
+      comentario: data.comentario,
+      icon: data.icon,
+      lat: data.lat,
+      lng: data.lng,
+      status: 'novo',
+      assignedAt: Date.now()
+    };
+    fila.push(ch);
+    vibrate([100, 50, 100, 50, 200]);
+    playBeep();
+    const pos = fila.length;
+    if(pos === 1){
+      showToast(`🔔 Novo chamado: ${data.cliente || ''}`);
+    } else {
+      showToast(`📍 +1 na fila (${pos}): ${data.cliente || ''}`);
+    }
+    afterFilaChange();
+  });
+
+  // Torre cancelou/desatribuiu — REMOVE DA FILA
+  sync.on('chamado:desatribuir', (data) => {
+    if(!me || data.motoristaId !== me.id) return;
+    const idx = fila.findIndex(x => x.id === data.chamadoId);
+    if(idx < 0) return;
+    const wasActive = idx === 0;
+    fila.splice(idx, 1);
+    if(fila.length === 0) setStatus('online');
+    showToast(wasActive ? 'Chamado ativo removido pela torre' : 'Chamado removido da fila');
+    afterFilaChange();
+  });
+
+  // Torre reordenou a fila
+  sync.on('chamado:reordenar', (data) => {
+    if(!me || data.motoristaId !== me.id) return;
+    // data.order = [chamadoId1, chamadoId2, ...] na nova ordem
+    const map = {};
+    for(const c of fila) map[c.id] = c;
+    const newFila = [];
+    for(const id of data.order){ if(map[id]) newFila.push(map[id]); }
+    // Adiciona qualquer chamado que não estava na lista de ordem (segurança)
+    for(const c of fila){ if(!data.order.includes(c.id)) newFila.push(c); }
+    fila = newFila;
+    showToast('Fila reordenada pela torre');
+    afterFilaChange();
+  });
+
+  // Torre pede checagem de presença
+  sync.on('motorista:ping', () => {
+    if(!me || !myPos) return;
+    sendPos(myPos);
+  });
+}
+
+// ====================== BEEP ======================
+let _ac = null;
+function playBeep(){
+  try {
+    if(!_ac){ const AC = window.AudioContext || window.webkitAudioContext; if(AC) _ac = new AC(); }
+    if(!_ac) return;
+    if(_ac.state === 'suspended') _ac.resume();
+    const t0 = _ac.currentTime;
+    for(let i=0;i<2;i++){
+      const o = _ac.createOscillator(), g = _ac.createGain();
+      o.frequency.value = 800 + i*200;
+      o.type = 'sine';
+      g.gain.setValueAtTime(0, t0+i*0.15);
+      g.gain.linearRampToValueAtTime(0.2, t0+i*0.15+0.02);
+      g.gain.linearRampToValueAtTime(0, t0+i*0.15+0.15);
+      o.connect(g); g.connect(_ac.destination);
+      o.start(t0+i*0.15); o.stop(t0+i*0.15+0.16);
+    }
+  } catch(_){}
+}
+
+// ====================== INIT ======================
+function bootApp(){
+  showApp();
+  renderTopBar();
+  initMap();
+  setupSyncListeners();
+  startGPS();
+
+  // Anuncia login
+  sync.send('motorista:login', {
+    id: me.id,
+    nome: me.nome,
+    placa: me.placa,
+    color: me.color,
+    status: me.status
+  });
+
+  // Heartbeat: re-anuncia a cada 15s pra torre saber que tá vivo
+  setInterval(() => {
+    if(myPos) sendPos(myPos);
+    else sync.send('motorista:heartbeat', { id: me.id, status: me.status });
+  }, 15000);
+
+  // Botões
+  document.getElementById('ststatus').onclick = () => {
+    const cur = me.status;
+    const next = STATUS_ORDER[(STATUS_ORDER.indexOf(cur) + 1) % STATUS_ORDER.length];
+    setStatus(next);
+  };
+  document.getElementById('btlogout').onclick = () => {
+    if(!confirm('Encerrar turno e sair?')) return;
+    sync.send('motorista:logout', { id: me.id });
+    if(watchId) navigator.geolocation.clearWatch(watchId);
+    clearMe();
+    location.reload();
+  };
+  document.getElementById('recenter').onclick = () => {
+    if(myPos) map.setView([myPos.lat, myPos.lng], 15);
+  };
+
+  // Toca som de welcome (precisa gesto do user, mas o submit do form vale)
+  setTimeout(() => playBeep(), 200);
+
+  renderChamadoCard();
+}
+
+document.getElementById('loginform').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const nome = document.getElementById('lognome').value.trim();
+  const placa = document.getElementById('logplaca').value.trim().toUpperCase();
+  if(!nome) return;
+  const existing = loadMe();
+  me = existing && existing.nome === nome ? existing : {
+    id: genId(),
+    nome,
+    placa,
+    color: '#00B4E5',
+    status: 'online'
+  };
+  me.color = colorFromId(me.id);
+  me.nome = nome;
+  me.placa = placa;
+  me.status = 'online';
+  saveMe(me);
+  sync = createSync();
+  bootApp();
+});
+
+// Auto-login se já tem sessão
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = loadMe();
+  if(saved){
+    me = saved;
+    me.status = 'online'; // sempre começa online ao abrir
+    saveMe(me);
+    sync = createSync();
+    bootApp();
+  } else {
+    showLogin();
+  }
+});
+
+// Mantém GPS ativo quando volta foreground
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden && me && myPos){ sendPos(myPos); }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,2222 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vammo · Torre de Controle</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+:root{
+  --bg:#0a1428;
+  --surf:#152339;
+  --surf2:#1e3050;
+  --bdr:#2d3f55;
+  --bdr2:#3d5278;
+  --txt:#e8eef8;
+  --txt2:#9aa8bd;
+  --txt3:#6b7a91;
+  --acc:#00B4E5;
+  --novo:#dc2626;
+  --rota:#d97706;
+  --conc:#16a34a;
+  --canc:#6b7280;
+  --on:#10b981;
+  --busy:#f59e0b;
+  --off:#6b7280;
+  --mono:'IBM Plex Mono','SF Mono','Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px}
+button{font-family:inherit;cursor:pointer;border:1px solid var(--bdr);background:var(--surf);color:var(--txt);padding:6px 12px;font-size:12px;border-radius:6px;font-weight:500}
+button:hover{background:var(--surf2);border-color:var(--bdr2)}
+button.primary{background:var(--acc);color:#001823;border-color:var(--acc);font-weight:700}
+button.primary:hover{background:#0099c4}
+input,select,textarea{font-family:inherit;font-size:12px;padding:8px 10px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt);border-radius:6px;width:100%}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-color:var(--acc)}
+
+#app{display:flex;flex-direction:column;height:100vh;width:100vw}
+
+/* NAV */
+#nav{flex:0 0 54px;display:flex;align-items:center;gap:12px;padding:0 16px;background:linear-gradient(180deg,#0d1730,#0a1428);border-bottom:1px solid var(--bdr2);font-size:13px}
+.brand{display:flex;align-items:center;gap:10px;padding-right:8px;border-right:1px solid var(--bdr);height:36px}
+.brand .lg{height:22px;color:var(--acc);display:block}
+.brand .lg svg{height:100%;width:auto;display:block}
+.brand .sub{color:var(--txt2);font-weight:500;font-size:10px;letter-spacing:0.8px;text-transform:uppercase}
+#nav .pills{display:flex;gap:4px}
+.pill{padding:5px 10px;border:1px solid var(--bdr);background:transparent;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:5px;border-radius:6px;color:var(--txt2);font-weight:600}
+.pill:hover{background:var(--surf);color:var(--txt)}
+.pill.active{background:var(--surf2);color:var(--txt);border-color:var(--bdr2)}
+.pill .n{background:var(--surf2);padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700}
+.pill.active .n{background:var(--acc);color:#001823}
+#nav .spacer{flex:1}
+
+#nav .iconbtn{padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:5px}
+#nav .iconbtn.on{background:var(--acc);color:#001823;border-color:var(--acc);font-weight:700}
+#nav .demo-on{background:var(--rota);color:#fff;border-color:var(--rota);font-weight:700}
+#syncind{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--txt2);padding:0 8px}
+#syncind .d{width:8px;height:8px;border-radius:50%;background:var(--off)}
+#syncind .d.ok{background:var(--on);box-shadow:0 0 6px var(--on)}
+
+/* MAIN */
+#main{flex:1;display:flex;min-height:0;overflow:hidden;position:relative}
+
+/* SIDEBAR */
+#sidebar{flex:0 0 340px;border-right:1px solid var(--bdr2);background:var(--surf);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#kpis{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border-bottom:1px solid var(--bdr)}
+.kpi{padding:10px 6px;text-align:center;cursor:pointer;border-right:1px solid var(--bdr);transition:background 0.15s}
+.kpi:last-child{border-right:none}
+.kpi:hover{background:var(--surf2)}
+.kpi.active{background:var(--surf2);box-shadow:inset 0 -2px 0 var(--acc)}
+.kpi .lbl{font-size:9px;color:var(--txt2);letter-spacing:0.6px;font-weight:700}
+.kpi .val{font-size:22px;font-weight:800;margin-top:3px;font-family:var(--mono)}
+.kpi.k-novo .val{color:var(--novo)}
+.kpi.k-rota .val{color:var(--rota)}
+.kpi.k-conc .val{color:var(--conc)}
+.kpi.k-canc .val{color:var(--canc)}
+
+#tabs{display:flex;border-bottom:1px solid var(--bdr);background:var(--bg)}
+.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:11px;color:var(--txt2);font-weight:600;letter-spacing:0.3px}
+.tab.active{background:var(--surf);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acc)}
+
+#listwrap{flex:1;overflow:auto;min-height:0;background:var(--bg)}
+.card{background:var(--surf);border-bottom:1px solid var(--bdr);padding:10px 12px;cursor:pointer;font-size:12px;position:relative;transition:background 0.1s}
+.card:hover{background:var(--surf2)}
+.card.sel{background:rgba(0,180,229,0.08);border-left:3px solid var(--acc);padding-left:9px}
+.card.warn{background:rgba(245,158,11,0.12)}
+.card.crit{background:rgba(220,38,38,0.18);animation:cardblink 1.6s infinite}
+@keyframes cardblink{0%,100%{background:rgba(220,38,38,0.18)}50%{background:rgba(220,38,38,0.35)}}
+.card .row1{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.card .nome{font-weight:700;font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .ico{font-size:16px}
+.card .badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.b{font-size:9px;padding:2px 6px;border-radius:3px;letter-spacing:0.5px;font-weight:700}
+.b-novo{background:var(--novo);color:#fff}
+.b-rota{background:var(--rota);color:#fff}
+.b-conc{background:var(--conc);color:#fff}
+.b-canc{background:var(--canc);color:#fff}
+.b-trav{background:#000;color:#ffd000}
+.b-sla{background:#fef3c7;color:#92400e}
+.b-sla.crit{background:var(--novo);color:#fff;animation:pulse 0.9s infinite}
+.b-mot{color:#fff;font-weight:700}
+.b-queue{background:var(--acc);color:#001823;font-weight:800;font-family:var(--mono)}
+.b-queue.first{background:#fff;color:#001823;box-shadow:0 0 0 1px var(--acc)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.card .motivo{color:var(--txt);font-size:11px;margin-top:3px;line-height:1.3}
+.card .end{color:var(--txt2);font-size:10px;margin-top:3px;line-height:1.3}
+.card .meta{display:flex;justify-content:space-between;color:var(--txt3);font-size:10px;margin-top:4px;font-family:var(--mono)}
+
+/* Motoristas */
+#motwrap{flex:1;overflow:auto;display:none;flex-direction:column;background:var(--surf)}
+#motwrap.show{display:flex}
+.mot{border-bottom:1px solid var(--bdr);background:var(--surf)}
+.mot .mhdr{padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.mot .mhdr:hover{background:var(--surf2)}
+.mot .av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex:0 0 36px;position:relative}
+.mot .av .stdot{position:absolute;bottom:-2px;right:-2px;width:12px;height:12px;border-radius:50%;border:2px solid var(--surf)}
+.mot .av .stdot.online{background:var(--on)}
+.mot .av .stdot.busy{background:var(--busy)}
+.mot .av .stdot.off{background:var(--off)}
+.mot .info{flex:1;min-width:0}
+.mot .nm{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mot .pl{color:var(--txt2);font-size:10px;margin-top:1px;font-family:var(--mono)}
+.mot .st{font-size:10px;color:var(--txt3);margin-top:2px}
+.mot .gobtn{padding:5px 8px;font-size:10px}
+.mot .chev{color:var(--txt3);font-size:14px;transition:transform 0.2s;padding:0 4px}
+.mot.expanded .chev{transform:rotate(180deg);color:var(--acc)}
+.mot .filadrop{background:var(--bg);border-top:1px solid var(--bdr);padding:8px 10px 10px 10px;display:none}
+.mot.expanded .filadrop{display:block}
+.mot .filaitem{display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;margin-bottom:5px;cursor:pointer}
+.mot .filaitem:hover{background:var(--surf2);border-color:var(--bdr2)}
+.mot .filaitem .fn{background:var(--acc);color:#001823;width:22px;height:22px;border-radius:50%;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);flex:0 0 22px}
+.mot .filaitem.first .fn{box-shadow:0 0 0 2px rgba(0,180,229,0.4);animation:numpulse 1.5s ease-out infinite}
+.mot .filaitem .fic{font-size:14px;flex:0 0 18px}
+.mot .filaitem .ftxt{flex:1;min-width:0;font-size:11px}
+.mot .filaitem .fcli{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mot .filaitem .fmt{color:var(--txt2);font-size:10px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mot .filaitem .fx{background:transparent;border:1px solid var(--bdr);color:var(--txt2);width:24px;height:24px;font-size:14px;display:flex;align-items:center;justify-content:center;border-radius:4px;padding:0;flex:0 0 24px}
+.mot .filaitem .fx:hover{background:var(--novo);color:#fff;border-color:var(--novo)}
+.mot .filaacts{display:flex;gap:6px;margin-top:8px}
+.mot .filaacts button{flex:1;padding:7px;font-size:10px;font-weight:600}
+.mot .filaacts .clear-all{background:rgba(220,38,38,0.12);color:#fca5a5;border-color:rgba(220,38,38,0.4)}
+.mot .filaacts .clear-all:hover{background:rgba(220,38,38,0.25);color:#fff}
+.mot .filaempty{padding:10px;text-align:center;color:var(--txt3);font-size:11px}
+
+#motempty{padding:24px;text-align:center;color:var(--txt2);font-size:12px}
+#motempty .ic{font-size:32px;margin-bottom:8px;opacity:0.5}
+#motempty .url{display:block;margin-top:12px;padding:10px;background:var(--bg);border-radius:6px;font-family:var(--mono);font-size:10px;color:var(--acc);word-break:break-all;border:1px dashed var(--bdr2)}
+
+/* MAP */
+#mapwrap{flex:1;position:relative;background:#0a1428;min-width:0}
+#leafmap{width:100%;height:100%;background:#0a1428;transition:background 0.3s}
+#leafmap.theme-voyager{background:#f5f3ea}
+#leafmap.theme-satellite{background:#000}
+
+.leaflet-container{background:#0a1428 !important}
+.leaflet-control-zoom a{background:var(--surf)!important;color:var(--txt)!important;border-color:var(--bdr)!important}
+.leaflet-control-zoom a:hover{background:var(--surf2)!important}
+.osrm-route{filter:drop-shadow(0 0 4px rgba(0,180,229,0.6));animation:dashflow 1s linear infinite}
+@keyframes dashflow{to{stroke-dashoffset:-20}}
+.route-tooltip{background:rgba(10,20,40,0.95) !important;color:var(--acc) !important;border:1px solid var(--acc) !important;font-weight:700;font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:6px}
+.route-tooltip::before{display:none !important}
+
+/* Markers */
+.cm-icon{background:transparent !important;border:none !important}
+.cm-icon .pin{width:34px;height:42px;position:relative;filter:drop-shadow(0 3px 4px rgba(0,0,0,0.5))}
+.cm-icon .pin .body{position:absolute;top:0;left:0;width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+.cm-icon .pin .em{transform:rotate(45deg);font-size:16px}
+.cm-icon .pin .qnum{position:absolute;top:-6px;right:-6px;width:22px;height:22px;background:#fff;color:#001823;border-radius:50%;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--acc);z-index:2;font-family:var(--mono)}
+.cm-icon .pin .qnum.first{background:var(--acc);color:#001823;border-color:#fff;animation:numpulse 1.5s ease-out infinite}
+@keyframes numpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+.cm-icon.sel .pin .body{box-shadow:0 0 0 3px var(--acc),0 0 0 5px #fff}
+.cm-icon.warn .pin .body::after{content:'';position:absolute;inset:-6px;border-radius:50% 50% 50% 0;border:2px solid #f59e0b;opacity:0.7;animation:pulse 1.6s infinite}
+.cm-icon.crit .pin .body::after{content:'';position:absolute;inset:-6px;border-radius:50% 50% 50% 0;border:2px solid var(--novo);animation:pulse 0.8s infinite}
+
+.mt-icon{background:transparent !important;border:none !important}
+.mt-icon .marker{width:46px;height:46px;position:relative}
+.mt-icon .ring{position:absolute;inset:0;border-radius:50%;background:rgba(0,180,229,0.15);border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;text-shadow:0 1px 2px rgba(0,0,0,0.6)}
+.mt-icon .pulse{position:absolute;inset:0;border-radius:50%;animation:motpulse 2s ease-out infinite;opacity:0.5}
+@keyframes motpulse{0%{transform:scale(1);opacity:0.5}100%{transform:scale(1.8);opacity:0}}
+.mt-icon .lbl{position:absolute;top:50px;left:50%;transform:translateX(-50%);background:rgba(10,20,40,0.95);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap;border:1px solid var(--acc);font-family:var(--mono)}
+.mt-icon .badge{position:absolute;top:-4px;right:-4px;background:var(--acc);color:#001823;font-size:10px;font-weight:800;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
+.mt-icon.off{opacity:0.4}
+.mt-icon.off .pulse{display:none}
+.mt-icon.warn .ring{border-color:#dc2626 !important;box-shadow:0 0 0 3px rgba(220,38,38,0.4)}
+.mt-icon.warn .pulse{background:#dc2626 !important;animation:motpulse 0.9s ease-out infinite}
+.mt-icon.warn::after{content:'⚠';position:absolute;top:-8px;right:-8px;background:#dc2626;color:#fff;width:20px;height:20px;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:800;border:2px solid var(--bg);z-index:3;animation:numpulse 1s infinite}
+
+.b-arrived{background:#16a34a;color:#fff;font-weight:700;animation:pulse 1.5s infinite}
+
+/* Detail panel */
+#detail{position:absolute;top:12px;right:12px;width:340px;background:var(--surf);border:1px solid var(--bdr2);box-shadow:0 12px 32px rgba(0,0,0,0.6);padding:14px;display:none;z-index:1000;max-height:calc(100% - 24px);overflow:auto;font-size:12px;border-radius:10px}
+#detail.show{display:block}
+#detail .x{position:absolute;top:8px;right:10px;background:transparent;border:none;font-size:18px;color:var(--txt2);padding:0;width:28px;height:28px;border-radius:50%}
+#detail .x:hover{background:var(--surf2)}
+#detail h3{font-size:15px;margin-bottom:6px;padding-right:30px;font-weight:700}
+#detail .mtv{color:var(--txt2);font-size:11px;margin-bottom:8px}
+#detail dl{display:grid;grid-template-columns:70px 1fr;gap:6px 10px;font-size:11px;margin-top:10px}
+#detail dt{color:var(--txt2);font-size:10px;font-weight:600;letter-spacing:0.3px}
+#detail dd{font-size:11px;line-height:1.4;word-break:break-word}
+#detail .links{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+#detail .links a{flex:1;min-width:80px;padding:6px;background:var(--surf2);color:var(--acc);text-decoration:none;text-align:center;font-size:10px;border-radius:6px;border:1px solid var(--bdr);font-weight:600}
+#detail .links a:hover{background:var(--bdr)}
+#detail .statbtns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:14px}
+#detail .statbtns button{padding:8px;font-size:10px;font-weight:700}
+#detail .statbtns .b-novo{background:var(--novo);color:#fff;border-color:var(--novo)}
+#detail .statbtns .b-rota{background:var(--rota);color:#fff;border-color:var(--rota)}
+#detail .statbtns .b-conc{background:var(--conc);color:#fff;border-color:var(--conc)}
+#detail .statbtns .b-canc{background:var(--canc);color:#fff;border-color:var(--canc)}
+#detail .statbtns button.cur{outline:2px solid var(--acc);outline-offset:-1px}
+#detail .assign{margin-top:14px;padding-top:14px;border-top:1px solid var(--bdr)}
+#detail .assign label{font-size:10px;color:var(--txt2);display:block;margin-bottom:6px;font-weight:600;letter-spacing:0.3px}
+#detail .assign-row{display:flex;gap:6px;align-items:center}
+#detail select{flex:1}
+#detail .curmot{margin-top:8px;padding:10px 12px;background:var(--surf2);border-radius:8px;font-size:11px;border-left:3px solid var(--acc)}
+#detail .curmot .line1{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+#detail .curmot .mavt{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;flex:0 0 26px}
+#detail .curmot .minfo{flex:1;font-size:12px}
+#detail .curmot .mn{font-weight:700}
+#detail .curmot .ms{color:var(--txt2);font-size:10px}
+#detail .unassign{width:100%;padding:9px;font-size:11px;background:rgba(220,38,38,0.15);color:#fca5a5;border:1px solid rgba(220,38,38,0.4);font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px}
+#detail .unassign:hover{background:rgba(220,38,38,0.3);color:#fff;border-color:var(--novo)}
+#detail .queuepos{margin-top:10px;padding:10px;background:rgba(0,180,229,0.1);border:1px solid var(--acc);border-radius:6px;display:flex;align-items:center;gap:10px}
+#detail .queuepos .pn{background:var(--acc);color:#001823;width:30px;height:30px;border-radius:50%;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);flex:0 0 30px}
+#detail .queuepos .pi{flex:1;font-size:11px}
+#detail .queuepos .pi .l1{color:var(--acc);font-weight:700}
+#detail .queuepos .pi .l2{color:var(--txt2);font-size:10px}
+#detail .qreorder{display:flex;gap:4px}
+#detail .qreorder button{padding:4px 8px;font-size:14px;line-height:1;background:var(--surf2);border:1px solid var(--bdr)}
+#detail .qreorder button:disabled{opacity:0.3;cursor:not-allowed}
+
+#legend{position:absolute;bottom:12px;left:12px;background:rgba(21,35,57,0.92);color:var(--txt2);padding:8px 12px;font-size:10px;border:1px solid var(--bdr);line-height:1.7;z-index:500;border-radius:8px;backdrop-filter:blur(8px);max-width:200px}
+#legend .lr{display:flex;align-items:center;gap:6px}
+#legend .dot{width:8px;height:8px;border-radius:50%}
+
+/* Layer switcher */
+#layerswitch{position:absolute;top:84px;right:12px;background:var(--surf);border:1px solid var(--bdr2);border-radius:8px;z-index:500;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
+#layerswitch button{padding:8px 6px;border:none;background:transparent;color:var(--txt2);font-size:9px;font-weight:600;border-bottom:1px solid var(--bdr);width:50px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;border-radius:0}
+#layerswitch button:last-child{border-bottom:none}
+#layerswitch button .ic{font-size:16px}
+#layerswitch button:hover{background:var(--surf2);color:var(--txt)}
+#layerswitch button.active{background:var(--acc);color:#001823}
+#layerswitch button.active .ic{filter:drop-shadow(0 0 2px rgba(255,255,255,0.5))}
+#layerswitch button.ttg{border-top:2px solid var(--bdr)}
+#layerswitch button.ttg.active{background:#d97706;color:#fff}
+
+/* Traffic incident markers */
+.tt-inc{background:transparent !important;border:none !important}
+.tt-inc .ic{width:26px;height:26px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));font-weight:800}
+.tt-inc.sev-1 .ic{background:#fbbf24}
+.tt-inc.sev-2 .ic{background:#f59e0b}
+.tt-inc.sev-3 .ic{background:#dc2626}
+.tt-inc.sev-4 .ic{background:#7f1d1d;animation:pulse 1.5s infinite}
+.tt-inc-tooltip{background:rgba(10,20,40,0.95) !important;color:#fff !important;border:1px solid var(--rota) !important;font-size:11px !important;max-width:250px;padding:6px 10px;border-radius:6px;font-weight:500}
+.mot-tooltip{background:rgba(10,20,40,0.95) !important;color:#fff !important;border:1px solid var(--acc) !important;font-size:11px !important;padding:6px 10px;border-radius:6px}
+.mot-tooltip::before{display:none !important}
+
+.traffic-attr{position:absolute;bottom:32px;right:8px;background:rgba(0,0,0,0.5);color:#fff;font-size:9px;padding:2px 6px;border-radius:3px;z-index:400;pointer-events:none;display:none}
+.traffic-attr.show{display:block}
+
+/* Custom scale */
+.leaflet-control-scale{margin-bottom:60px !important;margin-left:12px !important}
+.leaflet-control-scale-line{background:rgba(21,35,57,0.85) !important;color:var(--txt2) !important;border-color:var(--bdr) !important;font-family:var(--mono);font-size:10px !important}
+
+/* Tile filter adjustments per theme */
+#leafmap.theme-light .leaflet-tile-pane{filter:none}
+#leafmap.theme-satellite .leaflet-tile-pane{filter:saturate(0.85) brightness(0.9)}
+
+/* DEMO PANEL */
+#demopanel{position:absolute;top:12px;left:12px;background:var(--surf);border:1px solid var(--rota);padding:10px;font-size:11px;z-index:500;border-radius:8px;display:none;width:240px}
+#demopanel.show{display:block}
+#demopanel h4{font-size:11px;font-weight:700;margin-bottom:8px;color:var(--rota);display:flex;align-items:center;gap:6px}
+#demopanel .hint{color:var(--txt2);font-size:10px;margin-bottom:8px;line-height:1.4}
+#demopanel button{width:100%;padding:7px;font-size:11px;margin-bottom:4px}
+#demopanel .addmode{background:var(--rota);color:#fff;border-color:var(--rota)}
+#demopanel.armed::before{content:'';position:fixed;inset:0;pointer-events:none;border:3px dashed var(--rota);z-index:9999;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:0.3}}
+
+#leafmap.add-mode{cursor:crosshair}
+
+/* CONFIG */
+#config{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;z-index:10000}
+#config.show{display:flex}
+#config .panel{background:var(--surf);border:1px solid var(--bdr2);padding:24px;border-radius:12px;width:480px;max-width:92vw;max-height:90vh;overflow:auto}
+#config h2{font-size:18px;margin-bottom:6px}
+#config .sub{font-size:12px;color:var(--txt2);margin-bottom:16px}
+#config label{display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600}
+#config textarea{font-family:var(--mono);font-size:11px;min-height:120px;resize:vertical}
+#config .actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
+
+/* TOAST */
+#toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-200%);background:var(--acc);color:#001823;padding:12px 20px;border-radius:24px;font-weight:700;font-size:13px;z-index:10001;box-shadow:0 10px 30px rgba(0,180,229,0.4);transition:transform 0.3s;max-width:90vw}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--novo);color:#fff}
+
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:4px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="nav">
+    <div class="brand">
+      <div class="lg">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo">
+          <path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/>
+          <path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/>
+          <path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/>
+          <path d="M475.6293 139.81909V140.23909H475.9093Z"/>
+          <path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/>
+        </svg>
+      </div>
+      <span class="sub">Torre</span>
+    </div>
+    <div class="pills" id="pills"></div>
+    <div class="spacer"></div>
+    <div id="syncind" title="Status da sincronização"><span class="d" id="syncdot"></span><span id="synctxt">conectando…</span></div>
+    <button class="iconbtn" id="demobtn" title="Modo demo: crie chamados manualmente sem Slack">🧪 Demo</button>
+    <button class="iconbtn" id="configbtn" title="Configurações">⚙</button>
+    <button class="iconbtn" id="colaburlbtn" title="Link do app do colaborador">📱 Colab</button>
+  </div>
+
+  <div id="main">
+    <div id="sidebar">
+      <div id="kpis"></div>
+      <div id="tabs">
+        <div class="tab active" data-tab="chamados">Chamados <span id="tab1n">0</span></div>
+        <div class="tab" data-tab="motoristas">Colaboradores <span id="tab2n">0</span></div>
+      </div>
+      <div id="listwrap"></div>
+      <div id="motwrap"></div>
+    </div>
+
+    <div id="mapwrap">
+      <div id="leafmap"></div>
+      <div id="layerswitch">
+        <button data-l="dark" title="Tema escuro"><span class="ic">🌙</span><span>Dark</span></button>
+        <button data-l="voyager" title="Ruas coloridas"><span class="ic">🗺</span><span>Ruas</span></button>
+        <button data-l="satellite" title="Imagem de satélite com nomes"><span class="ic">🛰</span><span>Satélite</span></button>
+        <button data-t="traffic" class="ttg" title="Trânsito em tempo real (TomTom)"><span class="ic">🚦</span><span>Trânsito</span></button>
+        <button data-t="incidents" class="ttg" title="Acidentes / obras / engarrafamentos"><span class="ic">⚠️</span><span>Incid.</span></button>
+      </div>
+      <div id="detail"></div>
+      <div id="legend"></div>
+      <div id="demopanel">
+        <h4>🧪 Modo Demo</h4>
+        <div class="hint">Crie chamados clicando no mapa, sem precisar do Slack.</div>
+        <button class="addmode" id="addmode">📍 Adicionar chamado no mapa</button>
+        <button id="addsample">+ Adicionar 5 chamados aleatórios</button>
+        <button id="clearall">🗑 Limpar todos chamados</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIG MODAL -->
+<div id="config">
+  <div class="panel">
+    <h2>⚙ Configurações</h2>
+    <div class="sub">Sincronização e integração com Slack</div>
+
+    <label>SLA (minutos até alerta)</label>
+    <input type="number" id="cfgSla" min="10" max="240" step="5">
+
+    <label>🚦 Chave TomTom <small style="color:var(--txt3)">(trânsito, rotas inteligentes, otimização)</small></label>
+    <input type="text" id="cfgTtKey" placeholder="Cole sua chave TomTom aqui">
+    <div style="font-size:10px;color:var(--txt3);margin-top:3px">Obtenha em <a href="https://developer.tomtom.com" target="_blank" style="color:var(--acc)">developer.tomtom.com</a> · grátis 2.500 req/dia</div>
+
+    <label>🧭 Modo de roteamento <small style="color:var(--txt3)">(prioridade no cálculo da rota)</small></label>
+    <select id="cfgRouteType">
+      <option value="fastest">🚀 Mais rápido — prioriza menor tempo (default)</option>
+      <option value="shortest">📏 Menor distância — economiza km/combustível</option>
+      <option value="eco">💰 Econômico — equilibra tempo × consumo</option>
+    </select>
+
+    <label>🚛 Tipo de veículo</label>
+    <select id="cfgTravelMode">
+      <option value="car">Carro / guincho leve</option>
+      <option value="truck">Caminhão / guincho pesado (respeita restrições de via)</option>
+    </select>
+
+    <label>🚫 Evitar nas rotas</label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;margin-top:4px">
+      <label style="display:flex;gap:4px;align-items:center;font-weight:500;color:var(--txt);margin:0"><input type="checkbox" id="cfgAvoidTolls" style="width:auto"> Pedágios</label>
+      <label style="display:flex;gap:4px;align-items:center;font-weight:500;color:var(--txt);margin:0"><input type="checkbox" id="cfgAvoidMotorways" style="width:auto"> Rodovias</label>
+      <label style="display:flex;gap:4px;align-items:center;font-weight:500;color:var(--txt);margin:0"><input type="checkbox" id="cfgAvoidUnpaved" style="width:auto"> Não pavimentadas</label>
+      <label style="display:flex;gap:4px;align-items:center;font-weight:500;color:var(--txt);margin:0"><input type="checkbox" id="cfgAvoidFerries" style="width:auto"> Balsas</label>
+    </div>
+
+    <label>Firebase Realtime DB URL <small style="color:var(--txt3)">(opcional — pra rodar entre devices)</small></label>
+    <input type="text" id="cfgFbUrl" placeholder="https://seu-projeto.firebaseio.com">
+
+    <label>Firebase API Key</label>
+    <input type="text" id="cfgFbKey" placeholder="AIza...">
+
+    <label>Modo do app</label>
+    <select id="cfgMode">
+      <option value="demo">Demo (sem Slack — adicione chamados manualmente)</option>
+      <option value="slack">Slack via cowork (precisa rodar dentro do Cowork/Claude.ai)</option>
+    </select>
+
+    <div class="actions">
+      <button onclick="closeConfig()">Cancelar</button>
+      <button class="primary" onclick="saveConfig()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ============== CONFIG ==============
+const SYNC_CHANNEL = 'vammo-fase1';
+const REFRESH = 5 * 60 * 1000;
+const SLACK_CHANNEL = 'C07MDM8KUV7';
+const MOTORISTA_TTL_MS = 60 * 1000; // 60s sem update = offline
+
+let cfg = loadCfg();
+
+function loadCfg(){
+  try { return JSON.parse(localStorage.getItem('vammo_cfg')||'{}'); } catch(_){ return {}; }
+}
+function saveCfg2(c){ localStorage.setItem('vammo_cfg', JSON.stringify(c)); }
+
+// Defaults
+cfg.sla = cfg.sla || 30;
+cfg.mode = cfg.mode || 'demo';
+cfg.fbUrl = cfg.fbUrl || '';
+cfg.fbKey = cfg.fbKey || '';
+cfg.tomtomKey = cfg.tomtomKey || 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
+cfg.showTraffic = cfg.showTraffic !== false; // default ON
+cfg.showIncidents = cfg.showIncidents !== false;
+cfg.routeType = cfg.routeType || 'fastest';     // fastest | shortest | eco
+cfg.travelMode = cfg.travelMode || 'car';        // car | truck
+cfg.routeAvoid = cfg.routeAvoid || [];           // ['tollRoads','motorways','ferries','unpavedRoads']
+
+// ============== TOMTOM API LAYER ==============
+const TT = (() => {
+  const base = 'https://api.tomtom.com';
+  function k(){ return cfg.tomtomKey || ''; }
+  function has(){ return k().length > 10; }
+  async function jget(url){
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('TT HTTP ' + r.status + ' on ' + url.split('?')[0]);
+    return r.json();
+  }
+  async function jpost(url, body){
+    const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if(!r.ok) throw new Error('TT POST ' + r.status);
+    return r.json();
+  }
+  return {
+    has,
+    trafficFlowTileUrl(style){
+      // style: 'relative-delay' (recomendado), 'absolute', 'relative', 'reduced-sensitivity'
+      const s = style || 'relative-delay';
+      return `${base}/traffic/map/4/tile/flow/${s}/{z}/{x}/{y}.png?key=${k()}`;
+    },
+    async incidents(bbox){
+      // bbox = [minLng, minLat, maxLng, maxLat]
+      // Importante: idioma 'pt-PT' (pt-BR não é suportado pela API)
+      const fields = '{incidents{type,geometry{type,coordinates},properties{iconCategory,magnitudeOfDelay,events{description,code,iconCategory},startTime,endTime,from,to,length,delay,roadNumbers}}}';
+      const url = `${base}/traffic/services/5/incidentDetails?bbox=${bbox.join(',')}&fields=${encodeURIComponent(fields)}&language=pt-PT&key=${k()}`;
+      return jget(url);
+    },
+    async route(from, stops, opts){
+      // from = {lat,lng}, stops = [{lat,lng}, ...]
+      const o = opts || {};
+      const routeType = o.routeType || cfg.routeType || 'fastest';
+      const travelMode = o.travelMode || cfg.travelMode || 'car';
+      const avoid = o.avoid || cfg.routeAvoid || [];
+      const all = [from, ...stops];
+      const coordStr = all.map(p => `${p.lat},${p.lng}`).join(':');
+      const params = [
+        `routeType=${routeType}`,
+        'traffic=true',
+        `travelMode=${travelMode}`,
+        'computeBestOrder=false',
+        'instructionsType=text',
+        `key=${k()}`
+      ];
+      if(avoid.length) params.push('avoid=' + avoid.join(','));
+      const url = `${base}/routing/1/calculateRoute/${coordStr}/json?${params.join('&')}`;
+      const data = await jget(url);
+      if(!data.routes || !data.routes.length) throw new Error('TT route vazia');
+      const r = data.routes[0];
+      // Concat all leg points
+      const coords = [];
+      for(const leg of r.legs){
+        for(const p of leg.points){ coords.push([p.latitude, p.longitude]); }
+      }
+      const summary = r.summary || {};
+      return {
+        coords,
+        distance: summary.lengthInMeters || 0,
+        duration: summary.travelTimeInSeconds || 0,
+        trafficDelay: summary.trafficDelayInSeconds || 0,
+        legs: (r.legs || []).map(l => ({
+          distance: l.summary.lengthInMeters,
+          duration: l.summary.travelTimeInSeconds,
+          trafficDelay: l.summary.trafficDelayInSeconds || 0
+        }))
+      };
+    },
+    async optimize(from, stops){
+      // Reordena waypoints — retorna nova ordem (índices de stops, sem incluir from)
+      if(stops.length < 2) return stops.map((_,i) => i);
+      const url = `${base}/routing/waypointoptimization/1?key=${k()}`;
+      const body = {
+        waypoints: [from, ...stops].map(p => ({ point: { latitude: p.lat, longitude: p.lng }})),
+        options: { travelMode: 'car', outputExtensions: ['travelTimes','routeLengths'] }
+      };
+      const data = await jpost(url, body);
+      // Resposta: optimizedOrder = [0, 2, 1, 3, ...] — índices do array original que mandamos
+      // Sempre começa com 0 (origem). Removo a origem e ajusto índices.
+      const ord = data.optimizedOrder || [];
+      // ord vem com índices [0, ...] referenciando o array que mandamos (origin + stops)
+      // pra retornar só stops, removo 0 e desconto 1 de cada índice
+      return ord.filter(i => i > 0).map(i => i - 1);
+    },
+    async matrix(origins, destinations){
+      // Tempos entre origens e destinos com trânsito ao vivo.
+      // IMPORTANTE: traffic=live exige departAt=now (default any não combina).
+      const url = `${base}/routing/matrix/2?key=${k()}`;
+      const body = {
+        origins: origins.map(p => ({ point:{ latitude:p.lat, longitude:p.lng }})),
+        destinations: destinations.map(p => ({ point:{ latitude:p.lat, longitude:p.lng }})),
+        options: { travelMode:'car', traffic:'live', departAt:'now', routeType:'fastest' }
+      };
+      const data = await jpost(url, body);
+      return data.data || [];
+    },
+    async geocode(query, opts){
+      const o = opts || {};
+      const qs = new URLSearchParams({
+        countrySet: 'BR',
+        limit: String(o.limit || 1),
+        language: 'pt-BR',
+        key: k()
+      });
+      if(o.center){ qs.set('lat', o.center.lat); qs.set('lon', o.center.lng); qs.set('radius', String(o.radius || 50000)); }
+      const url = `${base}/search/2/geocode/${encodeURIComponent(query)}.json?${qs}`;
+      const data = await jget(url);
+      if(!data.results || !data.results.length) return null;
+      const r = data.results[0];
+      return {
+        lat: r.position.lat,
+        lng: r.position.lon,
+        address: r.address?.freeformAddress || query,
+        score: r.score
+      };
+    },
+    async reverse(lat, lng){
+      const url = `${base}/search/2/reverseGeocode/${lat},${lng}.json?language=pt-BR&key=${k()}`;
+      const data = await jget(url);
+      if(!data.addresses || !data.addresses.length) return null;
+      return data.addresses[0].address;
+    },
+    async snap(points){
+      // points = [{lat,lng}, ...]   — max 100 por chamada
+      if(points.length < 2) return points.slice();
+      const pstr = points.map(p => `${p.lat},${p.lng}`).join(':');
+      const url = `${base}/snap-to-roads/1?points=${pstr}&fields=snappedPoints&key=${k()}`;
+      try {
+        const data = await jget(url);
+        if(!data.snappedPoints) return points.slice();
+        return data.snappedPoints.map(sp => ({ lat: sp.location.latitude, lng: sp.location.longitude }));
+      } catch(e){
+        // Fallback: retorna originais
+        return points.slice();
+      }
+    }
+  };
+})();
+
+// ============== STATE ==============
+let chamados = [];         // de Slack OU demo
+let motoristas = {};       // {id: {nome, placa, color, lat, lng, status, lastSeen}}
+let filtro = null;
+let selId = null;
+let tab = 'chamados';
+let addMode = false;
+let pendingChamado = null;
+let demoMode = cfg.mode === 'demo';
+let map = null;
+let chamadoMarkers = {};
+let motoristaMarkers = {};
+let trails = {};              // {motoristaId: [{lat,lng,ts}, ...]}  últimas N posições
+let trailLines = {};          // {motoristaId: L.polyline}
+let routeLines = {};          // {motoristaId: L.polyline}  rota OSRM multi-stop
+let routePending = {};        // {motoristaId: bool}  evita request duplicado
+let motExpanded = new Set();  // ids de motoristas com fila expandida
+let sync = null;
+let lastSync = null;
+
+const TRAIL_MAX = 40;            // últimas N posições
+const TRAIL_TTL_MS = 30 * 60000; // pontos > 30min são descartados
+const ROUTE_REFRESH_M = 150;     // refaz OSRM se motorista andou >150m
+const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
+
+// localStorage maps
+function loadStatusMap(){ try{ return JSON.parse(localStorage.getItem('vammo_smap2')||'{}'); }catch(_){ return {}; } }
+function saveStatusMap(m){ localStorage.setItem('vammo_smap2', JSON.stringify(m)); }
+function loadAsgn(){ try{ return JSON.parse(localStorage.getItem('vammo_asgn2')||'{}'); }catch(_){ return {}; } }
+function saveAsgn(a){ localStorage.setItem('vammo_asgn2', JSON.stringify(a)); }
+function loadQueues(){ try{ return JSON.parse(localStorage.getItem('vammo_queue')||'{}'); }catch(_){ return {}; } }
+function saveQueues(q){ localStorage.setItem('vammo_queue', JSON.stringify(q)); }
+
+// Helpers da fila — ordem por motorista
+function queueAdd(motoristaId, chamadoId){
+  const q = loadQueues();
+  q[motoristaId] = q[motoristaId] || [];
+  if(!q[motoristaId].includes(chamadoId)) q[motoristaId].push(chamadoId);
+  saveQueues(q);
+  return q;
+}
+function queueRemove(chamadoId){
+  const q = loadQueues();
+  for(const mid in q){ q[mid] = q[mid].filter(id => id !== chamadoId); if(!q[mid].length) delete q[mid]; }
+  saveQueues(q);
+  return q;
+}
+function queueMove(motoristaId, fromIdx, toIdx){
+  const q = loadQueues();
+  if(!q[motoristaId]) return q;
+  const arr = q[motoristaId];
+  if(fromIdx < 0 || fromIdx >= arr.length || toIdx < 0 || toIdx >= arr.length) return q;
+  const [item] = arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, item);
+  saveQueues(q);
+  return q;
+}
+// Retorna {chamadoId: {motId, order, total}}
+function buildOrderMap(){
+  const map = {};
+  const q = loadQueues();
+  for(const mid in q){
+    q[mid].forEach((cid, i) => { map[cid] = { motId: mid, order: i+1, total: q[mid].length }; });
+  }
+  return map;
+}
+function loadDemoChamados(){ try{ return JSON.parse(localStorage.getItem('vammo_demo_ch')||'[]'); }catch(_){ return []; } }
+function saveDemoChamados(c){ localStorage.setItem('vammo_demo_ch', JSON.stringify(c)); }
+
+// ============== SYNC ==============
+function createSync(){
+  const handlers = {};
+  let bc = null, fb = null;
+
+  try { bc = new BroadcastChannel(SYNC_CHANNEL); } catch(_){}
+  if(bc){
+    bc.onmessage = (e) => {
+      const m = e.data;
+      if(m && m.type && handlers[m.type]) handlers[m.type].forEach(fn => fn(m.data, m));
+    };
+    setSyncIndicator('ok', 'local');
+  }
+
+  if(cfg.fbUrl && cfg.fbKey){
+    loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js').then(() =>
+      loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js')
+    ).then(() => {
+      try {
+        firebase.initializeApp({ apiKey: cfg.fbKey, databaseURL: cfg.fbUrl });
+        fb = firebase.database().ref('vammo/events');
+        fb.limitToLast(50).on('child_added', (snap) => {
+          const m = snap.val();
+          if(!m || m._from === 'torre') return;
+          if(m.type && handlers[m.type]) handlers[m.type].forEach(fn => fn(m.data, m));
+        });
+        setSyncIndicator('ok', 'firebase + local');
+      } catch(err){ console.warn('FB err', err); setSyncIndicator('err', 'erro firebase'); }
+    });
+  }
+
+  return {
+    on(t, fn){ (handlers[t] = handlers[t] || []).push(fn); },
+    send(t, d){
+      const msg = { type:t, data:d, ts:Date.now(), _from:'torre' };
+      if(bc) bc.postMessage(msg);
+      if(fb) fb.push(msg).catch(e => console.warn(e));
+    }
+  };
+}
+
+function loadScript(src){
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+function setSyncIndicator(state, txt){
+  const d = $('#syncdot');
+  d.className = 'd ' + (state === 'ok' ? 'ok' : '');
+  $('#synctxt').textContent = txt;
+}
+
+// ============== HELPERS ==============
+function $(s){ return document.querySelector(s); }
+function $$(s){ return [...document.querySelectorAll(s)]; }
+function esc(s){
+  if(s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function elapsedMin(ts){ return Math.floor((Date.now() - ts) / 60000); }
+function fmtTime(ts){
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+function fmtElapsed(ts){
+  const m = elapsedMin(ts);
+  if(m < 60) return m + 'min';
+  return Math.floor(m/60) + 'h' + String(m%60).padStart(2,'0');
+}
+
+function ico(motivo){
+  if(!motivo) return '🔧';
+  const m = motivo.toLowerCase();
+  if(m.includes('acidente')) return '🚨';
+  if(m.includes('não liga') || m.includes('nao liga')) return '🔌';
+  if(m.includes('não anda') || m.includes('nao anda')) return '⛔';
+  if(m.includes('freio')) return '🛑';
+  if(m.includes('devoluç') || m.includes('devoluc')) return '📦';
+  if(m.includes('pneu')) return '🛞';
+  if(m.includes('travada') || m.includes('travado')) return '🔒';
+  if(m.includes('inadimpl')) return '💸';
+  if(m.includes('recolhimento')) return '🚛';
+  if(m.includes('vazamento')) return '💧';
+  if(m.includes('bateria')) return '🔋';
+  return '🔧';
+}
+
+function statusColor(s){
+  return s === 'novo' ? '#dc2626' : s === 'em_rota' ? '#d97706' : s === 'concluido' ? '#16a34a' : '#6b7280';
+}
+
+function alertCls(c){
+  if(c.status !== 'novo' && c.status !== 'em_rota') return '';
+  const m = elapsedMin(c.ts);
+  if(m > cfg.sla * 2) return 'crit';
+  if(m > cfg.sla) return 'warn';
+  return '';
+}
+
+// ============== MAP ==============
+function ttTileUrl(style){
+  // TomTom Maps Display API — estilo Google Maps de verdade
+  return `https://api.tomtom.com/map/1/tile/${style}/{z}/{x}/{y}.png?key=${cfg.tomtomKey || ''}`;
+}
+function getTileLayers(){
+  // TomTom basic é estilo Google Maps. Pra satélite, ESRI funciona em qualquer zoom
+  // (TomTom hybrid só serve a partir do z=12).
+  if(TT.has()){
+    return {
+      dark: { url: ttTileUrl('basic/night'), sub: '', attr: '© TomTom', label: 'Dark' },
+      voyager: { url: ttTileUrl('basic/main'), sub: '', attr: '© TomTom', label: 'Streets' },
+      satellite: {
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        sub: '', attr: '© Esri', label: 'Satellite',
+        overlayLabels: ttTileUrl('labels/main') // labels TomTom em cima (consistente)
+      }
+    };
+  }
+  return {
+    dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', sub:'abcd', attr:'© OSM · CARTO', label:'Dark' },
+    voyager: { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', sub:'abcd', attr:'© OSM · CARTO', label:'Streets' },
+    satellite: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      sub: '', attr: '© Esri', label: 'Satellite',
+      overlayLabels: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+      overlaySub: 'abcd'
+    }
+  };
+}
+let TILE_LAYERS = getTileLayers();
+
+let baseLayer = null;
+let labelsLayer = null;
+let trafficLayer = null;
+let incidentLayer = null;
+let incidentMarkers = [];
+let incidentsLoading = false;
+let lastIncidentBbox = null;
+let currentLayerName = localStorage.getItem('vammo_layer') || 'dark';
+
+function applyLayer(name){
+  TILE_LAYERS = getTileLayers();
+  if(!TILE_LAYERS[name]) name = 'dark';
+  const l = TILE_LAYERS[name];
+  if(baseLayer) map.removeLayer(baseLayer);
+  if(labelsLayer){ map.removeLayer(labelsLayer); labelsLayer = null; }
+  baseLayer = L.tileLayer(l.url, {
+    subdomains: l.sub || 'abc',
+    maxZoom: 22,
+    attribution: l.attr
+  }).addTo(map);
+  baseLayer.bringToBack();
+  // Aplica overlay de labels se o layer tiver
+  if(l.overlayLabels){
+    labelsLayer = L.tileLayer(l.overlayLabels, {
+      subdomains: l.overlaySub || 'abc', maxZoom: 22, opacity: 0.95
+    }).addTo(map);
+  }
+  currentLayerName = name;
+  localStorage.setItem('vammo_layer', name);
+  const mapEl = $('#leafmap');
+  mapEl.classList.remove('theme-dark','theme-light','theme-satellite','theme-voyager');
+  mapEl.classList.add('theme-' + name);
+  $$('#layerswitch button').forEach(b => b.classList.toggle('active', b.dataset.l === name));
+  if(trafficLayer){ trafficLayer.bringToFront(); }
+}
+
+function initMap(){
+  map = L.map('leafmap', {
+    zoomControl: true,
+    attributionControl: false,
+    preferCanvas: false
+  }).setView([-23.5505, -46.6333], 11);
+  applyLayer(currentLayerName);
+  L.control.scale({ position: 'bottomleft', metric: true, imperial: false, maxWidth: 120 }).addTo(map);
+  L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map);
+
+  // Restaura estado dos toggles TomTom
+  if(cfg.showTraffic && TT.has()) toggleTraffic(true);
+  if(cfg.showIncidents && TT.has()) toggleIncidents(true);
+
+  map.on('click', (e) => {
+    if(addMode){ promptAddChamado(e.latlng.lat, e.latlng.lng); }
+  });
+
+  // Refetch incidentes quando o mapa mexe (debounced)
+  let incTo = null;
+  map.on('moveend', () => {
+    if(!incidentLayer || !TT.has()) return;
+    clearTimeout(incTo);
+    incTo = setTimeout(fetchIncidentsInView, 500);
+  });
+
+  // Layer switcher
+  $$('#layerswitch button').forEach(b => {
+    if(b.dataset.t){
+      b.classList.toggle('active', b.dataset.t === 'traffic' ? cfg.showTraffic : cfg.showIncidents);
+      b.onclick = () => {
+        if(!TT.has()){ showToast('Configure a chave TomTom em ⚙', true); return; }
+        if(b.dataset.t === 'traffic'){ toggleTraffic(); }
+        else { toggleIncidents(); }
+      };
+    } else {
+      b.onclick = () => applyLayer(b.dataset.l);
+    }
+  });
+}
+
+function toggleTraffic(force){
+  const on = force !== undefined ? force : !trafficLayer;
+  if(on && !trafficLayer){
+    trafficLayer = L.tileLayer(TT.trafficFlowTileUrl('relative-delay'), {
+      maxZoom: 22, opacity: 0.85, attribution: '© TomTom Traffic'
+    }).addTo(map);
+    trafficLayer.bringToFront();
+  } else if(!on && trafficLayer){
+    map.removeLayer(trafficLayer);
+    trafficLayer = null;
+  }
+  cfg.showTraffic = !!trafficLayer;
+  saveCfg2(cfg);
+  $$('#layerswitch button[data-t="traffic"]').forEach(b => b.classList.toggle('active', !!trafficLayer));
+}
+
+function toggleIncidents(force){
+  const on = force !== undefined ? force : !incidentLayer;
+  if(on && !incidentLayer){
+    incidentLayer = L.layerGroup().addTo(map);
+    fetchIncidentsInView();
+  } else if(!on && incidentLayer){
+    map.removeLayer(incidentLayer);
+    incidentLayer = null;
+    incidentMarkers = [];
+    lastIncidentBbox = null;
+  }
+  cfg.showIncidents = !!incidentLayer;
+  saveCfg2(cfg);
+  $$('#layerswitch button[data-t="incidents"]').forEach(b => b.classList.toggle('active', !!incidentLayer));
+}
+
+const INCIDENT_ICONS = {
+  // baseado em iconCategory do TomTom (0-14)
+  0: { e: 'ℹ️', name: 'Desconhecido' },
+  1: { e: '🚧', name: 'Acidente' },
+  2: { e: '🌫', name: 'Neblina' },
+  3: { e: '⚠️', name: 'Condição perigosa' },
+  4: { e: '🌧', name: 'Chuva' },
+  5: { e: '🧊', name: 'Gelo na pista' },
+  6: { e: '🐢', name: 'Engarrafamento' },
+  7: { e: '🚧', name: 'Faixa interditada' },
+  8: { e: '🚫', name: 'Pista fechada' },
+  9: { e: '🚧', name: 'Obras' },
+  10: { e: '💨', name: 'Vento forte' },
+  11: { e: '🌊', name: 'Alagamento' },
+  12: { e: '🚛', name: 'Veículo quebrado' },
+  13: { e: '🚨', name: 'Evento' },
+  14: { e: '⚠️', name: 'Outro' }
+};
+
+async function fetchIncidentsInView(){
+  if(!incidentLayer || !TT.has() || incidentsLoading) return;
+  const b = map.getBounds();
+  const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
+  if(span > 1.5){ // aprox 150km — muito zoom out
+    showToast('⚠ Dê zoom mais próximo pra ver incidentes', true);
+    return;
+  }
+  const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  if(lastIncidentBbox){
+    const dx = Math.max(Math.abs(bbox[0]-lastIncidentBbox[0]), Math.abs(bbox[2]-lastIncidentBbox[2]));
+    const dy = Math.max(Math.abs(bbox[1]-lastIncidentBbox[1]), Math.abs(bbox[3]-lastIncidentBbox[3]));
+    if(dx < 0.01 && dy < 0.01) return;
+  }
+  incidentsLoading = true;
+  try {
+    const data = await TT.incidents(bbox);
+    lastIncidentBbox = bbox;
+    incidentLayer.clearLayers();
+    incidentMarkers = [];
+    const incs = (data.incidents || []);
+    for(const inc of incs){
+      const props = inc.properties || {};
+      const geom = inc.geometry || {};
+      let lat, lng;
+      if(geom.type === 'Point'){ lng = geom.coordinates[0]; lat = geom.coordinates[1]; }
+      else if(geom.type === 'LineString' && geom.coordinates.length){
+        const mid = geom.coordinates[Math.floor(geom.coordinates.length/2)];
+        lng = mid[0]; lat = mid[1];
+      } else continue;
+      const cat = props.iconCategory != null ? props.iconCategory : 0;
+      const icon = INCIDENT_ICONS[cat] || INCIDENT_ICONS[0];
+      const sev = props.magnitudeOfDelay || 1;
+      const events = (props.events || []).map(e => e.description).filter(Boolean).join(' · ');
+      const desc = events || icon.name;
+      const road = props.roadNumbers ? props.roadNumbers.join(', ') : '';
+      const delayMin = props.delay ? Math.round(props.delay/60) : 0;
+      const lengthKm = props.length ? (props.length/1000).toFixed(1) : '';
+
+      const divIcon = L.divIcon({
+        className: `tt-inc sev-${Math.min(4, sev)}`,
+        html: `<div class="ic">${icon.e}</div>`,
+        iconSize: [26,26],
+        iconAnchor: [13,13]
+      });
+      let tipText = `<b>${icon.name}</b>${road ? ' — '+esc(road) : ''}<br>${esc(desc)}`;
+      if(delayMin > 0 || lengthKm) tipText += `<br><small style="color:#fbbf24">${delayMin?'⏱ +'+delayMin+'min ':''}${lengthKm?'📏 '+lengthKm+'km':''}</small>`;
+      // Linestring com geometry visual no mapa pra congestionamentos longos
+      if(geom.type === 'LineString' && geom.coordinates.length > 1){
+        const sevColors = { 0:'#fbbf24', 1:'#fbbf24', 2:'#f59e0b', 3:'#dc2626', 4:'#7f1d1d' };
+        const line = L.polyline(geom.coordinates.map(c => [c[1], c[0]]), {
+          color: sevColors[Math.min(4,sev)] || '#f59e0b',
+          weight: 5, opacity: 0.7, lineCap: 'round'
+        });
+        line.bindTooltip(tipText, { sticky:true, className:'tt-inc-tooltip' });
+        incidentLayer.addLayer(line);
+      }
+      const m = L.marker([lat, lng], { icon: divIcon, zIndexOffset: 100 });
+      m.bindTooltip(tipText, { sticky:true, className:'tt-inc-tooltip' });
+      incidentLayer.addLayer(m);
+      incidentMarkers.push(m);
+    }
+    const n = incs.length;
+    showToast(n > 0 ? `🚦 ${n} incidente${n>1?'s':''} de trânsito encontrado${n>1?'s':''}` : '✓ Nenhum incidente nesta área agora');
+  } catch(e){
+    console.warn('Incidents err:', e.message);
+    showToast('❌ Erro nos incidentes: ' + e.message, true);
+  } finally {
+    incidentsLoading = false;
+  }
+}
+
+function renderChamadoMarkers(){
+  const seen = new Set();
+  const orderMap = buildOrderMap();
+  for(const c of chamados){
+    if(!c.lat || !c.lng) continue;
+    seen.add(c.id);
+    const al = alertCls(c);
+    const isSel = c.id === selId;
+    const cls = `cm-icon ${al} ${isSel?'sel':''}`;
+    const color = statusColor(c.status);
+    const ord = orderMap[c.id];
+    const numHtml = ord ? `<div class="qnum${ord.order===1?' first':''}">${ord.order}</div>` : '';
+    const html = `<div class="pin">${numHtml}<div class="body" style="background:${color}"><div class="em">${ico(c.motivo)}</div></div></div>`;
+    const icon = L.divIcon({ className: cls, html, iconSize:[34,42], iconAnchor:[17,40] });
+    if(chamadoMarkers[c.id]){
+      chamadoMarkers[c.id].setIcon(icon);
+      chamadoMarkers[c.id].setLatLng([c.lat, c.lng]);
+    } else {
+      const m = L.marker([c.lat, c.lng], { icon }).addTo(map);
+      m.on('click', () => { selId = c.id; renderAll(); });
+      chamadoMarkers[c.id] = m;
+    }
+  }
+  for(const id in chamadoMarkers){
+    if(!seen.has(id)){ map.removeLayer(chamadoMarkers[id]); delete chamadoMarkers[id]; }
+  }
+}
+
+function renderMotoristaMarkers(){
+  const seen = new Set();
+  const now = Date.now();
+  for(const id in motoristas){
+    const m = motoristas[id];
+    if(!m.lat || !m.lng) continue;
+    seen.add(id);
+    const isOff = m.status === 'off' || (now - (m.lastSeen || 0)) > MOTORISTA_TTL_MS;
+    const ringColor = m.status === 'busy' ? '#d97706' : isOff ? '#6b7280' : '#10b981';
+    const initial = (m.nome || '?').charAt(0).toUpperCase();
+    const html = `<div class="marker">
+      <div class="pulse" style="background:${ringColor}"></div>
+      <div class="ring" style="background:${m.color || '#00B4E5'};border-color:${ringColor}">${initial}</div>
+      ${m.activeCount ? `<div class="badge">${m.activeCount}</div>` : ''}
+      <div class="lbl">${esc(m.nome.split(' ')[0])}</div>
+    </div>`;
+    const warnCls = m._offRoute ? ' warn' : '';
+    const icon = L.divIcon({ className: `mt-icon ${isOff?'off':''}${warnCls}`, html, iconSize:[46,70], iconAnchor:[23,23] });
+    const stTxt = isOff ? 'offline' : m.status === 'busy' ? 'em rota' : 'online';
+    const filaTxt = m.activeCount > 0 ? ` · ${m.activeCount} na fila` : '';
+    const ruaTxt = m.currentStreet ? `<br><small style="color:#00B4E5">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</small>` : '';
+    const tip = `<b>${esc(m.nome)}</b><br><small>${esc(m.placa||'sem placa')} · ${stTxt}${filaTxt}</small>${ruaTxt}`;
+    if(motoristaMarkers[id]){
+      motoristaMarkers[id].setIcon(icon);
+      motoristaMarkers[id].setLatLng([m.lat, m.lng]);
+      if(motoristaMarkers[id].getTooltip()) motoristaMarkers[id].setTooltipContent(tip);
+    } else {
+      const mk = L.marker([m.lat, m.lng], { icon, zIndexOffset: 500 }).addTo(map);
+      mk.bindTooltip(tip, { direction: 'top', offset: [0, -10], className: 'mot-tooltip', sticky: true });
+      motoristaMarkers[id] = mk;
+    }
+  }
+  for(const id in motoristaMarkers){
+    if(!seen.has(id)){ map.removeLayer(motoristaMarkers[id]); delete motoristaMarkers[id]; }
+  }
+}
+
+// ============== TRAILS (rastro GPS real do colaborador) ==============
+const snapDebounce = {};        // {motoristaId: timeoutId}
+const snappedTrails = {};       // {motoristaId: [{lat,lng}]} versão snapped pra render
+
+function pushTrail(motoristaId, lat, lng){
+  if(!trails[motoristaId]) trails[motoristaId] = [];
+  const arr = trails[motoristaId];
+  const last = arr[arr.length-1];
+  if(last && haversine(last, {lat,lng}) < 3) return;
+  arr.push({ lat, lng, ts: Date.now() });
+  const cutoff = Date.now() - TRAIL_TTL_MS;
+  while(arr.length > 0 && arr[0].ts < cutoff) arr.shift();
+  while(arr.length > TRAIL_MAX) arr.shift();
+  // Snap to roads em background (debounce 3s)
+  if(TT.has() && arr.length >= 3){
+    clearTimeout(snapDebounce[motoristaId]);
+    snapDebounce[motoristaId] = setTimeout(async () => {
+      try {
+        const snapped = await TT.snap(arr.slice(-100).map(p => ({lat:p.lat, lng:p.lng})));
+        snappedTrails[motoristaId] = snapped;
+        renderTrail(motoristaId);
+      } catch(e){}
+    }, 3000);
+  }
+}
+
+function renderTrail(motoristaId){
+  const arr = snappedTrails[motoristaId] || trails[motoristaId];
+  const mot = motoristas[motoristaId];
+  if(!arr || arr.length < 2 || !mot){
+    if(trailLines[motoristaId]){ map.removeLayer(trailLines[motoristaId]); delete trailLines[motoristaId]; }
+    return;
+  }
+  const pts = arr.map(p => [p.lat, p.lng]);
+  if(trailLines[motoristaId]){
+    trailLines[motoristaId].setLatLngs(pts);
+    trailLines[motoristaId].setStyle({ color: mot.color });
+  } else {
+    trailLines[motoristaId] = L.polyline(pts, {
+      color: mot.color || '#00B4E5',
+      weight: 4,
+      opacity: 0.7,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(map);
+  }
+}
+
+function renderAllTrails(){
+  for(const id in trails) renderTrail(id);
+  // Remove órfãos
+  for(const id in trailLines){
+    if(!trails[id] || !motoristas[id]){
+      map.removeLayer(trailLines[id]);
+      delete trailLines[id];
+    }
+  }
+}
+
+// ============== ROTA OSRM (motorista → chamado) ==============
+function haversine(a, b){
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI/180;
+  const dLng = (b.lng - a.lng) * Math.PI/180;
+  const la1 = a.lat * Math.PI/180, la2 = b.lat * Math.PI/180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+async function fetchMultiRoute(from, stops){
+  // Tenta TomTom primeiro (considera trânsito), OSRM como fallback
+  if(TT.has()){
+    try { return await TT.route(from, stops); }
+    catch(e){ console.warn('TT route falhou, fallback OSRM:', e.message); }
+  }
+  const all = [from, ...stops];
+  const coordStr = all.map(p => `${p.lng},${p.lat}`).join(';');
+  const url = `${OSRM_URL}/${coordStr}?overview=full&geometries=geojson&steps=false`;
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('OSRM HTTP ' + r.status);
+  const data = await r.json();
+  if(!data.routes || !data.routes.length) throw new Error('Sem rota encontrada');
+  const route = data.routes[0];
+  return {
+    coords: route.geometry.coordinates.map(c => [c[1], c[0]]),
+    distance: route.distance,
+    duration: route.duration,
+    trafficDelay: 0,
+    legs: (route.legs || []).map(l => ({ distance: l.distance, duration: l.duration, trafficDelay: 0 }))
+  };
+}
+
+async function updateRouteFor(motoristaId){
+  const m = motoristas[motoristaId];
+  if(!m || !m.lat || !m.lng){ clearRoute(motoristaId); return; }
+  const q = loadQueues();
+  const ids = q[motoristaId] || [];
+  // Pega chamados da fila que ainda estão abertos e geo-localizados
+  const stops = [];
+  for(const cid of ids){
+    const c = chamados.find(x => x.id === cid);
+    if(!c) continue;
+    if(c.status === 'concluido' || c.status === 'cancelado') continue;
+    if(!c.lat || !c.lng) continue;
+    stops.push({ lat: c.lat, lng: c.lng, id: c.id });
+  }
+  if(stops.length === 0){ clearRoute(motoristaId); return; }
+  // Cache: só refaz se motorista andou bastante OU se a fila mudou
+  const hashKey = stops.map(s => s.id).join('|');
+  const existing = routeLines[motoristaId];
+  if(existing && existing._hash === hashKey && existing._fromLat != null){
+    const moved = haversine({lat:existing._fromLat, lng:existing._fromLng}, {lat:m.lat, lng:m.lng});
+    if(moved < ROUTE_REFRESH_M) return;
+  }
+  if(routePending[motoristaId]) return;
+  routePending[motoristaId] = true;
+  try {
+    const route = await fetchMultiRoute({lat:m.lat,lng:m.lng}, stops);
+    if(routeLines[motoristaId]){ map.removeLayer(routeLines[motoristaId]); }
+    const line = L.polyline(route.coords, {
+      color: '#00B4E5',
+      weight: 5,
+      opacity: 0.85,
+      dashArray: '12,8',
+      lineCap: 'round',
+      className: 'osrm-route'
+    }).addTo(map);
+    line._fromLat = m.lat;
+    line._fromLng = m.lng;
+    line._distance = route.distance;
+    line._duration = route.duration;
+    line._trafficDelay = route.trafficDelay || 0;
+    line._legs = route.legs;
+    line._hash = hashKey;
+    line._motoristaId = motoristaId;
+    const km = (route.distance/1000).toFixed(1);
+    const min = Math.round(route.duration/60);
+    const delayMin = Math.round((route.trafficDelay||0)/60);
+    const delayTxt = delayMin > 0 ? ` <span style="color:#fbbf24">(+${delayMin}min de trânsito)</span>` : '';
+    const tipText = (stops.length > 1
+      ? `🚗 ${stops.length} paradas · ${km}km · ${min}min`
+      : `🚗 ${km}km · ETA ${min}min`) + delayTxt;
+    line.bindTooltip(tipText, { permanent: false, sticky: true, className: 'route-tooltip' });
+    routeLines[motoristaId] = line;
+    if(selId && chamados.find(x => x.id === selId && x.motoristaId === motoristaId)) renderDetail();
+  } catch(err){
+    console.warn('Erro OSRM:', err.message);
+  } finally {
+    routePending[motoristaId] = false;
+  }
+}
+
+function clearRoute(motoristaId){
+  if(routeLines[motoristaId]){
+    map.removeLayer(routeLines[motoristaId]);
+    delete routeLines[motoristaId];
+  }
+  delete routePending[motoristaId];
+}
+
+function updateAllRoutes(){
+  const q = loadQueues();
+  for(const mid in q){ updateRouteFor(mid); }
+  // Remove rotas de motoristas que não têm mais fila
+  for(const mid in routeLines){
+    if(!q[mid] || q[mid].length === 0) clearRoute(mid);
+  }
+}
+
+function renderLegend(){
+  const hasAtraso = chamados.some(c => (c.status==='novo'||c.status==='em_rota') && elapsedMin(c.ts) > cfg.sla);
+  const count = Object.keys(motoristas).filter(id => motoristas[id].status !== 'off').length;
+  $('#legend').innerHTML = `
+    <div class="lr"><span class="dot" style="background:#dc2626"></span>Novo</div>
+    <div class="lr"><span class="dot" style="background:#d97706"></span>Em rota</div>
+    <div class="lr"><span class="dot" style="background:#16a34a"></span>Concluído</div>
+    ${hasAtraso ? `<div class="lr"><span class="dot" style="background:#dc2626"></span>SLA estourado (+${cfg.sla}min)</div>`:''}
+    <div style="border-top:1px solid var(--bdr);margin:4px 0;padding-top:4px"></div>
+    <div class="lr"><span class="dot" style="background:#10b981"></span>${count} colaborador${count===1?'':'es'} ativo${count===1?'':'s'}</div>
+  `;
+}
+
+// ============== KPIs / TABS / LIST ==============
+function counts(){
+  const c = {novo:0, em_rota:0, concluido:0, cancelado:0};
+  for(const x of chamados) c[x.status] = (c[x.status]||0)+1;
+  return c;
+}
+
+function renderKPIs(){
+  const cs = counts();
+  const data = [
+    {k:'novo', cls:'k-novo', lbl:'NOVOS', n:cs.novo},
+    {k:'em_rota', cls:'k-rota', lbl:'ROTA', n:cs.em_rota},
+    {k:'concluido', cls:'k-conc', lbl:'CONC.', n:cs.concluido},
+    {k:'cancelado', cls:'k-canc', lbl:'CANC.', n:cs.cancelado}
+  ];
+  $('#kpis').innerHTML = data.map(d =>
+    `<div class="kpi ${d.cls}${filtro===d.k?' active':''}" data-k="${d.k}"><div class="lbl">${d.lbl}</div><div class="val">${d.n}</div></div>`
+  ).join('');
+  $$('.kpi').forEach(el => el.onclick = () => {
+    filtro = (filtro === el.dataset.k) ? null : el.dataset.k;
+    renderAll();
+  });
+}
+
+function renderPills(){
+  const cs = counts();
+  const total = chamados.length;
+  $('#pills').innerHTML = `<div class="pill${!filtro?' active':''}" data-f="">Todos <span class="n">${total}</span></div>` +
+    [['novo','🔴'],['em_rota','🟡'],['concluido','🟢'],['cancelado','⚫']].map(([k,e]) =>
+      `<div class="pill${filtro===k?' active':''}" data-f="${k}">${e} <span class="n">${cs[k]||0}</span></div>`
+    ).join('');
+  $$('#pills .pill').forEach(el => el.onclick = () => {
+    filtro = el.dataset.f || null;
+    renderAll();
+  });
+}
+
+function filtered(){
+  return chamados.filter(c => !filtro || c.status === filtro);
+}
+
+function renderList(){
+  const items = filtered();
+  $('#tab1n').textContent = '(' + items.length + ')';
+  if(!items.length){
+    $('#listwrap').innerHTML = `<div style="padding:30px;text-align:center;color:var(--txt2)">
+      <div style="font-size:36px;opacity:0.4">📋</div>
+      <div style="margin-top:8px;font-size:12px">Nenhum chamado${filtro?' neste filtro':''}</div>
+      ${demoMode ? '<div style="font-size:10px;color:var(--txt3);margin-top:6px">Modo demo: clique em <strong>🧪 Demo</strong> e adicione chamados</div>':''}
+    </div>`;
+    return;
+  }
+  const orderMap = buildOrderMap();
+  $('#listwrap').innerHTML = items.map(c => {
+    const sel = c.id === selId ? ' sel' : '';
+    const al = alertCls(c);
+    const motId = c.motoristaId;
+    const mot = motId ? motoristas[motId] : null;
+    const ord = orderMap[c.id];
+    const slaBadge = al ? `<span class="b b-sla${al==='crit'?' crit':''}">⏱ ${fmtElapsed(c.ts)}</span>` : '';
+    const trBadge = c.travada ? `<span class="b b-trav">⚠ TRAV</span>` : '';
+    const arrivedBadge = c.arrived ? `<span class="b b-arrived">🎯 NO LOCAL</span>` : '';
+    const queueBadge = ord ? `<span class="b b-queue${ord.order===1?' first':''}" title="Posição ${ord.order} na fila de ${ord.total}">${ord.order}/${ord.total}</span>` : '';
+    const motBadge = mot ? `<span class="b b-mot" style="background:${mot.color}">${esc(mot.nome.split(' ')[0])}</span>` : '';
+    const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>`;
+    return `<div class="card${sel} ${al}" data-id="${c.id}">
+      <div class="row1">
+        <div class="nome">${esc(c.cliente||'?')}</div>
+        <div class="ico">${ico(c.motivo)}</div>
+      </div>
+      <div class="badges">${stBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
+      <div class="motivo">${esc(c.motivo||'—')}</div>
+      ${c.endereco ? `<div class="end">📍 ${esc(c.endereco)}</div>` : ''}
+      <div class="meta"><span>${esc(c.placa||'—')}</span><span>${fmtTime(c.ts)} · ${fmtElapsed(c.ts)}</span></div>
+    </div>`;
+  }).join('');
+  $$('#listwrap .card').forEach(el => el.onclick = () => {
+    selId = el.dataset.id;
+    const c = chamados.find(x => x.id === selId);
+    if(c && c.lat) map.setView([c.lat, c.lng], 15);
+    renderAll();
+  });
+}
+
+function renderMot(){
+  const ids = Object.keys(motoristas);
+  $('#tab2n').textContent = '(' + ids.length + ')';
+  if(!ids.length){
+    const url = location.href.replace(/torre\.html.*$/, 'colab.html');
+    $('#motwrap').innerHTML = `<div id="motempty">
+      <div class="ic">📱</div>
+      <div><strong>Nenhum colaborador conectado</strong></div>
+      <div style="font-size:11px;margin-top:6px">Abra o app do colaborador em outro device ou aba para começar:</div>
+      <a class="url" href="${esc(url)}" target="_blank">${esc(url)}</a>
+      <div style="font-size:10px;color:var(--txt3);margin-top:8px">No celular do motorista: abra esse link, faça login e a posição aparece aqui em tempo real.</div>
+    </div>`;
+    return;
+  }
+  const q = loadQueues();
+  const expanded = motExpanded; // Set de ids expandidos
+
+  $('#motwrap').innerHTML = ids.map(id => {
+    const m = motoristas[id];
+    const fila = q[id] || [];
+    const ac = fila.length;
+    const isOff = m.status === 'off' || (Date.now() - (m.lastSeen||0)) > MOTORISTA_TTL_MS;
+    const stCls = isOff ? 'off' : m.status === 'busy' ? 'busy' : 'online';
+    const stLbl = isOff ? 'offline' : m.status === 'busy' ? 'em rota' : 'online';
+    const hasGeo = m.lat != null && m.lng != null;
+    const filaStr = ac > 0
+      ? `<span style="color:var(--acc);font-weight:700">${ac} na fila</span>`
+      : 'sem chamados';
+    const isExp = expanded.has(id);
+
+    // Fila expandida
+    let filaHtml = '';
+    if(fila.length === 0){
+      filaHtml = `<div class="filaempty">Sem chamados atribuídos</div>`;
+    } else {
+      filaHtml = fila.map((cid, i) => {
+        const c = chamados.find(x => x.id === cid);
+        if(!c) return '';
+        return `<div class="filaitem${i===0?' first':''}" data-cid="${cid}">
+          <div class="fn">${i+1}</div>
+          <div class="fic">${ico(c.motivo)}</div>
+          <div class="ftxt">
+            <div class="fcli">${esc(c.cliente||'?')}</div>
+            <div class="fmt">${esc(c.motivo||'')}${c.endereco ? ' · '+esc(c.endereco.split(',')[0]) : ''}</div>
+          </div>
+          <button class="fx" data-act="remove" title="Tirar este chamado deste colaborador">✕</button>
+        </div>`;
+      }).join('');
+      filaHtml += `<div class="filaacts">
+        ${hasGeo ? `<button data-act="locate">📍 Ver no mapa</button>` : ''}
+        ${hasGeo && fila.length > 1 && TT.has() ? `<button data-act="optimize" style="background:rgba(0,180,229,0.15);color:var(--acc);border-color:var(--acc);font-weight:700">✨ Otimizar ordem</button>` : ''}
+        <button class="clear-all" data-act="clear-all">🗑 Limpar fila</button>
+      </div>`;
+    }
+
+    return `<div class="mot${isExp?' expanded':''}" data-id="${id}">
+      <div class="mhdr">
+        <div class="av" style="background:${m.color}">
+          ${esc(m.nome.charAt(0).toUpperCase())}
+          <div class="stdot ${stCls}"></div>
+        </div>
+        <div class="info">
+          <div class="nm">${esc(m.nome)}</div>
+          <div class="pl">${esc(m.placa||'sem placa')}</div>
+          <div class="st">${stLbl} · ${filaStr} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}</div>
+          ${m.currentStreet ? `<div class="st" style="color:var(--acc);font-size:9px;margin-top:2px">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</div>` : ''}
+        </div>
+        <div class="chev">▼</div>
+      </div>
+      <div class="filadrop">${filaHtml}</div>
+    </div>`;
+  }).join('');
+
+  $$('#motwrap .mot').forEach(el => {
+    const id = el.dataset.id;
+    el.querySelector('.mhdr').onclick = () => {
+      if(motExpanded.has(id)) motExpanded.delete(id);
+      else motExpanded.add(id);
+      renderMot();
+    };
+    // Cliques nos items da fila — leva pro chamado no mapa
+    el.querySelectorAll('.filaitem').forEach(it => {
+      it.onclick = (e) => {
+        if(e.target.dataset.act === 'remove') return; // tratado abaixo
+        const cid = it.dataset.cid;
+        const c = chamados.find(x => x.id === cid);
+        if(c){
+          selId = cid;
+          if(c.lat) map.setView([c.lat, c.lng], 15);
+          renderAll();
+        }
+      };
+      // Botão ✕ individual
+      const rm = it.querySelector('[data-act="remove"]');
+      if(rm) rm.onclick = (e) => {
+        e.stopPropagation();
+        const cid = it.dataset.cid;
+        const c = chamados.find(x => x.id === cid);
+        if(!c) return;
+        const m = motoristas[id];
+        if(!confirm(`Tirar "${c.cliente}" da fila de ${m.nome}?`)) return;
+        atribuir(cid, '');
+      };
+    });
+    // Botão localizar
+    const loc = el.querySelector('[data-act="locate"]');
+    if(loc) loc.onclick = (e) => {
+      e.stopPropagation();
+      const m = motoristas[id];
+      if(m && m.lat) map.setView([m.lat, m.lng], 15);
+    };
+    // Botão limpar tudo
+    const clr = el.querySelector('[data-act="clear-all"]');
+    if(clr) clr.onclick = (e) => {
+      e.stopPropagation();
+      const m = motoristas[id];
+      const fila = (loadQueues()[id] || []);
+      if(!confirm(`Limpar TODA a fila de ${m.nome}?\n\n${fila.length} chamado${fila.length>1?'s':''} ${fila.length>1?'voltam':'volta'} para a torre.`)) return;
+      fila.slice().forEach(cid => atribuir(cid, ''));
+    };
+    // Botão otimizar fila
+    const opt = el.querySelector('[data-act="optimize"]');
+    if(opt) opt.onclick = async (e) => {
+      e.stopPropagation();
+      await otimizarFila(id, opt);
+    };
+  });
+}
+
+async function otimizarFila(motoristaId, btn){
+  const m = motoristas[motoristaId];
+  if(!m || !m.lat) return;
+  const q = loadQueues();
+  const fila = q[motoristaId] || [];
+  if(fila.length < 2) return;
+  const stops = [];
+  const idsValid = [];
+  for(const cid of fila){
+    const c = chamados.find(x => x.id === cid);
+    if(c && c.lat && c.lng && c.status !== 'concluido' && c.status !== 'cancelado'){
+      stops.push({ lat: c.lat, lng: c.lng });
+      idsValid.push(cid);
+    }
+  }
+  if(stops.length < 2){ showToast('Fila precisa de 2+ pontos com GPS pra otimizar'); return; }
+  const oldText = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Otimizando…'; }
+  try {
+    const newOrder = await TT.optimize({lat:m.lat, lng:m.lng}, stops);
+    if(!newOrder || newOrder.length !== stops.length){ throw new Error('Resposta inválida'); }
+    // Verifica se mudou de fato
+    const same = newOrder.every((v, i) => v === i);
+    if(same){
+      showToast('✓ A fila já estava na ordem ideal');
+      if(btn){ btn.disabled = false; btn.textContent = oldText; }
+      return;
+    }
+    const newQueue = newOrder.map(i => idsValid[i]);
+    // Mantém no fim os que não tinham GPS (não otimizáveis)
+    const rest = fila.filter(id => !idsValid.includes(id));
+    const qs = loadQueues();
+    qs[motoristaId] = [...newQueue, ...rest];
+    saveQueues(qs);
+    sync.send('chamado:reordenar', { motoristaId, order: qs[motoristaId] });
+    updateRouteFor(motoristaId);
+    renderAll();
+    showToast(`✨ Fila otimizada! ${m.nome} agora percorre menos km/tempo`);
+  } catch(e){
+    showToast('❌ Erro ao otimizar: ' + e.message, true);
+    if(btn){ btn.disabled = false; btn.textContent = oldText; }
+  }
+}
+
+// ============== DETAIL ==============
+function renderDetail(){
+  const c = chamados.find(x => x.id === selId);
+  if(!c){ $('#detail').classList.remove('show'); return; }
+  $('#detail').classList.add('show');
+
+  const motIds = Object.keys(motoristas);
+  const onlineMots = motIds.filter(id => {
+    const m = motoristas[id];
+    return m.status !== 'off' && (Date.now() - (m.lastSeen||0)) <= MOTORISTA_TTL_MS;
+  });
+  const curMot = c.motoristaId ? motoristas[c.motoristaId] : null;
+  const motOpts = '<option value="">— selecionar colaborador —</option>' +
+    motIds.map(id => {
+      const m = motoristas[id];
+      const isOn = onlineMots.includes(id);
+      return `<option value="${id}"${id===c.motoristaId?' selected':''}>${esc(m.nome)} ${m.placa?'('+esc(m.placa)+')':''} ${isOn?'🟢':'⚫'}</option>`;
+    }).join('');
+
+  const gmaps = c.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.endereco + ', São Paulo, SP')}` : '';
+
+  $('#detail').innerHTML = `
+    <button class="x" onclick="closeDetail()">×</button>
+    <h3>${ico(c.motivo)} ${esc(c.cliente||'?')}</h3>
+    <div class="mtv">${esc(c.motivo||'—')}</div>
+    <div>
+      <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>
+      <span style="margin-left:8px;color:var(--txt2);font-size:11px">⏱ ${fmtElapsed(c.ts)}</span>
+      ${c.travada?'<span class="b b-trav" style="margin-left:6px">⚠ TRAV</span>':''}
+    </div>
+    ${gmaps ? `<div class="links"><a href="${gmaps}" target="_blank" rel="noopener">🗺 Google Maps</a>${c.lat && c.lng ? `<a href="https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes" target="_blank">🚗 Waze</a>` : ''}${c.backofficeUrl ? `<a href="${esc(c.backofficeUrl)}" target="_blank">🔗 Backoffice</a>`:''}<a href="#" id="trackcopy" style="background:linear-gradient(135deg,#00B4E5,#0099c4);color:#fff;border:none;font-weight:700">📤 Link p/ cliente</a></div>`:''}
+    ${(() => {
+      // Busca rota do motorista atribuído a este chamado
+      if(!c.motoristaId) return '';
+      const r = routeLines[c.motoristaId];
+      if(!r) return '';
+      const km = (r._distance/1000).toFixed(1);
+      const min = Math.round(r._duration/60);
+      const delayMin = Math.round((r._trafficDelay||0)/60);
+      const provider = TT.has() && r._trafficDelay != null ? 'TomTom c/ trânsito' : 'OSM';
+      const modoLbl = { fastest:'🚀 mais rápido', shortest:'📏 menor distância', eco:'💰 econômico' }[cfg.routeType] || cfg.routeType;
+      const veicLbl = cfg.travelMode === 'truck' ? ' · 🚛 modo guincho' : '';
+      const avoidLbl = cfg.routeAvoid.length ? ' · evita ' + cfg.routeAvoid.length + ' restrição(ões)' : '';
+      return `<div style="margin-top:10px;padding:8px 10px;background:rgba(0,180,229,0.1);border:1px solid var(--acc);border-radius:6px;display:flex;align-items:center;gap:10px;font-size:11px">
+        <span style="font-size:18px">🚗</span>
+        <div style="flex:1">
+          <div style="color:var(--acc);font-weight:700">Rota total da fila ${delayMin>0?`<span style="color:#fbbf24">· +${delayMin}min trânsito</span>`:''}</div>
+          <div style="color:var(--txt2);font-size:10px;margin-top:2px">${km} km · ${min} min · ${provider}</div>
+          <div style="color:var(--txt3);font-size:9px;margin-top:1px">${modoLbl}${veicLbl}${avoidLbl}</div>
+        </div>
+      </div>`;
+    })()}
+    <dl>
+      <dt>Placa</dt><dd>${esc(c.placa||'—')}</dd>
+      ${c.analista ? `<dt>Analista</dt><dd>${esc(c.analista)}</dd>`:''}
+      <dt>Endereço</dt><dd>${esc(c.endereco||'—')}</dd>
+      ${c.comentario ? `<dt>Obs.</dt><dd>${esc(c.comentario)}</dd>`:''}
+      <dt>Aberto</dt><dd>${fmtTime(c.ts)} · ${new Date(c.ts).toLocaleDateString('pt-BR')}</dd>
+    </dl>
+    <div class="statbtns">
+      <button class="b-novo${c.status==='novo'?' cur':''}" data-st="novo">Novo</button>
+      <button class="b-rota${c.status==='em_rota'?' cur':''}" data-st="em_rota">Em rota</button>
+      <button class="b-conc${c.status==='concluido'?' cur':''}" data-st="concluido">Concluído</button>
+      <button class="b-canc${c.status==='cancelado'?' cur':''}" data-st="cancelado">Cancelado</button>
+    </div>
+    ${motIds.length ? `
+      <div class="assign">
+        <label>Atribuir a colaborador (${onlineMots.length} online)</label>
+        <div class="assign-row">
+          <select id="dasel">${motOpts}</select>
+          <button id="daok" class="primary">${curMot?'Trocar':'Atribuir'}</button>
+        </div>
+        ${!curMot ? `
+          <button id="dasugest" style="width:100%;margin-top:6px;padding:8px;font-size:11px;background:rgba(0,180,229,0.12);color:var(--acc);border:1px solid var(--acc);font-weight:700;border-radius:6px">🎯 Sugerir colab mais próximo${TT.has()?' (c/ trânsito)':''}</button>
+          <div id="dasugresult"></div>
+        ` : ''}
+        ${curMot ? `<div class="curmot">
+          <div class="line1">
+            <div class="mavt" style="background:${curMot.color}">${esc(curMot.nome.charAt(0).toUpperCase())}</div>
+            <div class="minfo">
+              <div class="mn">📲 ${esc(curMot.nome)}</div>
+              <div class="ms">${esc(curMot.placa||'sem placa')}</div>
+            </div>
+          </div>
+          <button class="unassign" id="daun">✕ Desatribuir deste colaborador</button>
+        </div>` : ''}
+        ${(() => {
+          const ord = curMot ? buildOrderMap()[c.id] : null;
+          if(!ord) return '';
+          return `<div class="queuepos">
+            <div class="pn">${ord.order}</div>
+            <div class="pi">
+              <div class="l1">Ponto ${ord.order} de ${ord.total} na fila</div>
+              <div class="l2">${ord.order === 1 ? '🎯 próximo a ser atendido' : `aguarda conclusão do${ord.order > 2 ? 's' : ''} ${ord.order-1} chamado${ord.order > 2 ? 's' : ''} anterior${ord.order > 2 ? 'es' : ''}`}</div>
+            </div>
+            <div class="qreorder">
+              <button id="qup" title="Mover pra cima" ${ord.order===1?'disabled':''}>▲</button>
+              <button id="qdown" title="Mover pra baixo" ${ord.order===ord.total?'disabled':''}>▼</button>
+            </div>
+          </div>`;
+        })()}
+      </div>
+    ` : `<div class="assign"><div style="color:var(--txt3);font-size:11px;text-align:center;padding:8px">Nenhum colaborador conectado.<br><small>Abra o app do colaborador em outro device.</small></div></div>`}
+  `;
+
+  $$('#detail .statbtns button').forEach(b => b.onclick = () => updateStatus(c.id, b.dataset.st));
+  const tc = $('#trackcopy'); if(tc) tc.onclick = (e) => {
+    e.preventDefault();
+    const url = location.href.replace(/torre\.html.*$/, 'track.html') + '?id=' + encodeURIComponent(c.id);
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(url).then(() => showToast('📋 Link público copiado! Envie pro cliente'));
+    } else {
+      prompt('Envie este link pro cliente:', url);
+    }
+  };
+  const ok = $('#daok'); if(ok) ok.onclick = () => atribuir(c.id, $('#dasel').value);
+  const un = $('#daun'); if(un) un.onclick = () => {
+    const motNome = curMot ? curMot.nome : 'o colaborador';
+    if(!confirm(`Desatribuir "${c.cliente}" de ${motNome}?\n\nO chamado volta pra fila aberta e o colaborador é notificado.`)) return;
+    atribuir(c.id, '');
+  };
+  const qup = $('#qup'); if(qup) qup.onclick = () => {
+    const ord = buildOrderMap()[c.id]; if(!ord) return;
+    reordenarFila(ord.motId, ord.order-1, ord.order-2);
+  };
+  const qdown = $('#qdown'); if(qdown) qdown.onclick = () => {
+    const ord = buildOrderMap()[c.id]; if(!ord) return;
+    reordenarFila(ord.motId, ord.order-1, ord.order);
+  };
+  const sug = $('#dasugest'); if(sug) sug.onclick = async () => {
+    sug.disabled = true;
+    const showErr = (msg) => { $('#dasugresult').innerHTML = `<div style="margin-top:6px;padding:8px;background:rgba(220,38,38,0.15);border:1px solid var(--novo);border-radius:6px;font-size:10px;color:#fca5a5">${esc(msg)}</div>`; sug.disabled = false; sug.textContent = '🎯 Sugerir colab mais próximo' + (TT.has()?' (c/ trânsito)':''); };
+    if(!c.lat || !c.lng){ showErr('⚠ Este chamado não tem coordenadas. Adicione um endereço/local antes.'); return; }
+    const origins = onlineMots.map(id => motoristas[id]).filter(m => m.lat && m.lng).map(m => ({ id: m.id, lat: m.lat, lng: m.lng, nome: m.nome }));
+    if(origins.length === 0){ showErr('⚠ Sem colaboradores online com GPS.'); return; }
+    sug.textContent = '⏳ Calculando rotas para ' + origins.length + ' colab' + (origins.length>1?'s':'') + '…';
+    try {
+      let ranked;
+      if(TT.has()){
+        const matrix = await TT.matrix(origins, [{lat:c.lat,lng:c.lng}]);
+        ranked = matrix.map(r => ({
+          mot: origins[r.originIndex],
+          time: r.routeSummary?.travelTimeInSeconds || 0,
+          dist: r.routeSummary?.lengthInMeters || 0,
+          delay: r.routeSummary?.trafficDelayInSeconds || 0
+        })).sort((a,b) => a.time - b.time);
+      } else {
+        // Fallback: distância em linha reta (~ tempo a 30km/h)
+        ranked = origins.map(mot => {
+          const dist = haversine({lat:mot.lat,lng:mot.lng}, {lat:c.lat,lng:c.lng});
+          return { mot, time: dist/8.33, dist, delay: 0 };
+        }).sort((a,b) => a.time - b.time);
+      }
+      $('#dasugresult').innerHTML = `
+        <div style="margin-top:8px;padding:8px;background:var(--surf2);border-radius:6px;font-size:10px;border:1px solid var(--acc)">
+          <div style="color:var(--acc);font-weight:700;margin-bottom:6px">⚡ Ranking ${TT.has()?'com trânsito':'(linha reta)'}:</div>
+          ${ranked.slice(0,5).map((r,i) => {
+            const min = Math.round(r.time/60);
+            const km = (r.dist/1000).toFixed(1);
+            const dly = Math.round(r.delay/60);
+            const mot = r.mot;
+            return `<div style="display:flex;align-items:center;gap:6px;padding:5px 4px;border-radius:4px;margin-bottom:2px;${i===0?'background:rgba(0,180,229,0.15)':''}">
+              <span style="font-weight:800;color:${i===0?'var(--acc)':'var(--txt3)'};width:18px">${i+1}º</span>
+              <span style="flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(mot.nome)}</span>
+              <span style="font-family:var(--mono);color:${i===0?'var(--acc)':'var(--txt2)'};font-weight:700">${min}min</span>
+              <span style="color:var(--txt3);font-size:9px;font-family:var(--mono)">${km}km${dly>0?` +${dly}m`:''}</span>
+              <button data-pick="${mot.id}" style="padding:4px 8px;font-size:9px;background:${i===0?'var(--acc)':'var(--surf)'};color:${i===0?'#001823':'var(--txt)'};border:1px solid ${i===0?'var(--acc)':'var(--bdr)'};border-radius:3px;font-weight:700;cursor:pointer">Atribuir</button>
+            </div>`;
+          }).join('')}
+        </div>
+      `;
+      sug.style.display = 'none';
+      $$('#dasugresult button[data-pick]').forEach(b => b.onclick = () => atribuir(c.id, b.dataset.pick));
+    } catch(e){
+      showErr('❌ Erro: ' + e.message);
+    }
+  };
+}
+
+function closeDetail(){ selId = null; renderAll(); }
+window.closeDetail = closeDetail;
+
+function updateStatus(chamadoId, newStatus){
+  const c = chamados.find(x => x.id === chamadoId);
+  if(!c) return;
+  c.status = newStatus;
+  const sm = loadStatusMap();
+  sm[chamadoId] = newStatus;
+  saveStatusMap(sm);
+  if(demoMode){
+    const list = loadDemoChamados();
+    const i = list.findIndex(x => x.id === chamadoId);
+    if(i >= 0){ list[i].status = newStatus; saveDemoChamados(list); }
+  }
+  sync.send('chamado:status_torre', { chamadoId, status: newStatus });
+  // Se chamado fechou, remove da fila do motorista (e refaz a rota dele)
+  if(newStatus === 'concluido' || newStatus === 'cancelado'){
+    const oldMot = c.motoristaId;
+    queueRemove(chamadoId);
+    if(oldMot) updateRouteFor(oldMot);
+  }
+  renderAll();
+}
+
+function atribuir(chamadoId, motoristaId){
+  const c = chamados.find(x => x.id === chamadoId);
+  if(!c) return;
+  const a = loadAsgn();
+  if(motoristaId){
+    // Remove de qualquer fila anterior (caso reatribuição) e adiciona na nova
+    queueRemove(chamadoId);
+    queueAdd(motoristaId, chamadoId);
+    a[chamadoId] = motoristaId;
+    c.motoristaId = motoristaId;
+    if(c.status === 'novo'){
+      c.status = 'em_rota';
+      const sm = loadStatusMap();
+      sm[chamadoId] = 'em_rota';
+      saveStatusMap(sm);
+    }
+    saveAsgn(a);
+    // Envia chamado pro motorista (vai pro final da fila no app dele)
+    sync.send('chamado:atribuir', {
+      chamadoId: c.id,
+      motoristaId,
+      cliente: c.cliente,
+      motivo: c.motivo,
+      endereco: c.endereco,
+      placa: c.placa,
+      comentario: c.comentario,
+      icon: ico(c.motivo),
+      lat: c.lat,
+      lng: c.lng
+    });
+    const q = loadQueues();
+    const pos = q[motoristaId] ? q[motoristaId].length : 1;
+    showToast(`📲 ${motoristas[motoristaId].nome}${pos>1?` · ponto ${pos} da fila`:''}`);
+    updateRouteFor(motoristaId);
+  } else {
+    const oldMot = a[chamadoId];
+    delete a[chamadoId];
+    queueRemove(chamadoId);
+    saveAsgn(a);
+    c.motoristaId = null;
+    if(c.status === 'em_rota'){
+      c.status = 'novo';
+      const sm = loadStatusMap();
+      sm[chamadoId] = 'novo';
+      saveStatusMap(sm);
+    }
+    if(oldMot){
+      sync.send('chamado:desatribuir', { chamadoId: c.id, motoristaId: oldMot });
+      updateRouteFor(oldMot); // refaz rota sem esse chamado
+    }
+  }
+  recountMotoristas();
+  renderAll();
+}
+
+// Reordenar fila de um motorista (drag, ou ↑↓)
+function reordenarFila(motoristaId, fromIdx, toIdx){
+  const q = queueMove(motoristaId, fromIdx, toIdx);
+  // Avisa colaborador
+  sync.send('chamado:reordenar', { motoristaId, order: q[motoristaId] || [] });
+  updateRouteFor(motoristaId);
+  renderAll();
+}
+
+function recountMotoristas(){
+  const q = loadQueues();
+  for(const id in motoristas) motoristas[id].activeCount = 0;
+  for(const mid in q){
+    if(motoristas[mid]) motoristas[mid].activeCount = q[mid].length;
+  }
+}
+
+// ============== DEMO ==============
+const DEMO_BAIRROS = [
+  {n:'Vila Mariana', lat:-23.5896, lng:-46.6357},
+  {n:'Pinheiros', lat:-23.5635, lng:-46.6863},
+  {n:'Itaim Bibi', lat:-23.5853, lng:-46.6740},
+  {n:'Moema', lat:-23.6018, lng:-46.6664},
+  {n:'Tatuapé', lat:-23.5408, lng:-46.5773},
+  {n:'Santo Amaro', lat:-23.6539, lng:-46.7090},
+  {n:'Lapa', lat:-23.5234, lng:-46.7026},
+  {n:'Mooca', lat:-23.5556, lng:-46.5985},
+  {n:'Santana', lat:-23.5024, lng:-46.6286},
+  {n:'Vila Madalena', lat:-23.5559, lng:-46.6911}
+];
+const DEMO_MOTIVOS = [
+  {m:'Moto não liga', t:false},
+  {m:'Pneu furado', t:false},
+  {m:'Acidente leve', t:false},
+  {m:'Bateria descarregada', t:false},
+  {m:'Devolução de moto', t:false},
+  {m:'Vazamento de óleo', t:false},
+  {m:'Recolhimento por inadimplência', t:true},
+  {m:'Freio sem resposta', t:false},
+  {m:'Moto travada no Tracksolution', t:true}
+];
+const DEMO_NOMES = ['João Silva','Maria Santos','Pedro Oliveira','Ana Costa','Carlos Souza','Júlia Lima','Rafael Pereira','Beatriz Ferreira','Lucas Almeida','Fernanda Martins'];
+
+function genId(){ return 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2,6); }
+
+async function promptAddChamado(lat, lng){
+  const cliente = prompt('Nome do cliente:', DEMO_NOMES[Math.floor(Math.random()*DEMO_NOMES.length)]);
+  if(!cliente) return;
+  const motivoIdx = Math.floor(Math.random() * DEMO_MOTIVOS.length);
+  const motivo = prompt('Motivo:', DEMO_MOTIVOS[motivoIdx].m);
+  if(!motivo) return;
+  const placa = 'XYZ' + Math.floor(Math.random()*9000+1000);
+  // Reverse geocode pra pegar endereço real do ponto clicado
+  let endereco = `Lat ${lat.toFixed(4)}, Lng ${lng.toFixed(4)}`;
+  if(TT.has()){
+    try {
+      const addr = await TT.reverse(lat, lng);
+      if(addr && addr.freeformAddress) endereco = addr.freeformAddress;
+    } catch(e){}
+  }
+  const ch = {
+    id: genId(),
+    ts: Date.now(),
+    cliente, motivo, placa, endereco,
+    lat, lng,
+    status: 'novo',
+    travada: /travada|trava/i.test(motivo)
+  };
+  const list = loadDemoChamados();
+  list.unshift(ch);
+  saveDemoChamados(list);
+  chamados.unshift(ch);
+  selId = ch.id;
+  addMode = false;
+  $('#leafmap').classList.remove('add-mode');
+  $('#demopanel').classList.remove('armed');
+  renderAll();
+  showToast('✓ Chamado criado: ' + endereco.substring(0, 50));
+}
+
+function addSampleChamados(){
+  const list = loadDemoChamados();
+  for(let i=0;i<5;i++){
+    const b = DEMO_BAIRROS[Math.floor(Math.random()*DEMO_BAIRROS.length)];
+    const motivo = DEMO_MOTIVOS[Math.floor(Math.random()*DEMO_MOTIVOS.length)];
+    const cliente = DEMO_NOMES[Math.floor(Math.random()*DEMO_NOMES.length)];
+    const ch = {
+      id: genId(),
+      ts: Date.now() - Math.floor(Math.random() * 60 * 60000),
+      cliente,
+      motivo: motivo.m,
+      placa: 'ABC' + Math.floor(Math.random()*9000+1000),
+      endereco: `${b.n}, São Paulo, SP`,
+      lat: b.lat + (Math.random()-0.5)*0.015,
+      lng: b.lng + (Math.random()-0.5)*0.015,
+      status: 'novo',
+      travada: motivo.t
+    };
+    list.unshift(ch);
+    chamados.unshift(ch);
+  }
+  saveDemoChamados(list);
+  renderAll();
+  showToast('✓ 5 chamados aleatórios adicionados');
+}
+
+function clearAllChamados(){
+  if(!confirm('Remover TODOS os chamados (demo)?\n\nIsso também esvazia a fila de todos os colaboradores.')) return;
+  // Avisa cada colaborador pra limpar a fila dele
+  const queues = loadQueues();
+  for(const motId in queues){
+    for(const cid of queues[motId]){
+      sync.send('chamado:desatribuir', { chamadoId: cid, motoristaId: motId });
+    }
+  }
+  // Limpa todos os stores
+  saveDemoChamados([]);
+  saveAsgn({});
+  saveStatusMap({});
+  saveQueues({});
+  chamados = [];
+  selId = null;
+  // Limpa visual do mapa
+  for(const id in chamadoMarkers){ map.removeLayer(chamadoMarkers[id]); }
+  chamadoMarkers = {};
+  for(const id in routeLines){ map.removeLayer(routeLines[id]); }
+  routeLines = {};
+  // Zera contadores de motoristas
+  for(const id in motoristas){ motoristas[id].activeCount = 0; }
+  renderAll();
+  showToast('🗑 Tudo limpo · filas dos colaboradores também');
+}
+
+// ============== TABS ==============
+function setTab(t){
+  tab = t;
+  $$('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  $('#listwrap').style.display = t === 'chamados' ? 'block' : 'none';
+  $('#motwrap').classList.toggle('show', t === 'motoristas');
+}
+
+// ============== TOAST ==============
+function showToast(msg, isErr){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = isErr ? 'err show' : 'show';
+  clearTimeout(showToast._to);
+  showToast._to = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ============== CONFIG MODAL ==============
+function openConfig(){
+  $('#cfgSla').value = cfg.sla;
+  $('#cfgTtKey').value = cfg.tomtomKey;
+  $('#cfgRouteType').value = cfg.routeType;
+  $('#cfgTravelMode').value = cfg.travelMode;
+  $('#cfgAvoidTolls').checked = cfg.routeAvoid.includes('tollRoads');
+  $('#cfgAvoidMotorways').checked = cfg.routeAvoid.includes('motorways');
+  $('#cfgAvoidUnpaved').checked = cfg.routeAvoid.includes('unpavedRoads');
+  $('#cfgAvoidFerries').checked = cfg.routeAvoid.includes('ferries');
+  $('#cfgFbUrl').value = cfg.fbUrl;
+  $('#cfgFbKey').value = cfg.fbKey;
+  $('#cfgMode').value = cfg.mode;
+  $('#config').classList.add('show');
+}
+function closeConfig(){ $('#config').classList.remove('show'); }
+function saveConfig(){
+  cfg.sla = +$('#cfgSla').value || 30;
+  cfg.tomtomKey = $('#cfgTtKey').value.trim();
+  cfg.routeType = $('#cfgRouteType').value;
+  cfg.travelMode = $('#cfgTravelMode').value;
+  cfg.routeAvoid = [];
+  if($('#cfgAvoidTolls').checked) cfg.routeAvoid.push('tollRoads');
+  if($('#cfgAvoidMotorways').checked) cfg.routeAvoid.push('motorways');
+  if($('#cfgAvoidUnpaved').checked) cfg.routeAvoid.push('unpavedRoads');
+  if($('#cfgAvoidFerries').checked) cfg.routeAvoid.push('ferries');
+  cfg.fbUrl = $('#cfgFbUrl').value.trim();
+  cfg.fbKey = $('#cfgFbKey').value.trim();
+  cfg.mode = $('#cfgMode').value;
+  saveCfg2(cfg);
+  closeConfig();
+  showToast('✓ Configurações salvas — recarregando…');
+  setTimeout(() => location.reload(), 800);
+}
+window.closeConfig = closeConfig;
+window.saveConfig = saveConfig;
+
+// ============== SYNC LISTENERS ==============
+function setupSyncListeners(){
+  // Colaborador fez login
+  sync.on('motorista:login', (data) => {
+    motoristas[data.id] = {
+      id: data.id,
+      nome: data.nome,
+      placa: data.placa,
+      color: data.color || '#00B4E5',
+      status: data.status || 'online',
+      lastSeen: Date.now()
+    };
+    recountMotoristas();
+    renderAll();
+    showToast(`📲 ${data.nome} entrou no turno`);
+  });
+
+  // Posição atualizada
+  sync.on('motorista:posicao', (data) => {
+    if(!motoristas[data.id]){
+      motoristas[data.id] = {
+        id: data.id,
+        nome: data.nome,
+        placa: data.placa,
+        color: data.color || '#00B4E5',
+        status: data.status || 'online',
+        activeCount: 0
+      };
+    }
+    const m = motoristas[data.id];
+    m.lat = data.lat;
+    m.lng = data.lng;
+    m.status = data.status || m.status;
+    m.lastSeen = Date.now();
+    // Reverse geocode — só 1x por 45s por motorista
+    if(TT.has()){
+      if(!m._lastReverse || Date.now() - m._lastReverse > 45000){
+        m._lastReverse = Date.now();
+        TT.reverse(data.lat, data.lng).then(addr => {
+          if(addr){
+            m.currentStreet = addr.streetName || addr.municipalitySubdivision || '';
+            m.currentArea = addr.municipalitySubdivision || addr.localName || '';
+            renderMot();
+          }
+        }).catch(() => {});
+      }
+    }
+    // Trail GPS real
+    pushTrail(data.id, data.lat, data.lng);
+    renderTrail(data.id);
+    renderMotoristaMarkers();
+    renderMot();
+    renderLegend();
+    // Atualiza rota multi-stop OSRM do motorista (se tem fila)
+    updateRouteFor(data.id);
+  });
+
+  // Status mudou
+  sync.on('motorista:status', (data) => {
+    if(motoristas[data.id]){
+      motoristas[data.id].status = data.status;
+      motoristas[data.id].lastSeen = Date.now();
+      renderMotoristaMarkers();
+      renderMot();
+    }
+  });
+
+  // Heartbeat
+  sync.on('motorista:heartbeat', (data) => {
+    if(motoristas[data.id]){
+      motoristas[data.id].lastSeen = Date.now();
+      motoristas[data.id].status = data.status || motoristas[data.id].status;
+    }
+  });
+
+  // Logout
+  sync.on('motorista:logout', (data) => {
+    if(motoristas[data.id]){
+      delete motoristas[data.id];
+      if(motoristaMarkers[data.id]){
+        map.removeLayer(motoristaMarkers[data.id]);
+        delete motoristaMarkers[data.id];
+      }
+      if(trailLines[data.id]){
+        map.removeLayer(trailLines[data.id]);
+        delete trailLines[data.id];
+      }
+      delete trails[data.id];
+      clearRoute(data.id);
+      renderMot();
+      renderLegend();
+    }
+  });
+
+  // Colaborador mudou status do chamado
+  sync.on('chamado:status', (data) => {
+    const c = chamados.find(x => x.id === data.chamadoId);
+    if(!c) return;
+    c.status = data.status;
+    const sm = loadStatusMap();
+    sm[c.id] = data.status;
+    saveStatusMap(sm);
+    if(demoMode){
+      const list = loadDemoChamados();
+      const i = list.findIndex(x => x.id === c.id);
+      if(i >= 0){ list[i].status = data.status; saveDemoChamados(list); }
+    }
+    // Se concluiu/cancelou, tira da fila e atualiza rota do motorista
+    if(data.status === 'concluido' || data.status === 'cancelado'){
+      const oldMot = c.motoristaId;
+      queueRemove(c.id);
+      if(oldMot) updateRouteFor(oldMot);
+    }
+    renderAll();
+    showToast(`Chamado de ${c.cliente}: ${data.status === 'em_rota' ? '▶ em rota' : data.status === 'concluido' ? '✓ concluído' : data.status}`);
+  });
+
+  // Colaborador saiu da rota — alerta gestor
+  sync.on('colab:fora-rota', (data) => {
+    const mot = motoristas[data.motoristaId];
+    const c = chamados.find(x => x.id === data.chamadoId);
+    if(!mot) return;
+    showToast(`⚠ ${mot.nome} saiu da rota ${c ? '· '+c.cliente : ''} (${data.distFromRoute}m fora)`, true);
+    // Marca visualmente
+    mot._offRoute = true;
+    mot._offRouteCliente = c ? c.cliente : '';
+    renderMotoristaMarkers();
+    renderMot();
+    // Some o alerta visual depois de 30s
+    setTimeout(() => { if(motoristas[data.motoristaId]){ delete motoristas[data.motoristaId]._offRoute; renderMotoristaMarkers(); renderMot(); }}, 30000);
+  });
+
+  // Colaborador chegou no local (auto-detectado por GPS)
+  sync.on('chamado:chegou', (data) => {
+    const c = chamados.find(x => x.id === data.chamadoId);
+    const mot = motoristas[data.motoristaId];
+    if(!c) return;
+    c.arrived = true;
+    c.arrivedAt = Date.now();
+    showToast(`🎯 ${mot ? mot.nome+' chegou no local — ' : 'Colaborador chegou em '}${c.cliente}`);
+    renderAll();
+  });
+
+  // Colaborador recusou
+  sync.on('chamado:recusar', (data) => {
+    const c = chamados.find(x => x.id === data.chamadoId);
+    if(!c) return;
+    const a = loadAsgn();
+    const oldMot = a[c.id];
+    delete a[c.id];
+    saveAsgn(a);
+    queueRemove(c.id);
+    c.motoristaId = null;
+    c.status = 'novo';
+    const sm = loadStatusMap();
+    sm[c.id] = 'novo';
+    saveStatusMap(sm);
+    if(oldMot) updateRouteFor(oldMot);
+    recountMotoristas();
+    renderAll();
+    showToast(`⚠ Chamado de ${c.cliente} foi recusado`, true);
+  });
+}
+
+// ============== TTL CHECK ==============
+function checkMotoristasTTL(){
+  const now = Date.now();
+  let changed = false;
+  for(const id in motoristas){
+    const m = motoristas[id];
+    const stale = (now - (m.lastSeen||0)) > MOTORISTA_TTL_MS;
+    if(stale && m.status !== 'off'){
+      // Não muda status real, só visualmente fica como "offline" via TTL
+      changed = true;
+    }
+  }
+  if(changed){
+    renderMotoristaMarkers();
+    renderMot();
+  }
+}
+
+// ============== RENDER ==============
+function renderAll(){
+  renderPills();
+  renderKPIs();
+  renderList();
+  renderMot();
+  renderChamadoMarkers();
+  renderMotoristaMarkers();
+  renderLegend();
+  renderDetail();
+}
+
+// ============== INIT ==============
+function init(){
+  // Carrega chamados demo persistidos
+  if(demoMode){
+    const list = loadDemoChamados();
+    const sm = loadStatusMap();
+    const asgn = loadAsgn();
+    chamados = list.map(c => ({
+      ...c,
+      status: sm[c.id] || c.status,
+      motoristaId: asgn[c.id] || null
+    }));
+  }
+
+  // Migração: se tem asgn mas queue vazia, reconstrói queue dos asgns
+  const q = loadQueues();
+  const asgn = loadAsgn();
+  let migrated = false;
+  for(const cid in asgn){
+    const mid = asgn[cid];
+    if(!mid) continue;
+    q[mid] = q[mid] || [];
+    if(!q[mid].includes(cid)){ q[mid].push(cid); migrated = true; }
+  }
+  // Limpa entradas órfãs da queue (chamado não existe mais)
+  const chIds = new Set(chamados.map(c => c.id));
+  for(const mid in q){
+    q[mid] = q[mid].filter(id => chIds.has(id));
+    if(!q[mid].length) delete q[mid];
+  }
+  if(migrated) saveQueues(q);
+
+  initMap();
+  sync = createSync();
+  setupSyncListeners();
+  setTab('chamados');
+
+  // Pede heartbeat pra todos os motoristas conhecidos
+  setTimeout(() => sync.send('motorista:ping', {}), 1000);
+
+  // Tabs
+  $$('.tab').forEach(el => el.onclick = () => setTab(el.dataset.tab));
+
+  // Demo panel
+  $('#demobtn').onclick = () => {
+    const dp = $('#demopanel');
+    const isOpen = dp.classList.toggle('show');
+    $('#demobtn').classList.toggle('demo-on', isOpen);
+  };
+  if(demoMode){
+    $('#demobtn').classList.add('demo-on');
+    $('#demopanel').classList.add('show');
+  }
+
+  $('#addmode').onclick = () => {
+    addMode = !addMode;
+    $('#leafmap').classList.toggle('add-mode', addMode);
+    $('#demopanel').classList.toggle('armed', addMode);
+    if(addMode) showToast('Clique no mapa para posicionar o chamado');
+  };
+  $('#addsample').onclick = addSampleChamados;
+  $('#clearall').onclick = clearAllChamados;
+
+  // Config
+  $('#configbtn').onclick = openConfig;
+
+  // Link do colab
+  $('#colaburlbtn').onclick = () => {
+    const url = location.href.replace(/torre\.html.*$/, 'colab.html');
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(url);
+      showToast('📋 Link copiado: ' + url);
+    } else {
+      prompt('Abra este link no celular do colaborador:', url);
+    }
+  };
+
+  renderAll();
+
+  // Refresh SLA badges a cada 30s
+  setInterval(() => {
+    if(chamados.length){
+      renderList();
+      renderChamadoMarkers();
+      renderLegend();
+    }
+    checkMotoristasTTL();
+  }, 30000);
+}
+
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
