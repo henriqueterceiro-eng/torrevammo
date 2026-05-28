@@ -644,6 +644,57 @@ function buildOrderMap(){
 function loadDemoChamados(){ try{ return JSON.parse(localStorage.getItem('vammo_demo_ch')||'[]'); }catch(_){ return []; } }
 function saveDemoChamados(c){ localStorage.setItem('vammo_demo_ch', JSON.stringify(c)); }
 
+// ============== STORE (Firebase como source of truth) ==============
+// Sincroniza chamados, atribuições e filas entre todos os gestores em tempo real.
+// localStorage continua como cache pra abrir rápido + offline.
+const STORE = (() => {
+  let fb = null;
+  let handlers = {};
+  let initialized = false;
+
+  function tryInit(){
+    if(initialized) return true;
+    if(typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return false;
+    try {
+      fb = firebase.database().ref('vammo');
+      initialized = true;
+      fb.child('chamados').on('child_added', s => { const v = s.val(); if(v && handlers.onChamadoAdded) handlers.onChamadoAdded(v); });
+      fb.child('chamados').on('child_changed', s => { const v = s.val(); if(v && handlers.onChamadoChanged) handlers.onChamadoChanged(v); });
+      fb.child('chamados').on('child_removed', s => { if(handlers.onChamadoRemoved) handlers.onChamadoRemoved(s.key); });
+      fb.child('queues').on('value', s => { if(handlers.onQueuesChanged) handlers.onQueuesChanged(s.val() || {}); });
+      return true;
+    } catch(e){ console.warn('STORE init err:', e); return false; }
+  }
+
+  // Tenta inicializar a cada 400ms até conseguir (firebase carrega async)
+  let pollHandle = setInterval(() => { if(tryInit()){ clearInterval(pollHandle); } }, 400);
+
+  return {
+    setHandlers(h){ handlers = h; tryInit(); },
+    ready(){ return initialized; },
+    saveChamado(ch){ if(fb) fb.child('chamados').child(ch.id).set(ch).catch(e => console.warn('fb saveChamado:', e)); },
+    updateChamado(id, patch){
+      if(!fb) return;
+      // Firebase não aceita undefined/null em update — limpa
+      const clean = {};
+      for(const k in patch){ if(patch[k] !== undefined) clean[k] = patch[k] === null ? null : patch[k]; }
+      fb.child('chamados').child(id).update(clean).catch(e => console.warn('fb updateChamado:', e));
+    },
+    deleteChamado(id){ if(fb) fb.child('chamados').child(id).remove().catch(e => console.warn('fb deleteChamado:', e)); },
+    clearAll(){
+      if(!fb) return;
+      fb.child('chamados').remove();
+      fb.child('queues').remove();
+    },
+    setQueue(motId, arr){
+      if(!fb) return;
+      if(arr && arr.length) fb.child('queues').child(motId).set(arr).catch(e => console.warn('fb setQueue:', e));
+      else fb.child('queues').child(motId).remove().catch(e => console.warn('fb rmQueue:', e));
+    },
+    setAllQueues(qs){ if(fb) fb.child('queues').set(qs).catch(e => console.warn('fb setAllQueues:', e)); }
+  };
+})();
+
 // ============== SYNC ==============
 function createSync(){
   const handlers = {};
@@ -1474,6 +1525,7 @@ async function otimizarFila(motoristaId, btn){
     const qs = loadQueues();
     qs[motoristaId] = [...newQueue, ...rest];
     saveQueues(qs);
+    STORE.setAllQueues(qs);
     sync.send('chamado:reordenar', { motoristaId, order: qs[motoristaId] });
     updateRouteFor(motoristaId);
     renderAll();
@@ -1678,11 +1730,13 @@ function updateStatus(chamadoId, newStatus){
     const i = list.findIndex(x => x.id === chamadoId);
     if(i >= 0){ list[i].status = newStatus; saveDemoChamados(list); }
   }
+  // Persiste no Firebase (propaga pra todos)
+  STORE.updateChamado(chamadoId, { status: newStatus });
   sync.send('chamado:status_torre', { chamadoId, status: newStatus });
-  // Se chamado fechou, remove da fila do motorista (e refaz a rota dele)
   if(newStatus === 'concluido' || newStatus === 'cancelado'){
     const oldMot = c.motoristaId;
     queueRemove(chamadoId);
+    STORE.setAllQueues(loadQueues());
     if(oldMot) updateRouteFor(oldMot);
   }
   renderAll();
@@ -1693,7 +1747,6 @@ function atribuir(chamadoId, motoristaId){
   if(!c) return;
   const a = loadAsgn();
   if(motoristaId){
-    // Remove de qualquer fila anterior (caso reatribuição) e adiciona na nova
     queueRemove(chamadoId);
     queueAdd(motoristaId, chamadoId);
     a[chamadoId] = motoristaId;
@@ -1705,6 +1758,9 @@ function atribuir(chamadoId, motoristaId){
       saveStatusMap(sm);
     }
     saveAsgn(a);
+    // Persiste tudo no Firebase
+    STORE.updateChamado(chamadoId, { motoristaId, status: c.status });
+    STORE.setAllQueues(loadQueues());
     // Envia chamado pro motorista (vai pro final da fila no app dele)
     sync.send('chamado:atribuir', {
       chamadoId: c.id,
@@ -1734,9 +1790,11 @@ function atribuir(chamadoId, motoristaId){
       sm[chamadoId] = 'novo';
       saveStatusMap(sm);
     }
+    STORE.updateChamado(chamadoId, { motoristaId: null, status: c.status });
+    STORE.setAllQueues(loadQueues());
     if(oldMot){
       sync.send('chamado:desatribuir', { chamadoId: c.id, motoristaId: oldMot });
-      updateRouteFor(oldMot); // refaz rota sem esse chamado
+      updateRouteFor(oldMot);
     }
   }
   recountMotoristas();
@@ -1746,7 +1804,7 @@ function atribuir(chamadoId, motoristaId){
 // Reordenar fila de um motorista (drag, ou ↑↓)
 function reordenarFila(motoristaId, fromIdx, toIdx){
   const q = queueMove(motoristaId, fromIdx, toIdx);
-  // Avisa colaborador
+  STORE.setAllQueues(q);
   sync.send('chamado:reordenar', { motoristaId, order: q[motoristaId] || [] });
   updateRouteFor(motoristaId);
   renderAll();
@@ -1815,6 +1873,7 @@ async function promptAddChamado(lat, lng){
   list.unshift(ch);
   saveDemoChamados(list);
   chamados.unshift(ch);
+  STORE.saveChamado(ch);
   selId = ch.id;
   addMode = false;
   $('#leafmap').classList.remove('add-mode');
@@ -1843,6 +1902,7 @@ function addSampleChamados(){
     };
     list.unshift(ch);
     chamados.unshift(ch);
+    STORE.saveChamado(ch);
   }
   saveDemoChamados(list);
   renderAll();
@@ -1850,7 +1910,7 @@ function addSampleChamados(){
 }
 
 function clearAllChamados(){
-  if(!confirm('Remover TODOS os chamados (demo)?\n\nIsso também esvazia a fila de todos os colaboradores.')) return;
+  if(!confirm('Remover TODOS os chamados?\n\nIsso esvazia a fila de TODOS os gestores e colaboradores em tempo real.')) return;
   // Avisa cada colaborador pra limpar a fila dele
   const queues = loadQueues();
   for(const motId in queues){
@@ -1858,7 +1918,9 @@ function clearAllChamados(){
       sync.send('chamado:desatribuir', { chamadoId: cid, motoristaId: motId });
     }
   }
-  // Limpa todos os stores
+  // Limpa Firebase (propaga pra todos)
+  STORE.clearAll();
+  // Limpa caches locais
   saveDemoChamados([]);
   saveAsgn({});
   saveStatusMap({});
@@ -2037,10 +2099,11 @@ function setupSyncListeners(){
       const i = list.findIndex(x => x.id === c.id);
       if(i >= 0){ list[i].status = data.status; saveDemoChamados(list); }
     }
-    // Se concluiu/cancelou, tira da fila e atualiza rota do motorista
+    STORE.updateChamado(c.id, { status: data.status });
     if(data.status === 'concluido' || data.status === 'cancelado'){
       const oldMot = c.motoristaId;
       queueRemove(c.id);
+      STORE.setAllQueues(loadQueues());
       if(oldMot) updateRouteFor(oldMot);
     }
     renderAll();
@@ -2069,6 +2132,7 @@ function setupSyncListeners(){
     if(!c) return;
     c.arrived = true;
     c.arrivedAt = Date.now();
+    STORE.updateChamado(c.id, { arrived: true, arrivedAt: c.arrivedAt });
     showToast(`🎯 ${mot ? mot.nome+' chegou no local — ' : 'Colaborador chegou em '}${c.cliente}`);
     renderAll();
   });
@@ -2087,10 +2151,68 @@ function setupSyncListeners(){
     const sm = loadStatusMap();
     sm[c.id] = 'novo';
     saveStatusMap(sm);
+    STORE.updateChamado(c.id, { motoristaId: null, status: 'novo' });
+    STORE.setAllQueues(loadQueues());
     if(oldMot) updateRouteFor(oldMot);
     recountMotoristas();
     renderAll();
     showToast(`⚠ Chamado de ${c.cliente} foi recusado`, true);
+  });
+}
+
+// ============== STORE LISTENERS (multi-gestor) ==============
+function setupStoreListeners(){
+  STORE.setHandlers({
+    onChamadoAdded: (ch) => {
+      // Recebido do Firebase — outro gestor criou ou estamos no boot
+      if(!chamados.find(x => x.id === ch.id)){
+        chamados.unshift(ch);
+        // Atualiza cache local
+        const list = loadDemoChamados();
+        if(!list.find(x => x.id === ch.id)){
+          list.unshift(ch);
+          saveDemoChamados(list);
+        }
+        renderAll();
+      }
+    },
+    onChamadoChanged: (ch) => {
+      // Outro gestor mudou algo (status, atribuição, arrived, etc)
+      const idx = chamados.findIndex(x => x.id === ch.id);
+      if(idx >= 0){
+        chamados[idx] = { ...chamados[idx], ...ch };
+      } else {
+        chamados.unshift(ch);
+      }
+      // Sync caches locais (status, asgn)
+      const sm = loadStatusMap(); sm[ch.id] = ch.status; saveStatusMap(sm);
+      const a = loadAsgn();
+      if(ch.motoristaId) a[ch.id] = ch.motoristaId; else delete a[ch.id];
+      saveAsgn(a);
+      // Atualiza cache de chamado
+      const list = loadDemoChamados();
+      const li = list.findIndex(x => x.id === ch.id);
+      if(li >= 0){ list[li] = ch; saveDemoChamados(list); }
+      recountMotoristas();
+      renderAll();
+    },
+    onChamadoRemoved: (id) => {
+      chamados = chamados.filter(c => c.id !== id);
+      saveDemoChamados(loadDemoChamados().filter(c => c.id !== id));
+      const sm = loadStatusMap(); delete sm[id]; saveStatusMap(sm);
+      const a = loadAsgn(); delete a[id]; saveAsgn(a);
+      if(selId === id) selId = null;
+      // Remove marker e rota
+      if(chamadoMarkers[id]){ map.removeLayer(chamadoMarkers[id]); delete chamadoMarkers[id]; }
+      renderAll();
+    },
+    onQueuesChanged: (newQueues) => {
+      // Outro gestor reorganizou as filas
+      saveQueues(newQueues || {});
+      recountMotoristas();
+      updateAllRoutes();
+      renderAll();
+    }
   });
 }
 
@@ -2159,6 +2281,7 @@ function init(){
   initMap();
   sync = createSync();
   setupSyncListeners();
+  setupStoreListeners();
   setTab('chamados');
 
   // Pede heartbeat pra todos os motoristas conhecidos
