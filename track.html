@@ -191,6 +191,10 @@ a{color:var(--acc);text-decoration:none}
 
 const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I',
+  databaseURL: 'https://vammo-torre-default-rtdb.firebaseio.com'
+};
 
 // Lê id do chamado da URL: ?id=xxx
 const params = new URLSearchParams(location.search);
@@ -390,11 +394,33 @@ function setVehiclePos(lat, lng){
 }
 
 // ============== SYNC ==============
-let bc = null;
+let bc = null, fb = null;
 try { bc = new BroadcastChannel(SYNC_CHANNEL); } catch(_){}
 
 if(bc){
   bc.onmessage = (e) => handleEvent(e.data);
+}
+
+// Firebase: pra funcionar quando cliente abre num device diferente do colab
+function loadScript(src){
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
+  loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js').then(() =>
+    loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js')
+  ).then(() => {
+    try {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      fb = firebase.database().ref('vammo/events');
+      fb.limitToLast(100).on('child_added', (snap) => {
+        handleEvent(snap.val());
+      });
+    } catch(e){ console.warn('FB init err:', e); }
+  });
 }
 
 // Recupera estado do localStorage (se na mesma origin)

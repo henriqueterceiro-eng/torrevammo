@@ -427,8 +427,8 @@ function saveCfg2(c){ localStorage.setItem('vammo_cfg', JSON.stringify(c)); }
 // Defaults
 cfg.sla = cfg.sla || 30;
 cfg.mode = cfg.mode || 'demo';
-cfg.fbUrl = cfg.fbUrl || '';
-cfg.fbKey = cfg.fbKey || '';
+cfg.fbUrl = cfg.fbUrl || 'https://vammo-torre-default-rtdb.firebaseio.com';
+cfg.fbKey = cfg.fbKey || 'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I';
 cfg.tomtomKey = cfg.tomtomKey || 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 cfg.showTraffic = cfg.showTraffic !== false; // default ON
 cfg.showIncidents = cfg.showIncidents !== false;
