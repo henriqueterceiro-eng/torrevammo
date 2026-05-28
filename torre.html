@@ -672,13 +672,16 @@ const STORE = (() => {
   return {
     setHandlers(h){ handlers = h; tryInit(); },
     ready(){ return initialized; },
-    saveChamado(ch){ if(fb) fb.child('chamados').child(ch.id).set(ch).catch(e => console.warn('fb saveChamado:', e)); },
+    saveChamado(ch){
+      if(!fb) return;
+      try { fb.child('chamados').child(ch.id).set(cleanForFb(ch)).catch(e => console.warn('fb saveChamado:', e)); }
+      catch(e){ console.warn('fb saveChamado throw:', e); }
+    },
     updateChamado(id, patch){
       if(!fb) return;
-      // Firebase não aceita undefined/null em update — limpa
-      const clean = {};
-      for(const k in patch){ if(patch[k] !== undefined) clean[k] = patch[k] === null ? null : patch[k]; }
-      fb.child('chamados').child(id).update(clean).catch(e => console.warn('fb updateChamado:', e));
+      const clean = cleanForFb(patch);
+      try { fb.child('chamados').child(id).update(clean).catch(e => console.warn('fb updateChamado:', e)); }
+      catch(e){ console.warn('fb updateChamado throw:', e); }
     },
     deleteChamado(id){ if(fb) fb.child('chamados').child(id).remove().catch(e => console.warn('fb deleteChamado:', e)); },
     clearAll(){
@@ -738,16 +741,33 @@ function createSync(){
   return {
     on(t, fn){ (handlers[t] = handlers[t] || []).push(fn); },
     send(t, d){
-      const msg = { type:t, data:d, ts:Date.now(), _from:'torre' };
+      // Limpa undefined recursivamente (Firebase rejeita undefined com exception SÍNCRONA — perde no .catch)
+      const clean = cleanForFb(d);
+      const msg = { type:t, data:clean, ts:Date.now(), _from:'torre' };
       if(bc) bc.postMessage(msg);
       if(fb){
-        fb.push(msg).catch(e => console.warn('fb push fail:', e));
+        try { fb.push(msg).catch(e => console.warn('[sync.send]', t, 'fb push fail:', e)); }
+        catch(e){ console.warn('[sync.send]', t, 'fb push throw:', e); }
       } else if(cfg.fbUrl && cfg.fbKey){
-        // Firebase ainda carregando — segura pro flush
         pendingMsgs.push(msg);
       }
     }
   };
+}
+
+// Remove undefined recursivamente — Firebase joga erro sync se algum campo for undefined
+function cleanForFb(obj){
+  if(obj === null || obj === undefined) return null;
+  if(Array.isArray(obj)) return obj.map(cleanForFb).filter(v => v !== undefined);
+  if(typeof obj === 'object'){
+    const out = {};
+    for(const k in obj){
+      const v = cleanForFb(obj[k]);
+      if(v !== undefined) out[k] = v;
+    }
+    return out;
+  }
+  return obj;
 }
 
 function loadScript(src){

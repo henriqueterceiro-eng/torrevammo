@@ -299,15 +299,31 @@ function createSync(){
   return {
     on(type, fn){ (handlers[type] = handlers[type] || []).push(fn); },
     send(type, data){
-      const msg = { type, data, ts: Date.now(), _from: me?.id || 'anon' };
+      const clean = cleanForFb(data);
+      const msg = { type, data: clean, ts: Date.now(), _from: me?.id || 'anon' };
       if(bc) bc.postMessage(msg);
       if(fb){
-        fb.push(msg).catch(e => console.warn('fb push fail:', e));
+        try { fb.push(msg).catch(e => console.warn('[sync.send]', type, 'fail:', e)); }
+        catch(e){ console.warn('[sync.send]', type, 'throw:', e); }
       } else if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
         pendingMsgs.push(msg);
       }
     }
   };
+}
+
+function cleanForFb(obj){
+  if(obj === null || obj === undefined) return null;
+  if(Array.isArray(obj)) return obj.map(cleanForFb).filter(v => v !== undefined);
+  if(typeof obj === 'object'){
+    const out = {};
+    for(const k in obj){
+      const v = cleanForFb(obj[k]);
+      if(v !== undefined) out[k] = v;
+    }
+    return out;
+  }
+  return obj;
 }
 
 function loadScript(src){
