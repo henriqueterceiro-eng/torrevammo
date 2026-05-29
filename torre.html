@@ -6,6 +6,7 @@
 <title>Vammo · Torre de Controle</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <style>
 :root{
   --bg:#0a1428;
@@ -242,6 +243,15 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #layerswitch button.active .ic{filter:drop-shadow(0 0 2px rgba(255,255,255,0.5))}
 #layerswitch button.ttg{border-top:2px solid var(--bdr)}
 #layerswitch button.ttg.active{background:#d97706;color:#fff}
+#layerswitch button[data-t="heatmap"].active{background:linear-gradient(135deg,#fbbf24,#dc2626);color:#fff}
+
+/* Legenda do heatmap (canto inferior direito) */
+#heatlegend{position:absolute;bottom:50px;right:12px;background:rgba(21,35,57,0.92);color:var(--txt);padding:8px 10px;font-size:10px;border:1px solid var(--bdr);border-radius:8px;backdrop-filter:blur(8px);z-index:500;display:none;min-width:140px}
+#heatlegend.show{display:block}
+#heatlegend .ttl{font-weight:700;font-size:10px;letter-spacing:0.4px;margin-bottom:6px;text-transform:uppercase;color:var(--txt2)}
+#heatlegend .scale{height:10px;border-radius:5px;background:linear-gradient(to right,#3b82f6,#06b6d4,#fbbf24,#f59e0b,#dc2626);margin-bottom:4px}
+#heatlegend .lbls{display:flex;justify-content:space-between;font-size:9px;color:var(--txt2)}
+#heatlegend .crit{font-size:9px;color:var(--txt3);margin-top:4px;line-height:1.4}
 
 /* Traffic incident markers */
 .tt-inc{background:transparent !important;border:none !important}
@@ -339,9 +349,16 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         <button data-l="satellite" title="Imagem de satélite com nomes"><span class="ic">🛰</span><span>Satélite</span></button>
         <button data-t="traffic" class="ttg" title="Trânsito em tempo real (TomTom)"><span class="ic">🚦</span><span>Trânsito</span></button>
         <button data-t="incidents" class="ttg" title="Acidentes / obras / engarrafamentos"><span class="ic">⚠️</span><span>Incid.</span></button>
+        <button data-t="heatmap" class="ttg" title="Mapa de calor de chamados — vermelho onde tem mais chamados e/ou mais antigos"><span class="ic">🔥</span><span>Calor</span></button>
       </div>
       <div id="detail"></div>
       <div id="legend"></div>
+      <div id="heatlegend">
+        <div class="ttl">🔥 Mapa de calor</div>
+        <div class="scale"></div>
+        <div class="lbls"><span>frio</span><span>quente</span></div>
+        <div class="crit">+ chamados<br>+ tempo aberto = mais vermelho</div>
+      </div>
       <div id="demopanel">
         <h4>🧪 Modo Demo</h4>
         <div class="hint">Crie chamados clicando no mapa, sem precisar do Slack.</div>
@@ -432,6 +449,7 @@ cfg.fbKey = cfg.fbKey || 'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I';
 cfg.tomtomKey = cfg.tomtomKey || 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 cfg.showTraffic = cfg.showTraffic !== false; // default ON
 cfg.showIncidents = cfg.showIncidents !== false;
+cfg.showHeatmap = cfg.showHeatmap === true; // default OFF
 cfg.routeType = cfg.routeType || 'fastest';     // fastest | shortest | eco
 cfg.travelMode = cfg.travelMode || 'car';        // car | truck
 cfg.routeAvoid = cfg.routeAvoid || [];           // ['tollRoads','motorways','ferries','unpavedRoads']
@@ -878,6 +896,7 @@ let incidentLayer = null;
 let incidentMarkers = [];
 let incidentsLoading = false;
 let lastIncidentBbox = null;
+let heatLayer = null;
 let currentLayerName = localStorage.getItem('vammo_layer') || 'dark';
 
 function applyLayer(name){
@@ -920,6 +939,7 @@ function initMap(){
   // Restaura estado dos toggles TomTom
   if(cfg.showTraffic && TT.has()) toggleTraffic(true);
   if(cfg.showIncidents && TT.has()) toggleIncidents(true);
+  if(cfg.showHeatmap) toggleHeatmap(true);
 
   map.on('click', (e) => {
     if(addMode){ promptAddChamado(e.latlng.lat, e.latlng.lng); }
@@ -936,11 +956,15 @@ function initMap(){
   // Layer switcher
   $$('#layerswitch button').forEach(b => {
     if(b.dataset.t){
-      b.classList.toggle('active', b.dataset.t === 'traffic' ? cfg.showTraffic : cfg.showIncidents);
+      const flagMap = { traffic: 'showTraffic', incidents: 'showIncidents', heatmap: 'showHeatmap' };
+      b.classList.toggle('active', !!cfg[flagMap[b.dataset.t]]);
       b.onclick = () => {
-        if(!TT.has()){ showToast('Configure a chave TomTom em ⚙', true); return; }
-        if(b.dataset.t === 'traffic'){ toggleTraffic(); }
-        else { toggleIncidents(); }
+        if((b.dataset.t === 'traffic' || b.dataset.t === 'incidents') && !TT.has()){
+          showToast('Configure a chave TomTom em ⚙', true); return;
+        }
+        if(b.dataset.t === 'traffic') toggleTraffic();
+        else if(b.dataset.t === 'incidents') toggleIncidents();
+        else if(b.dataset.t === 'heatmap') toggleHeatmap();
       };
     } else {
       b.onclick = () => applyLayer(b.dataset.l);
@@ -978,6 +1002,57 @@ function toggleIncidents(force){
   cfg.showIncidents = !!incidentLayer;
   saveCfg2(cfg);
   $$('#layerswitch button[data-t="incidents"]').forEach(b => b.classList.toggle('active', !!incidentLayer));
+}
+
+// ============== HEATMAP DE CHAMADOS ==============
+// Intensidade cresce com (a) densidade de chamados na área e (b) tempo aberto.
+// Cada chamado vira um ponto [lat, lng, intensity 0-1]. Quando vários pontos ficam
+// próximos, o Leaflet.heat soma — então área com muitos chamados antigos = vermelhão.
+function buildHeatPoints(){
+  const now = Date.now();
+  const pts = [];
+  for(const c of chamados){
+    if(!c.lat || !c.lng) continue;
+    if(c.status === 'concluido' || c.status === 'cancelado') continue;
+    const ageMin = Math.max(0, (now - (c.ts || now)) / 60000);
+    // Intensidade base por tempo: 0.35 (recém) → 1.0 (>= 2h aberto)
+    let intensity = 0.35 + Math.min(0.65, ageMin / 120);
+    // Em rota há muito tempo = mais peso (algo está demorando)
+    if(c.status === 'em_rota' && ageMin > 45) intensity = Math.min(1, intensity + 0.15);
+    // Travada (recolhimento por inadimplência etc) = peso extra
+    if(c.travada) intensity = Math.min(1, intensity + 0.1);
+    pts.push([c.lat, c.lng, intensity]);
+  }
+  return pts;
+}
+
+function toggleHeatmap(force){
+  const on = force !== undefined ? force : !heatLayer;
+  if(on){
+    if(typeof L.heatLayer !== 'function'){ showToast('Plugin de heatmap ainda carregando…', true); return; }
+    const pts = buildHeatPoints();
+    if(heatLayer) map.removeLayer(heatLayer);
+    heatLayer = L.heatLayer(pts, {
+      radius: 38,
+      blur: 28,
+      maxZoom: 17,
+      max: 1.0,
+      minOpacity: 0.35,
+      gradient: { 0.2: '#3b82f6', 0.4: '#06b6d4', 0.55: '#84cc16', 0.7: '#fbbf24', 0.85: '#f59e0b', 1.0: '#dc2626' }
+    }).addTo(map);
+  } else if(heatLayer){
+    map.removeLayer(heatLayer);
+    heatLayer = null;
+  }
+  cfg.showHeatmap = !!heatLayer;
+  saveCfg2(cfg);
+  $$('#layerswitch button[data-t="heatmap"]').forEach(b => b.classList.toggle('active', !!heatLayer));
+  $('#heatlegend').classList.toggle('show', !!heatLayer);
+}
+
+function refreshHeatmap(){
+  if(!heatLayer) return;
+  heatLayer.setLatLngs(buildHeatPoints());
 }
 
 const INCIDENT_ICONS = {
@@ -2262,6 +2337,7 @@ function setupStoreListeners(){
       }
       recountMotoristas();
       scheduleUpdateRoutes();
+      refreshHeatmap();
       scheduleRender();
     },
     onQueuesChanged: (newQueues) => {
@@ -2392,12 +2468,13 @@ function init(){
 
   renderAll();
 
-  // Refresh SLA badges a cada 30s
+  // Refresh SLA badges + heatmap (chamados envelhecem, intensidade muda) a cada 30s
   setInterval(() => {
     if(chamados.length){
       renderList();
       renderChamadoMarkers();
       renderLegend();
+      refreshHeatmap();
     }
     checkMotoristasTTL();
   }, 30000);
