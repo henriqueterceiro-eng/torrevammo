@@ -484,7 +484,8 @@ function distFromRoute(pos, coords){
 function checkOffRoute(){
   if(!routeCoords || !myPos || fila.length === 0) return;
   const ativo = fila[0];
-  if(!ativo || ativo.status !== 'em_rota') return; // só checa se já iniciou a rota
+  // Dispara em novo OU em_rota — se o GPS detecta movimento longe da rota, alerta
+  if(!ativo || (ativo.status !== 'em_rota' && ativo.status !== 'novo')) return;
   const d = distFromRoute(myPos, routeCoords);
   if(d > OFF_ROUTE_THRESHOLD_M){
     if(!offRouteSince) offRouteSince = Date.now();
@@ -514,7 +515,9 @@ function checkArrived(){
   if(!myPos || fila.length === 0) return;
   const ativo = fila[0];
   if(!ativo || !ativo.lat || !ativo.lng) return;
-  if(ativo.status !== 'em_rota' || ativo.arrived) return;
+  if(ativo.arrived) return;
+  // Dispara em novo OU em_rota — mesmo se motorista não clicou "iniciar"
+  if(ativo.status !== 'em_rota' && ativo.status !== 'novo') return;
   const d = haversine(myPos, { lat: ativo.lat, lng: ativo.lng });
   if(d < ARRIVED_THRESHOLD_M){
     if(!nearDestSince[ativo.id]) nearDestSince[ativo.id] = Date.now();
@@ -653,26 +656,27 @@ function updateMeMarker(){
 }
 
 function updateChamadoMarkers(){
-  // Limpa todos
+  // SÓ o ativo (primeiro da fila) aparece no mapa do colab
+  // Próximos só são revelados ao concluir o anterior
   for(const id in chamadoMarkers){ map.removeLayer(chamadoMarkers[id]); }
   chamadoMarkers = {};
-  fila.forEach((c, i) => {
-    if(!c.lat || !c.lng) return;
-    const num = i + 1;
-    let cls = 'chamado-marker';
-    if(i === 0) cls += c.arrived ? ' arrived' : ' active';
-    const emoji = c.arrived ? '✓' : (c.icon || '🔧');
-    const icon = L.divIcon({
-      className: cls,
-      html: `<div class="pin">
-        <div class="num">${num}</div>
-        <div class="body"><div class="em">${emoji}</div></div>
-      </div>`,
-      iconSize: [34,42],
-      iconAnchor: [17,40]
-    });
-    chamadoMarkers[c.id] = L.marker([c.lat, c.lng], { icon }).addTo(map);
-  });
+  if(fila.length > 0){
+    const c = fila[0];
+    if(c.lat && c.lng){
+      const cls = c.arrived ? 'chamado-marker arrived' : 'chamado-marker active';
+      const emoji = c.arrived ? '✓' : (c.icon || '🔧');
+      const icon = L.divIcon({
+        className: cls,
+        html: `<div class="pin">
+          <div class="num">1</div>
+          <div class="body"><div class="em">${emoji}</div></div>
+        </div>`,
+        iconSize: [34,42],
+        iconAnchor: [17,40]
+      });
+      chamadoMarkers[c.id] = L.marker([c.lat, c.lng], { icon }).addTo(map);
+    }
+  }
   updateRoute();
   fitToFila();
 }
@@ -743,13 +747,14 @@ async function updateRoute(){
     routeInfo = null;
     return;
   }
-  const validStops = fila.filter(c => c.lat && c.lng);
+  // SÓ pra o ativo — colab não sabe o destino dos próximos antes de concluir
+  const ativo = fila[0];
+  const validStops = (ativo && ativo.lat && ativo.lng) ? [ativo] : [];
   if(validStops.length === 0){
     if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
     routeInfo = null;
     return;
   }
-  // Cache: refaz se moveu >100m OU se a fila mudou
   const queueHash = validStops.map(c => c.id).join('|');
   if(routeFromPos && haversine(routeFromPos, myPos) < 100 && routeLine && queueHash === routeFromQueueIds) return;
   // Linha reta provisória enquanto OSRM responde
@@ -778,10 +783,12 @@ async function updateRoute(){
 
 function fitToFila(){
   if(fila.length === 0 || !myPos) return;
-  const pts = [[myPos.lat, myPos.lng]];
-  for(const c of fila){ if(c.lat && c.lng) pts.push([c.lat, c.lng]); }
-  if(pts.length < 2) return;
-  map.fitBounds(L.latLngBounds(pts), { padding: [80, 80], maxZoom: 15 });
+  const ativo = fila[0];
+  if(!ativo || !ativo.lat || !ativo.lng) return;
+  // Bounds só de me + ativo (próximos ficam ocultos)
+  map.fitBounds(L.latLngBounds([[myPos.lat, myPos.lng], [ativo.lat, ativo.lng]]), {
+    padding: [80, 80], maxZoom: 15
+  });
 }
 
 // ====================== UI ======================
@@ -824,40 +831,16 @@ function renderChamadoCard(){
 
   const dest = c.lat && c.lng ? `${c.lat},${c.lng}` : encodeURIComponent((c.endereco || '') + ', São Paulo, SP');
   const origin = myPos ? `${myPos.lat},${myPos.lng}` : '';
-  // Waypoints intermediários no Google Maps (passa pelos próximos antes do destino final, exceto o último que é destino)
-  let waypoints = '';
-  if(proximos.length > 0){
-    const wps = proximos.slice(0, -1).filter(c => c.lat && c.lng).map(c => `${c.lat},${c.lng}`);
-    if(wps.length > 0) waypoints = '&waypoints=' + wps.join('|');
-    // Se tem mais de 1 próximo, o destino vira o último da fila
-    const last = proximos[proximos.length-1];
-    if(last && last.lat && last.lng){
-      // Reconstroi com destino sendo o último, waypoints sendo os intermediários (incluindo o ativo!)
-      const middle = [c, ...proximos.slice(0, -1)].filter(x => x.lat && x.lng).map(x => `${x.lat},${x.lng}`);
-      const newDest = `${last.lat},${last.lng}`;
-      const wpStr = middle.length ? '&waypoints=' + middle.join('|') : '';
-      var gmaps = `https://www.google.com/maps/dir/?api=1&destination=${newDest}${origin?'&origin='+origin:''}${wpStr}&travelmode=driving&dir_action=navigate`;
-    } else {
-      var gmaps = `https://www.google.com/maps/dir/?api=1&destination=${dest}${origin?'&origin='+origin:''}${waypoints}&travelmode=driving&dir_action=navigate`;
-    }
-  } else {
-    var gmaps = `https://www.google.com/maps/dir/?api=1&destination=${dest}${origin?'&origin='+origin:''}&travelmode=driving&dir_action=navigate`;
-  }
+  // Apenas o destino atual — próximos só são revelados ao concluir
+  const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${dest}${origin?'&origin='+origin:''}&travelmode=driving&dir_action=navigate`;
   const waze = c.lat && c.lng ? `https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes` : (c.endereco ? `https://waze.com/ul?q=${encodeURIComponent(c.endereco)}&navigate=yes` : '');
   const tel = c.telefone ? `tel:${c.telefone.replace(/\D/g,'')}` : '';
 
-  // Info de rota total (todos os stops) + ETA até o ativo (primeira leg)
+  // Info de rota — só até o ATIVO (próximos ainda não revelados)
   let routeBlock = '';
   if(routeInfo){
-    const totalKm = (routeInfo.distance/1000).toFixed(1);
-    const totalMin = Math.round(routeInfo.duration/60);
-    let firstLegHtml = '';
-    if(routeInfo.legs && routeInfo.legs.length > 0 && fila.length > 1){
-      const leg = routeInfo.legs[0];
-      const lKm = (leg.distance/1000).toFixed(1);
-      const lMin = Math.round(leg.duration/60);
-      firstLegHtml = `<div style="color:var(--txt2);font-size:10px;margin-top:3px">▶ até <strong style="color:var(--txt)">${esc(c.cliente)}</strong>: ${lKm}km · ${lMin}min</div>`;
-    }
+    const km = (routeInfo.distance/1000).toFixed(1);
+    const min = Math.round(routeInfo.duration/60);
     const delayMin = Math.round((routeInfo.trafficDelay||0)/60);
     const provider = TOMTOM_KEY ? 'c/ trânsito' : 'OSM';
     routeBlock = `
@@ -865,9 +848,8 @@ function renderChamadoCard(){
         <div style="display:flex;align-items:center;gap:10px">
           <div style="font-size:22px">🚗</div>
           <div style="flex:1">
-            <div style="color:var(--acc);font-weight:700;font-size:13px">${fila.length > 1 ? 'Rota total: ' : ''}${totalKm} km · ${totalMin} min ${delayMin>0?`<span style="color:#fbbf24">+${delayMin}min trânsito</span>`:''}</div>
-            <div style="color:var(--txt2);font-size:10px;margin-top:2px">${fila.length} parada${fila.length>1?'s':''} · ${provider}</div>
-            ${firstLegHtml}
+            <div style="color:var(--acc);font-weight:700;font-size:13px">${km} km · ETA ${min} min ${delayMin>0?`<span style="color:#fbbf24">+${delayMin}min trânsito</span>`:''}</div>
+            <div style="color:var(--txt2);font-size:10px;margin-top:2px">até o cliente · ${provider}</div>
           </div>
         </div>
       </div>`;
@@ -881,26 +863,19 @@ function renderChamadoCard(){
       ${fila.length > 1 ? `<div class="total">de ${fila.length}</div>` : ''}
     </div>`;
 
-  // Lista dos próximos
+  // Lista dos próximos — VELADA. Só mostra quantos há na fila, sem revelar destinos.
+  // Próximo só é revelado ao concluir o atual (cria foco no operacional).
   let proxHtml = '';
   if(proximos.length > 0){
     proxHtml = `<div class="proximos">
-      <div class="ph">⏭ Próximos na fila (${proximos.length})</div>
-      ${proximos.map((p, i) => {
-        let dist = '';
-        if(routeInfo && routeInfo.legs && routeInfo.legs[i+1]){
-          dist = `<div class="pdist">+${(routeInfo.legs[i+1].distance/1000).toFixed(1)}km</div>`;
-        }
-        return `<div class="prox">
-          <div class="pnum">${i+2}</div>
-          <div class="picon">${p.icon || '🔧'}</div>
-          <div class="pinfo">
-            <div class="pcli">${esc(p.cliente || '?')}</div>
-            <div class="pmt">${esc(p.motivo || '')}${p.endereco ? ' · '+esc(p.endereco.split(',')[0]) : ''}</div>
-          </div>
-          ${dist}
-        </div>`;
-      }).join('')}
+      <div class="ph">🔒 Próximos na fila</div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--surf2);border-radius:8px;border:1px dashed var(--bdr)">
+        <div style="font-size:28px;opacity:0.7">🔒</div>
+        <div style="flex:1;font-size:11px;color:var(--txt2);line-height:1.4">
+          Você tem <strong style="color:var(--acc);font-size:14px">+${proximos.length} chamado${proximos.length>1?'s':''}</strong> na sua fila.<br>
+          Detalhes liberados ao concluir o atual.
+        </div>
+      </div>
     </div>`;
   }
 
@@ -933,8 +908,8 @@ function renderChamadoCard(){
     ${c.comentario ? `<div class="row"><div class="lbl">💬</div><div class="val">${esc(c.comentario)}</div></div>` : ''}
     ${routeBlock}
     <div class="extras">
-      <a href="${gmaps}" target="_blank" rel="noopener" style="background:#4285F4;color:#fff;border-color:#4285F4">🗺 ${fila.length > 1 ? 'Navegar rota completa' : 'Navegar Google Maps'}</a>
-      ${waze ? `<a href="${waze}" target="_blank" rel="noopener">🚗 Waze (1ª parada)</a>` : ''}
+      <a href="${gmaps}" target="_blank" rel="noopener" style="background:#4285F4;color:#fff;border-color:#4285F4">🗺 Navegar Google Maps</a>
+      ${waze ? `<a href="${waze}" target="_blank" rel="noopener">🚗 Waze</a>` : ''}
       ${tel ? `<a href="${tel}">📞 Ligar</a>` : ''}
     </div>
     <div class="actions">
