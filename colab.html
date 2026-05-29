@@ -578,6 +578,9 @@ function onGPSUpdate(pos){
     const dt = (pos.ts - lastSentPos.ts) / 1000; // s
     if(dt > 0.5 && dt < 60){ kmh = (dist / dt) * 3.6; }
   }
+  // Se já temos histórico mas o cálculo não fechou (parado), considera 0
+  // (Firebase omite null, então 0 garante que apareça no torre como "🛑 parado")
+  if(kmh == null && lastSentPos){ kmh = 0; }
   pos.kmh = kmh != null ? Math.max(0, Math.round(kmh)) : null;
   myPos = pos;
   const spdTxt = pos.kmh != null ? ` · ${pos.kmh}km/h` : '';
