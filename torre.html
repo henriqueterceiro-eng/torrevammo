@@ -362,10 +362,50 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
       <div id="demopanel">
         <h4>🧪 Modo Demo</h4>
         <div class="hint">Crie chamados clicando no mapa, sem precisar do Slack.</div>
-        <button class="addmode" id="addmode">📍 Adicionar chamado no mapa</button>
+        <button class="addmode" id="addmode">📍 Adicionar clicando no mapa</button>
+        <button id="addbyaddr">✍ Adicionar por endereço</button>
         <button id="addsample">+ Adicionar 5 chamados aleatórios</button>
         <button id="clearall">🗑 Limpar todos chamados</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- NOVO CHAMADO POR ENDEREÇO -->
+<div id="addch" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;z-index:10000">
+  <div style="background:var(--surf);border:1px solid var(--bdr2);padding:24px;border-radius:12px;width:480px;max-width:92vw">
+    <h2 style="font-size:18px;margin-bottom:4px">✍ Novo chamado por endereço</h2>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:16px">Digite o endereço e a gente geocodifica via TomTom</div>
+
+    <label style="display:block;font-size:11px;color:var(--txt2);margin-top:8px;margin-bottom:4px;font-weight:600">Endereço completo</label>
+    <input type="text" id="addrEndereco" placeholder="Ex: Av. Paulista, 1578, São Paulo">
+
+    <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Cliente</label>
+    <input type="text" id="addrCliente" placeholder="Nome do cliente">
+
+    <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Motivo</label>
+    <select id="addrMotivo">
+      <option value="Moto não liga">🔌 Moto não liga</option>
+      <option value="Pneu furado">🛞 Pneu furado</option>
+      <option value="Acidente">🚨 Acidente</option>
+      <option value="Bateria descarregada">🔋 Bateria descarregada</option>
+      <option value="Devolução de moto">📦 Devolução de moto</option>
+      <option value="Vazamento de óleo">💧 Vazamento</option>
+      <option value="Recolhimento por inadimplência">🚛 Recolhimento por inadimplência</option>
+      <option value="Freio sem resposta">🛑 Freio sem resposta</option>
+      <option value="Moto travada no Tracksolution">🔒 Moto travada</option>
+      <option value="__custom">✏ Outro (digitar)</option>
+    </select>
+    <input type="text" id="addrMotivoCustom" placeholder="Descreva o motivo" style="display:none;margin-top:6px">
+
+    <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Placa (opcional)</label>
+    <input type="text" id="addrPlaca" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase">
+
+    <div id="addrResult" style="margin-top:14px;padding:10px;background:var(--surf2);border-radius:6px;font-size:11px;color:var(--txt2);display:none"></div>
+
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button onclick="closeAddCh()">Cancelar</button>
+      <button class="primary" id="addrSubmit">📍 Geocodificar e criar</button>
     </div>
   </div>
 </div>
@@ -2058,6 +2098,75 @@ function addSampleChamados(){
   showToast('✓ 5 chamados aleatórios adicionados');
 }
 
+function openAddCh(){
+  $('#addrEndereco').value = '';
+  $('#addrCliente').value = '';
+  $('#addrPlaca').value = '';
+  $('#addrMotivo').value = 'Moto não liga';
+  $('#addrMotivoCustom').style.display = 'none';
+  $('#addrMotivoCustom').value = '';
+  $('#addrResult').style.display = 'none';
+  $('#addch').style.display = 'flex';
+  setTimeout(() => $('#addrEndereco').focus(), 100);
+}
+function closeAddCh(){ $('#addch').style.display = 'none'; }
+window.closeAddCh = closeAddCh;
+
+async function submitAddCh(){
+  const endereco = $('#addrEndereco').value.trim();
+  const cliente = $('#addrCliente').value.trim();
+  let motivo = $('#addrMotivo').value;
+  if(motivo === '__custom'){ motivo = $('#addrMotivoCustom').value.trim() || 'Atendimento'; }
+  const placa = $('#addrPlaca').value.trim().toUpperCase() || ('XYZ' + Math.floor(Math.random()*9000+1000));
+
+  if(!endereco){ showToast('⚠ Endereço é obrigatório', true); return; }
+  if(!cliente){ showToast('⚠ Cliente é obrigatório', true); return; }
+
+  const btn = $('#addrSubmit');
+  btn.disabled = true; btn.textContent = '⏳ Geocodificando…';
+
+  let lat = null, lng = null, enderecoOficial = endereco;
+  try {
+    if(TT.has()){
+      // Tenta com viés pra SP — limita raio de 50km a partir do centro
+      const result = await TT.geocode(endereco, { center: { lat: -23.5505, lng: -46.6333 }, radius: 80000 });
+      if(result){
+        lat = result.lat; lng = result.lng;
+        enderecoOficial = result.address;
+        $('#addrResult').style.display = 'block';
+        $('#addrResult').innerHTML = `✓ Encontrado: <strong style="color:var(--acc)">${esc(enderecoOficial)}</strong><br><small>${lat.toFixed(5)}, ${lng.toFixed(5)} · score ${(result.score||0).toFixed(1)}</small>`;
+      }
+    }
+    if(lat == null || lng == null){
+      throw new Error('Endereço não encontrado. Verifique a grafia ou inclua bairro/cidade.');
+    }
+  } catch(e){
+    showToast('❌ ' + e.message, true);
+    btn.disabled = false; btn.textContent = '📍 Geocodificar e criar';
+    return;
+  }
+
+  const ch = {
+    id: genId(),
+    ts: Date.now(),
+    cliente, motivo, placa,
+    endereco: enderecoOficial,
+    lat, lng,
+    status: 'novo',
+    travada: /travada|trava/i.test(motivo)
+  };
+  const list = loadDemoChamados();
+  list.unshift(ch);
+  saveDemoChamados(list);
+  chamados.unshift(ch);
+  STORE.saveChamado(ch);
+  selId = ch.id;
+  closeAddCh();
+  map.setView([lat, lng], 15);
+  renderAll();
+  showToast(`✓ Chamado criado: ${cliente} · ${enderecoOficial.substring(0, 40)}`);
+}
+
 function clearAllChamados(){
   if(!confirm('Remover TODOS os chamados?\n\nIsso esvazia a fila de TODOS os gestores e colaboradores em tempo real.')) return;
   // Avisa cada colaborador pra limpar a fila dele
@@ -2499,6 +2608,19 @@ function init(){
   };
   $('#addsample').onclick = addSampleChamados;
   $('#clearall').onclick = clearAllChamados;
+  $('#addbyaddr').onclick = openAddCh;
+  $('#addrMotivo').onchange = (e) => {
+    $('#addrMotivoCustom').style.display = e.target.value === '__custom' ? 'block' : 'none';
+    if(e.target.value === '__custom') setTimeout(() => $('#addrMotivoCustom').focus(), 50);
+  };
+  $('#addrSubmit').onclick = submitAddCh;
+  $('#addrEndereco').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){ e.preventDefault(); submitAddCh(); }
+  });
+  // Fecha modal com ESC
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape' && $('#addch').style.display === 'flex') closeAddCh();
+  });
 
   // Config
   $('#configbtn').onclick = openConfig;
