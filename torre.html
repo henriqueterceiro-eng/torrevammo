@@ -432,7 +432,8 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
-const MOTORISTA_TTL_MS = 60 * 1000; // 60s sem update = offline
+const MOTORISTA_TTL_MS = 60 * 1000;        // 60s sem update = visualmente "offline"
+const MOTORISTA_REMOVE_MS = 5 * 60 * 1000; // 5min sem update = remove do mapa automaticamente
 
 let cfg = loadCfg();
 
@@ -1547,6 +1548,7 @@ function renderMot(){
           <div class="st">${stLbl} · ${filaStr} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}${m.kmh != null ? ` · <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : m.kmh+' km/h'}</span>` : ''}</div>
           ${m.currentStreet ? `<div class="st" style="color:var(--acc);font-size:9px;margin-top:2px">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</div>` : ''}
         </div>
+        <button class="motrm" data-act="rm-mot" title="Remover este colaborador do mapa (se for fantasma de teste antigo)" style="background:transparent;border:none;color:var(--txt3);font-size:14px;padding:4px 8px;cursor:pointer;border-radius:4px">✕</button>
         <div class="chev">▼</div>
       </div>
       <div class="filadrop">${filaHtml}</div>
@@ -1605,6 +1607,26 @@ function renderMot(){
     if(opt) opt.onclick = async (e) => {
       e.stopPropagation();
       await otimizarFila(id, opt);
+    };
+    // Botão remover motorista do mapa
+    const rm = el.querySelector('[data-act="rm-mot"]');
+    if(rm) rm.onclick = (e) => {
+      e.stopPropagation();
+      const m = motoristas[id];
+      if(!confirm(`Remover ${m?.nome || 'colaborador'} do mapa?\n\nEle some daqui mas continua online no app dele. Útil pra limpar fantasmas de teste.`)) return;
+      // Desatribui chamados dele
+      const q = (loadQueues()[id] || []);
+      q.slice().forEach(cid => atribuir(cid, ''));
+      // Remove
+      if(motoristaMarkers[id]){ map.removeLayer(motoristaMarkers[id]); delete motoristaMarkers[id]; }
+      if(trailLines[id]){ map.removeLayer(trailLines[id]); delete trailLines[id]; }
+      delete trails[id]; delete snappedTrails[id];
+      clearRoute(id);
+      delete motoristas[id];
+      motExpanded.delete(id);
+      recountMotoristas();
+      renderAll();
+      showToast(`✕ ${m?.nome || 'Colaborador'} removido do mapa`);
     };
   });
 }
@@ -2364,17 +2386,32 @@ document.addEventListener('visibilitychange', () => {
 function checkMotoristasTTL(){
   const now = Date.now();
   let changed = false;
+  const toRemove = [];
   for(const id in motoristas){
     const m = motoristas[id];
-    const stale = (now - (m.lastSeen||0)) > MOTORISTA_TTL_MS;
-    if(stale && m.status !== 'off'){
-      // Não muda status real, só visualmente fica como "offline" via TTL
+    const age = now - (m.lastSeen||0);
+    if(age > MOTORISTA_REMOVE_MS){
+      toRemove.push({ id, nome: m.nome });
+    } else if(age > MOTORISTA_TTL_MS && m.status !== 'off'){
       changed = true;
     }
   }
+  // Remove fantasmas (>5min sem updates)
+  for(const {id, nome} of toRemove){
+    if(motoristaMarkers[id]){ map.removeLayer(motoristaMarkers[id]); delete motoristaMarkers[id]; }
+    if(trailLines[id]){ map.removeLayer(trailLines[id]); delete trailLines[id]; }
+    delete trails[id];
+    delete snappedTrails[id];
+    clearRoute(id);
+    delete motoristas[id];
+    changed = true;
+    console.log('[TTL] removido inativo:', nome, id);
+  }
   if(changed){
+    recountMotoristas();
     renderMotoristaMarkers();
     renderMot();
+    renderLegend();
   }
 }
 
