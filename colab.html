@@ -175,6 +175,11 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #installbanner .tx b{display:block;font-size:13px;margin-bottom:2px}
 #installbanner button{padding:8px 14px;border-radius:20px;border:none;font-weight:700;font-size:12px;background:#001823;color:#fff}
 #installbanner .close{background:transparent;color:#001823;font-size:18px;padding:0 6px;font-weight:400}
+
+/* Aviso de tela bloqueada */
+#screentip{position:fixed;top:max(60px,env(safe-area-inset-top));left:8px;right:8px;background:rgba(251,191,36,0.95);color:#1f2937;padding:10px 12px;border-radius:8px;font-size:11px;font-weight:600;display:none;z-index:150;line-height:1.4;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
+#screentip.show{display:flex;align-items:center;gap:8px}
+#screentip .x{background:transparent;border:none;color:#1f2937;font-size:16px;padding:0 4px;cursor:pointer;font-weight:400}
 </style>
 </head>
 <body>
@@ -227,6 +232,13 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 </div>
 
 <div id="toast"></div>
+
+<!-- Aviso de tela bloqueada (aparece se voltar de background com gap longo) -->
+<div id="screentip">
+  <span style="font-size:16px">⚠</span>
+  <span style="flex:1">Sua tela ficou bloqueada — o GPS pausa nesse momento. Mantenha o app aberto pra rastreio contínuo.</span>
+  <button class="x" onclick="document.getElementById('screentip').classList.remove('show')">×</button>
+</div>
 
 <!-- Banner pra instalar PWA -->
 <div id="installbanner">
@@ -629,6 +641,7 @@ function onGPSUpdate(pos){
 
 function sendPos(pos){
   if(!me) return;
+  bufferLastPos(pos);
   sync.send('motorista:posicao', {
     id: me.id,
     nome: me.nome,
@@ -638,11 +651,41 @@ function sendPos(pos){
     lat: pos.lat,
     lng: pos.lng,
     accuracy: pos.accuracy,
-    kmh: pos.kmh,           // velocidade em km/h (pode ser null)
-    heading: pos.heading    // graus (pode ser null)
+    kmh: pos.kmh,
+    heading: pos.heading
   });
   lastSentPos = pos;
   lastSentAt = Date.now();
+}
+
+// Buffer da última posição conhecida (sobrevive a tela bloqueada)
+function bufferLastPos(pos){
+  try {
+    localStorage.setItem('vammo_last_pos', JSON.stringify({
+      lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy,
+      kmh: pos.kmh, heading: pos.heading, ts: Date.now()
+    }));
+  } catch(_){}
+}
+
+// Ao voltar foreground, envia a última posição se ela estiver "velha"
+// pra torre atualizar mesmo que tenha tido um gap de tela bloqueada
+function flushLastPos(){
+  if(!me) return;
+  try {
+    const raw = localStorage.getItem('vammo_last_pos');
+    if(!raw) return;
+    const p = JSON.parse(raw);
+    if(!p || p.lat == null) return;
+    const ageMs = Date.now() - (p.ts||0);
+    if(ageMs > 30000){
+      sync.send('motorista:posicao', {
+        id: me.id, nome: me.nome, placa: me.placa, color: me.color, status: me.status,
+        lat: p.lat, lng: p.lng, accuracy: p.accuracy, kmh: p.kmh, heading: p.heading
+      });
+      console.log('[colab] flush last pos: ', Math.round(ageMs/1000), 's antes');
+    }
+  } catch(_){}
 }
 
 function setGpsStatus(cls, txt){
@@ -1210,10 +1253,23 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Mantém GPS ativo quando volta foreground
+// Mantém GPS ativo quando volta foreground + avisa se ficou bloqueado muito tempo
+let _hiddenSince = null;
 document.addEventListener('visibilitychange', () => {
-  if(!document.hidden && me && myPos){ sendPos(myPos); }
-  if(!document.hidden && me) requestWakeLock(); // re-ativa Wake Lock ao voltar
+  if(document.hidden){
+    _hiddenSince = Date.now();
+  } else if(me){
+    const gap = _hiddenSince ? (Date.now() - _hiddenSince) : 0;
+    flushLastPos();
+    if(myPos) sendPos(myPos);
+    requestWakeLock();
+    if(gap > 60000){ // ficou bloqueado/em outro app > 1min
+      const tip = document.getElementById('screentip');
+      if(tip) tip.classList.add('show');
+      setTimeout(() => { if(tip) tip.classList.remove('show'); }, 10000);
+    }
+    _hiddenSince = null;
+  }
 });
 
 // ====================== PWA + WAKE LOCK ======================

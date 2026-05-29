@@ -182,6 +182,8 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 .mt-icon .badge{position:absolute;top:-4px;right:-4px;background:var(--acc);color:#001823;font-size:10px;font-weight:800;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
 .mt-icon.off{opacity:0.4}
 .mt-icon.off .pulse{display:none}
+.mt-icon.stale .ring{border-color:#fbbf24 !important;box-shadow:0 0 0 2px rgba(251,191,36,0.4)}
+.mt-icon.stale::before{content:'⏱';position:absolute;top:-4px;right:-4px;background:#fbbf24;color:#001823;width:18px;height:18px;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:800;border:2px solid var(--bg);z-index:3}
 .mt-icon.warn .ring{border-color:#dc2626 !important;box-shadow:0 0 0 3px rgba(220,38,38,0.4)}
 .mt-icon.warn .pulse{background:#dc2626 !important;animation:motpulse 0.9s ease-out infinite}
 .mt-icon.warn::after{content:'⚠';position:absolute;top:-8px;right:-8px;background:#dc2626;color:#fff;width:20px;height:20px;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:800;border:2px solid var(--bg);z-index:3;animation:numpulse 1s infinite}
@@ -1231,8 +1233,10 @@ function renderMotoristaMarkers(){
     const m = motoristas[id];
     if(!m.lat || !m.lng) continue;
     seen.add(id);
-    const isOff = m.status === 'off' || (now - (m.lastSeen || 0)) > MOTORISTA_TTL_MS;
-    const ringColor = m.status === 'busy' ? '#d97706' : isOff ? '#6b7280' : '#10b981';
+    const ageS = Math.round((now - (m.lastSeen || 0))/1000);
+    const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
+    const isStale = !isOff && ageS > 30; // > 30s sem update mas ainda dentro do TTL
+    const ringColor = m.status === 'busy' ? '#d97706' : isOff ? '#6b7280' : isStale ? '#fbbf24' : '#10b981';
     const initial = (m.nome || '?').charAt(0).toUpperCase();
     const html = `<div class="marker">
       <div class="pulse" style="background:${ringColor}"></div>
@@ -1241,12 +1245,14 @@ function renderMotoristaMarkers(){
       <div class="lbl">${esc(m.nome.split(' ')[0])}</div>
     </div>`;
     const warnCls = m._offRoute ? ' warn' : '';
-    const icon = L.divIcon({ className: `mt-icon ${isOff?'off':''}${warnCls}`, html, iconSize:[46,70], iconAnchor:[23,23] });
+    const staleCls = isStale ? ' stale' : '';
+    const icon = L.divIcon({ className: `mt-icon ${isOff?'off':''}${warnCls}${staleCls}`, html, iconSize:[46,70], iconAnchor:[23,23] });
     const stTxt = isOff ? 'offline' : m.status === 'busy' ? 'em rota' : 'online';
+    const ageTxt = isStale ? ` · <span style="color:#fbbf24">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
     const filaTxt = m.activeCount > 0 ? ` · ${m.activeCount} na fila` : '';
     const ruaTxt = m.currentStreet ? `<br><small style="color:#00B4E5">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</small>` : '';
     const spdTxt = (m.kmh != null) ? `<br><small style="color:${m.kmh > 0 ? '#fbbf24' : '#9ca3af'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : `🏃 ${m.kmh} km/h`}</small>` : '';
-    const tip = `<b>${esc(m.nome)}</b><br><small>${esc(m.placa||'sem placa')} · ${stTxt}${filaTxt}</small>${spdTxt}${ruaTxt}`;
+    const tip = `<b>${esc(m.nome)}</b><br><small>${esc(m.placa||'sem placa')} · ${stTxt}${filaTxt}${ageTxt}</small>${spdTxt}${ruaTxt}`;
     if(motoristaMarkers[id]){
       motoristaMarkers[id].setIcon(icon);
       motoristaMarkers[id].setLatLng([m.lat, m.lng]);
@@ -1551,9 +1557,12 @@ function renderMot(){
     const m = motoristas[id];
     const fila = q[id] || [];
     const ac = fila.length;
-    const isOff = m.status === 'off' || (Date.now() - (m.lastSeen||0)) > MOTORISTA_TTL_MS;
+    const ageS = Math.round((Date.now() - (m.lastSeen||0))/1000);
+    const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
+    const isStale = !isOff && ageS > 30;
     const stCls = isOff ? 'off' : m.status === 'busy' ? 'busy' : 'online';
     const stLbl = isOff ? 'offline' : m.status === 'busy' ? 'em rota' : 'online';
+    const ageLbl = isStale ? ` · <span style="color:#fbbf24;font-weight:700">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
     const hasGeo = m.lat != null && m.lng != null;
     const filaStr = ac > 0
       ? `<span style="color:var(--acc);font-weight:700">${ac} na fila</span>`
@@ -1594,7 +1603,7 @@ function renderMot(){
         <div class="info">
           <div class="nm">${esc(m.nome)}</div>
           <div class="pl">${esc(m.placa||'sem placa')}</div>
-          <div class="st">${stLbl} · ${filaStr} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}${m.kmh != null ? ` · <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : m.kmh+' km/h'}</span>` : ''}</div>
+          <div class="st">${stLbl} · ${filaStr} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}${m.kmh != null ? ` · <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : m.kmh+' km/h'}</span>` : ''}${ageLbl}</div>
           ${m.currentStreet ? `<div class="st" style="color:var(--acc);font-size:9px;margin-top:2px">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</div>` : ''}
         </div>
         <button class="motrm" data-act="rm-mot" title="Remover este colaborador do mapa (se for fantasma de teste antigo)" style="background:transparent;border:none;color:var(--txt3);font-size:14px;padding:4px 8px;cursor:pointer;border-radius:4px">✕</button>
@@ -2648,6 +2657,13 @@ function init(){
     }
     checkMotoristasTTL();
   }, 30000);
+  // Atualiza tempo "sem GPS" / "stale" a cada 15s sem reload completo
+  setInterval(() => {
+    if(Object.keys(motoristas).length){
+      renderMotoristaMarkers();
+      renderMot();
+    }
+  }, 15000);
 }
 
 if(document.readyState === 'loading'){
