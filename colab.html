@@ -552,6 +552,8 @@ function startGPS(){
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
         accuracy: pos.coords.accuracy,
+        speed: (pos.coords.speed != null && pos.coords.speed >= 0) ? pos.coords.speed : null, // m/s
+        heading: pos.coords.heading != null ? pos.coords.heading : null,
         ts: Date.now()
       };
       onGPSUpdate(newPos);
@@ -564,15 +566,25 @@ function startGPS(){
 }
 
 function onGPSUpdate(pos){
+  // Calcula velocidade: prefere pos.speed do GPS (mais preciso), senão calcula por delta
+  let kmh = null;
+  if(pos.speed != null){
+    kmh = pos.speed * 3.6;
+  } else if(lastSentPos){
+    const dist = haversine(lastSentPos, pos); // m
+    const dt = (pos.ts - lastSentPos.ts) / 1000; // s
+    if(dt > 0.5 && dt < 60){ kmh = (dist / dt) * 3.6; }
+  }
+  pos.kmh = kmh != null ? Math.max(0, Math.round(kmh)) : null;
   myPos = pos;
-  setGpsStatus('ok', `GPS ±${Math.round(pos.accuracy)}m`);
+  const spdTxt = pos.kmh != null ? ` · ${pos.kmh}km/h` : '';
+  setGpsStatus('ok', `GPS ±${Math.round(pos.accuracy)}m${spdTxt}`);
   updateMeMarker();
   if(!lastSentPos){ map.setView([pos.lat, pos.lng], 15); }
   const now = Date.now();
   const movedEnough = !lastSentPos || haversine(lastSentPos, pos) >= GPS_MIN_DELTA_M;
   const timeEnough = (now - lastSentAt) >= GPS_MIN_INTERVAL;
   if(movedEnough && timeEnough){ sendPos(pos); }
-  // Detecção de desvio + auto-chegada
   checkOffRoute();
   checkArrived();
 }
@@ -587,7 +599,9 @@ function sendPos(pos){
     status: me.status,
     lat: pos.lat,
     lng: pos.lng,
-    accuracy: pos.accuracy
+    accuracy: pos.accuracy,
+    kmh: pos.kmh,           // velocidade em km/h (pode ser null)
+    heading: pos.heading    // graus (pode ser null)
   });
   lastSentPos = pos;
   lastSentAt = Date.now();

@@ -1120,7 +1120,8 @@ function renderMotoristaMarkers(){
     const stTxt = isOff ? 'offline' : m.status === 'busy' ? 'em rota' : 'online';
     const filaTxt = m.activeCount > 0 ? ` · ${m.activeCount} na fila` : '';
     const ruaTxt = m.currentStreet ? `<br><small style="color:#00B4E5">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</small>` : '';
-    const tip = `<b>${esc(m.nome)}</b><br><small>${esc(m.placa||'sem placa')} · ${stTxt}${filaTxt}</small>${ruaTxt}`;
+    const spdTxt = (m.kmh != null) ? `<br><small style="color:${m.kmh > 0 ? '#fbbf24' : '#9ca3af'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : `🏃 ${m.kmh} km/h`}</small>` : '';
+    const tip = `<b>${esc(m.nome)}</b><br><small>${esc(m.placa||'sem placa')} · ${stTxt}${filaTxt}</small>${spdTxt}${ruaTxt}`;
     if(motoristaMarkers[id]){
       motoristaMarkers[id].setIcon(icon);
       motoristaMarkers[id].setLatLng([m.lat, m.lng]);
@@ -1466,7 +1467,7 @@ function renderMot(){
         <div class="info">
           <div class="nm">${esc(m.nome)}</div>
           <div class="pl">${esc(m.placa||'sem placa')}</div>
-          <div class="st">${stLbl} · ${filaStr} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}</div>
+          <div class="st">${stLbl} · ${filaStr} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}${m.kmh != null ? ` · <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : m.kmh+' km/h'}</span>` : ''}</div>
           ${m.currentStreet ? `<div class="st" style="color:var(--acc);font-size:9px;margin-top:2px">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</div>` : ''}
         </div>
         <div class="chev">▼</div>
@@ -2066,6 +2067,16 @@ function setupSyncListeners(){
     m.lng = data.lng;
     m.status = data.status || m.status;
     m.lastSeen = Date.now();
+    // Velocidade — usa o kmh enviado pelo colab; se vier null e tiver prev pos, calcula
+    if(data.kmh != null){
+      m.kmh = data.kmh;
+    } else if(m._prevPos){
+      const dist = haversine(m._prevPos, {lat:data.lat,lng:data.lng});
+      const dt = (Date.now() - m._prevPos.ts) / 1000;
+      if(dt > 0.5 && dt < 60) m.kmh = Math.max(0, Math.round((dist/dt) * 3.6));
+    }
+    m._prevPos = { lat: data.lat, lng: data.lng, ts: Date.now() };
+    if(data.heading != null) m.heading = data.heading;
     // Reverse geocode — só 1x por 45s por motorista
     if(TT.has()){
       if(!m._lastReverse || Date.now() - m._lastReverse > 45000){
@@ -2201,6 +2212,19 @@ function setupSyncListeners(){
 }
 
 // ============== STORE LISTENERS (multi-gestor) ==============
+// Debounce: várias mudanças em sequência (atribuir → snapshot, queues → snapshot, etc)
+// disparam apenas 1 renderAll por frame, evitando travamento de UI
+let _renderRaf = null;
+function scheduleRender(){
+  if(_renderRaf) return;
+  _renderRaf = requestAnimationFrame(() => { _renderRaf = null; renderAll(); });
+}
+let _updateRoutesTo = null;
+function scheduleUpdateRoutes(){
+  if(_updateRoutesTo) return;
+  _updateRoutesTo = setTimeout(() => { _updateRoutesTo = null; updateAllRoutes(); }, 300);
+}
+
 function setupStoreListeners(){
   STORE.setHandlers({
     onChamadosSnapshot: (data) => {
@@ -2232,21 +2256,19 @@ function setupStoreListeners(){
       }
       saveStatusMap(sm);
       saveAsgn(a);
-      // Limpa selId se chamado sumiu
       if(selId && !data[selId]) selId = null;
-      // Remove markers órfãos
       for(const mid in chamadoMarkers){
         if(!data[mid]){ map.removeLayer(chamadoMarkers[mid]); delete chamadoMarkers[mid]; }
       }
       recountMotoristas();
-      updateAllRoutes();
-      renderAll();
+      scheduleUpdateRoutes();
+      scheduleRender();
     },
     onQueuesChanged: (newQueues) => {
       saveQueues(newQueues || {});
       recountMotoristas();
-      updateAllRoutes();
-      renderAll();
+      scheduleUpdateRoutes();
+      scheduleRender();
     }
   });
 }
