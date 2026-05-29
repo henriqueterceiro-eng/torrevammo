@@ -172,12 +172,6 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   <form id="loginform">
     <input type="text" id="lognome" placeholder="Seu nome" autocomplete="name" required>
     <input type="text" id="logplaca" placeholder="Placa do guincho (ex: ABC1D23)" autocomplete="off" maxlength="8">
-    <select id="logvehicle" required style="width:100%;padding:14px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt);border-radius:10px;font-size:16px;font-family:inherit">
-      <option value="pickup_carreta">🛻 Pickup com carreta (mais comum)</option>
-      <option value="pickup">🛻 Pickup só</option>
-      <option value="caminhao">🚛 Caminhão / guincho pesado</option>
-      <option value="moto">🏍 Moto</option>
-    </select>
     <button type="submit">Entrar no turno</button>
   </form>
   <div class="hint">
@@ -605,13 +599,12 @@ function sendPos(pos){
     nome: me.nome,
     placa: me.placa,
     color: me.color,
-    vehicle: me.vehicle || 'pickup_carreta',
     status: me.status,
     lat: pos.lat,
     lng: pos.lng,
     accuracy: pos.accuracy,
-    kmh: pos.kmh,
-    heading: pos.heading
+    kmh: pos.kmh,           // velocidade em km/h (pode ser null)
+    heading: pos.heading    // graus (pode ser null)
   });
   lastSentPos = pos;
   lastSentAt = Date.now();
@@ -1104,7 +1097,6 @@ function bootApp(){
     nome: me.nome,
     placa: me.placa,
     color: me.color,
-    vehicle: me.vehicle || 'pickup_carreta',
     status: me.status
   });
 
@@ -1141,7 +1133,6 @@ document.getElementById('loginform').addEventListener('submit', (e) => {
   e.preventDefault();
   const nome = document.getElementById('lognome').value.trim();
   const placa = document.getElementById('logplaca').value.trim().toUpperCase();
-  const vehicle = document.getElementById('logvehicle').value || 'pickup_carreta';
   if(!nome) return;
   const existing = loadMe();
   me = existing && existing.nome === nome ? existing : {
@@ -1154,7 +1145,6 @@ document.getElementById('loginform').addEventListener('submit', (e) => {
   me.color = colorFromId(me.id);
   me.nome = nome;
   me.placa = placa;
-  me.vehicle = vehicle;
   me.status = 'online';
   saveMe(me);
   sync = createSync();
@@ -1166,8 +1156,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const saved = loadMe();
   if(saved){
     me = saved;
-    me.vehicle = me.vehicle || 'pickup_carreta';
-    me.status = 'online';
+    me.status = 'online'; // sempre começa online ao abrir
     saveMe(me);
     sync = createSync();
     bootApp();
