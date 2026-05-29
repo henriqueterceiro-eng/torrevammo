@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#00B4E5">
 <title>Vammo · Colaborador</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vammo">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
@@ -154,6 +161,20 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 /* ===== Sync indicator ===== */
 #syncdot{width:8px;height:8px;border-radius:50%;background:var(--txt3);display:inline-block}
 #syncdot.ok{background:var(--on)}
+
+/* ===== Wake Lock indicator ===== */
+#wakedot{width:7px;height:7px;border-radius:50%;background:var(--txt3);display:inline-block;margin-left:2px}
+#wakedot.on{background:#fbbf24;box-shadow:0 0 4px #fbbf24}
+#wakedot.on::after{content:' tela ativa'}
+
+/* ===== Install banner ===== */
+#installbanner{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#00B4E5,#0099c4);color:#001823;padding:14px 16px;padding-bottom:max(14px,env(safe-area-inset-bottom));display:none;align-items:center;gap:12px;z-index:200;box-shadow:0 -4px 16px rgba(0,180,229,0.4);animation:slideUp 0.4s}
+#installbanner.show{display:flex}
+#installbanner .ic{font-size:28px;flex:0 0 32px}
+#installbanner .tx{flex:1;font-size:12px;line-height:1.4}
+#installbanner .tx b{display:block;font-size:13px;margin-bottom:2px}
+#installbanner button{padding:8px 14px;border-radius:20px;border:none;font-weight:700;font-size:12px;background:#001823;color:#fff}
+#installbanner .close{background:transparent;color:#001823;font-size:18px;padding:0 6px;font-weight:400}
 </style>
 </head>
 <body>
@@ -185,7 +206,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     <div class="av" id="tbav">?</div>
     <div class="info">
       <div class="nm" id="tbnome">—</div>
-      <div class="pl"><span id="syncdot"></span><span id="tbplaca">—</span></div>
+      <div class="pl"><span id="syncdot"></span><span id="tbplaca">—</span><span id="wakedot"></span></div>
     </div>
     <button class="stbtn" id="ststatus">ONLINE</button>
     <button class="out" id="btlogout" title="Sair">⏻</button>
@@ -206,6 +227,17 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 </div>
 
 <div id="toast"></div>
+
+<!-- Banner pra instalar PWA -->
+<div id="installbanner">
+  <div class="ic">📲</div>
+  <div class="tx">
+    <b>Instalar app Vammo no celular</b>
+    Tela fica ativa o turno todo, abre em 1s, funciona offline
+  </div>
+  <button id="installbtn">Instalar</button>
+  <button class="close" id="installclose">×</button>
+</div>
 
 <script>
 'use strict';
@@ -1116,6 +1148,7 @@ function bootApp(){
     if(!confirm('Encerrar turno e sair?')) return;
     sync.send('motorista:logout', { id: me.id });
     if(watchId) navigator.geolocation.clearWatch(watchId);
+    if(wakeLock && !wakeLock.released) wakeLock.release().catch(()=>{});
     clearMe();
     location.reload();
   };
@@ -1125,6 +1158,18 @@ function bootApp(){
 
   // Toca som de welcome (precisa gesto do user, mas o submit do form vale)
   setTimeout(() => playBeep(), 200);
+
+  // Mantém tela ativa durante turno (Wake Lock)
+  requestWakeLock();
+
+  // Se já tem prompt de install esperando, mostra banner
+  if(deferredInstall){
+    const dismissed = localStorage.getItem('vammo_install_dismiss');
+    const recent = dismissed && (Date.now() - +dismissed) < 24 * 3600000;
+    if(!recent && !window.matchMedia('(display-mode: standalone)').matches){
+      document.getElementById('installbanner').classList.add('show');
+    }
+  }
 
   renderChamadoCard();
 }
@@ -1168,6 +1213,80 @@ window.addEventListener('DOMContentLoaded', () => {
 // Mantém GPS ativo quando volta foreground
 document.addEventListener('visibilitychange', () => {
   if(!document.hidden && me && myPos){ sendPos(myPos); }
+  if(!document.hidden && me) requestWakeLock(); // re-ativa Wake Lock ao voltar
+});
+
+// ====================== PWA + WAKE LOCK ======================
+// Service Worker pra cache offline + sobrevivência a quedas de rede
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').then(reg => {
+      console.log('[PWA] service worker registrado:', reg.scope);
+    }).catch(err => console.warn('[PWA] SW fail:', err));
+  });
+}
+
+// Wake Lock: mantém a tela ligada enquanto o motorista trabalha
+let wakeLock = null;
+async function requestWakeLock(){
+  if(!('wakeLock' in navigator)){
+    document.getElementById('wakedot').className = '';
+    return;
+  }
+  try {
+    if(wakeLock && !wakeLock.released) return;
+    wakeLock = await navigator.wakeLock.request('screen');
+    document.getElementById('wakedot').className = 'on';
+    wakeLock.addEventListener('release', () => {
+      document.getElementById('wakedot').className = '';
+      console.log('[PWA] wake lock released');
+    });
+    console.log('[PWA] wake lock ativo');
+  } catch(e){
+    console.warn('[PWA] wake lock fail:', e);
+    document.getElementById('wakedot').className = '';
+  }
+}
+
+// Confirma antes de fechar (sair acidentalmente do app durante turno é problema)
+window.addEventListener('beforeunload', (e) => {
+  if(me && me.status !== 'off' && fila.length > 0){
+    e.preventDefault();
+    e.returnValue = 'Você tem chamados ativos. Tem certeza que quer sair?';
+    return e.returnValue;
+  }
+});
+
+// Prompt de instalação do PWA (Chrome/Edge/Android)
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  // Não mostra banner se usuário já dispensou hoje
+  const dismissed = localStorage.getItem('vammo_install_dismiss');
+  if(dismissed && (Date.now() - +dismissed) < 24 * 3600000) return;
+  // Não mostra se já tá rodando como PWA
+  if(window.matchMedia('(display-mode: standalone)').matches) return;
+  // Mostra após login
+  if(me) document.getElementById('installbanner').classList.add('show');
+});
+
+document.getElementById('installbtn').addEventListener('click', async () => {
+  if(!deferredInstall){
+    // iOS Safari não tem beforeinstallprompt — instrui manualmente
+    showToast('iOS: toque em ⇧ Compartilhar → Adicionar à Tela Inicial');
+    return;
+  }
+  deferredInstall.prompt();
+  const { outcome } = await deferredInstall.userChoice;
+  console.log('[PWA] install:', outcome);
+  deferredInstall = null;
+  document.getElementById('installbanner').classList.remove('show');
+});
+
+document.getElementById('installclose').addEventListener('click', () => {
+  document.getElementById('installbanner').classList.remove('show');
+  localStorage.setItem('vammo_install_dismiss', String(Date.now()));
 });
 </script>
 </body>
