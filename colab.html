@@ -623,23 +623,20 @@ function setGpsStatus(cls, txt){
 function initMap(){
   map = L.map('mapcanvas', {
     zoomControl: false,
-    attributionControl: false
+    attributionControl: false,
+    maxZoom: 19,
+    minZoom: 6
   }).setView([-23.5505, -46.6333], 12);
   L.control.zoom({ position: 'topright' }).addTo(map);
-  // TomTom Maps Display se tem chave (estilo Google), CARTO como fallback
+  const tileOpts = { maxZoom: 19, minZoom: 6, errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' };
   if(TOMTOM_KEY){
-    L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/night/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, {
-      maxZoom: 22, attribution: '© TomTom'
-    }).addTo(map);
-    // Overlay de trânsito ao vivo (subtil)
-    L.tileLayer(`https://api.tomtom.com/traffic/map/4/tile/flow/relative-delay/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, {
-      maxZoom: 22, opacity: 0.7, attribution: ''
-    }).addTo(map);
+    L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/night/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, attribution: '© TomTom' }).addTo(map);
+    L.tileLayer(`https://api.tomtom.com/traffic/map/4/tile/flow/relative-delay/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, opacity: 0.7, attribution: '' }).addTo(map);
   } else {
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 19, attribution: '© OSM · CARTO'
-    }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { ...tileOpts, subdomains: 'abcd', attribution: '© OSM · CARTO' }).addTo(map);
   }
+  setTimeout(() => map.invalidateSize(), 100);
+  window.addEventListener('resize', () => map.invalidateSize());
 }
 
 function updateMeMarker(){

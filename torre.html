@@ -908,8 +908,11 @@ function applyLayer(name){
   if(labelsLayer){ map.removeLayer(labelsLayer); labelsLayer = null; }
   baseLayer = L.tileLayer(l.url, {
     subdomains: l.sub || 'abc',
-    maxZoom: 22,
-    attribution: l.attr
+    maxZoom: 19,
+    minZoom: 6,
+    attribution: l.attr,
+    // Quando tile falha ou está fora do range, mostra placeholder dark em vez de esticar tile vizinha
+    errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
   }).addTo(map);
   baseLayer.bringToBack();
   // Aplica overlay de labels se o layer tiver
@@ -931,9 +934,15 @@ function initMap(){
   map = L.map('leafmap', {
     zoomControl: true,
     attributionControl: false,
-    preferCanvas: false
+    preferCanvas: false,
+    maxZoom: 19,         // limite global — TomTom serve até 22 mas pode dar borrão em alguns locais
+    minZoom: 6
   }).setView([-23.5505, -46.6333], 11);
   applyLayer(currentLayerName);
+  // Mapa às vezes inicializa com div ainda sem tamanho (flex layout) — força recalc após render
+  setTimeout(() => map.invalidateSize(), 100);
+  setTimeout(() => map.invalidateSize(), 600);
+  window.addEventListener('resize', () => map.invalidateSize());
   L.control.scale({ position: 'bottomleft', metric: true, imperial: false, maxWidth: 120 }).addTo(map);
   L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map);
 

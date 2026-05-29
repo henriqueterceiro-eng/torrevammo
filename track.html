@@ -212,18 +212,19 @@ let lastRouteFetch = 0;
 function initMap(){
   map = L.map('mapcanvas', {
     zoomControl: false,
-    attributionControl: false
+    attributionControl: false,
+    maxZoom: 19,
+    minZoom: 6
   }).setView([-23.5505, -46.6333], 13);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
+  const tileOpts = { maxZoom: 19, minZoom: 6, errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' };
   if(TOMTOM_KEY){
-    L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, {
-      maxZoom: 22, attribution: '© TomTom'
-    }).addTo(map);
+    L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, attribution: '© TomTom' }).addTo(map);
   } else {
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 19
-    }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { ...tileOpts, subdomains: 'abcd' }).addTo(map);
   }
+  setTimeout(() => map.invalidateSize(), 100);
+  window.addEventListener('resize', () => map.invalidateSize());
 }
 
 function updateVehicle(lat, lng){
