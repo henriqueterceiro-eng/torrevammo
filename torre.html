@@ -42,15 +42,19 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #nav{flex:0 0 68px;display:flex;align-items:center;gap:14px;padding:0 20px;background:linear-gradient(180deg,#0d1730 0%,#0a1428 100%);border-bottom:1px solid var(--bdr2);font-size:13px;position:relative}
 #nav::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--acc) 30%,var(--acc) 70%,transparent 100%);opacity:0.7}
 .brand{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding-right:16px;margin-right:4px;border-right:1px solid var(--bdr);height:52px;gap:3px;position:relative}
-.brand .lg{height:30px;color:var(--acc);display:block;filter:drop-shadow(0 0 12px rgba(0,180,229,0.45))}
+.brand .lg{height:34px;color:var(--acc);display:block;filter:drop-shadow(0 0 14px rgba(0,180,229,0.55))}
 .brand .lg svg{height:100%;width:auto;display:block}
-.brand .sub{color:#fff;font-weight:800;font-size:10px;letter-spacing:5px;text-transform:uppercase;padding-left:2px;opacity:0.95;text-shadow:0 0 8px rgba(0,180,229,0.3)}
-#nav .pills{display:flex;gap:5px}
-.pill{padding:6px 11px;border:1px solid var(--bdr);background:transparent;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:6px;border-radius:7px;color:var(--txt2);font-weight:600;transition:all 0.15s}
-.pill:hover{background:var(--surf);color:var(--txt);border-color:var(--bdr2)}
-.pill.active{background:var(--surf2);color:var(--txt);border-color:var(--bdr2);box-shadow:inset 0 -2px 0 var(--acc)}
-.pill .n{background:var(--surf2);padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.brand .sub{color:var(--acc);font-weight:900;font-size:11px;letter-spacing:7px;text-transform:uppercase;padding-left:2px;text-shadow:0 0 10px rgba(0,180,229,0.5);margin-top:1px}
+#nav .pills{display:flex;gap:6px;align-items:stretch}
+.pill{padding:6px 12px;border:1px solid var(--bdr);background:var(--surf);cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-radius:8px;color:var(--txt2);font-weight:700;transition:all 0.15s;height:38px}
+.pill:hover{background:var(--surf2);color:var(--txt);border-color:var(--bdr2)}
+.pill.active{background:var(--surf2);color:var(--txt);border-color:var(--bdr2);box-shadow:inset 0 -2px 0 var(--acc),0 2px 8px rgba(0,180,229,0.15)}
+.pill .n{background:var(--bg);padding:3px 9px;border-radius:10px;font-size:13px;font-weight:800;font-family:var(--mono);min-width:24px;text-align:center;line-height:1}
 .pill.active .n{background:var(--acc);color:#001823}
+.pill[data-f="novo"].active .n{background:var(--novo);color:#fff}
+.pill[data-f="em_rota"].active .n{background:var(--rota);color:#fff}
+.pill[data-f="concluido"].active .n{background:var(--conc);color:#fff}
+.pill[data-f="cancelado"].active .n{background:var(--canc);color:#fff}
 #nav .spacer{flex:1}
 
 #nav .iconbtn{padding:7px 11px;font-size:11px;display:flex;align-items:center;gap:5px;border-radius:7px;transition:all 0.15s}
@@ -66,18 +70,6 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 
 /* SIDEBAR */
 #sidebar{flex:0 0 340px;border-right:1px solid var(--bdr2);background:var(--surf);display:flex;flex-direction:column;min-height:0;overflow:hidden}
-#kpis{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border-bottom:1px solid var(--bdr)}
-.kpi{padding:10px 6px;text-align:center;cursor:pointer;border-right:1px solid var(--bdr);transition:background 0.15s}
-.kpi:last-child{border-right:none}
-.kpi:hover{background:var(--surf2)}
-.kpi.active{background:var(--surf2);box-shadow:inset 0 -2px 0 var(--acc)}
-.kpi .lbl{font-size:9px;color:var(--txt2);letter-spacing:0.6px;font-weight:700}
-.kpi .val{font-size:22px;font-weight:800;margin-top:3px;font-family:var(--mono)}
-.kpi.k-novo .val{color:var(--novo)}
-.kpi.k-rota .val{color:var(--rota)}
-.kpi.k-conc .val{color:var(--conc)}
-.kpi.k-canc .val{color:var(--canc)}
-
 #tabs{display:flex;border-bottom:1px solid var(--bdr);background:var(--bg)}
 .tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:11px;color:var(--txt2);font-weight:600;letter-spacing:0.3px}
 .tab.active{background:var(--surf);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acc)}
@@ -360,7 +352,6 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 
   <div id="main">
     <div id="sidebar">
-      <div id="kpis"></div>
       <div id="tabs">
         <div class="tab active" data-tab="chamados">Chamados <span id="tab1n">0</span></div>
         <div class="tab" data-tab="motoristas">Colaboradores <span id="tab2n">0</span></div>
@@ -2803,7 +2794,6 @@ function checkMotoristasTTL(){
 // ============== RENDER ==============
 function renderAll(){
   renderPills();
-  renderKPIs();
   renderList();
   renderMot();
   renderChamadoMarkers();
