@@ -2535,24 +2535,35 @@ async function uploadFile(file, onProgress){
   return data; // { id, url, previewUrl, name, size }
 }
 
-// Helper pro form: campo de upload OU URL manual
+// Helper pro form: upload de arquivo direto pro Drive (sem opção de colar URL)
 function docUploadField(inputId, currentUrl, label){
   const hasUrl = !!currentUrl;
+  // input hidden guarda a URL retornada pelo Apps Script — não é editável pelo usuário
+  if(!cfg.uploadUrl){
+    return `
+      <label>${label}</label>
+      <input id="${inputId}" type="hidden" value="${esc(currentUrl || '')}">
+      <div style="padding:10px 12px;background:rgba(220,38,38,0.12);border:1px solid #dc2626;border-radius:6px;font-size:11px;color:#fca5a5">
+        ⚠ Upload não configurado. Vá em ⚙ Config → cole a URL do Apps Script de upload pra habilitar o anexo de documentos.
+      </div>
+    `;
+  }
   return `
     <label>${label}</label>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input id="${inputId}" type="url" placeholder="${cfg.uploadUrl ? 'Cole URL ou suba arquivo →' : 'Cole URL (Drive, OneDrive...)'}" value="${esc(currentUrl || '')}" style="flex:1;min-width:200px">
-      ${cfg.uploadUrl ? `<label style="padding:8px 12px;background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap" title="Subir arquivo (PDF/JPG/PNG até 20MB)">
-        📎 Subir arquivo
-        <input type="file" data-up="${inputId}" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
-      </label>` : ''}
-      ${hasUrl ? `<a href="${esc(currentUrl)}" target="_blank" rel="noopener" style="padding:8px 10px;font-size:14px;color:var(--acc);text-decoration:none;border:1px solid var(--bdr);border-radius:6px" title="Abrir documento atual">📄</a>` : ''}
+    <input id="${inputId}" type="hidden" value="${esc(currentUrl || '')}">
+    <div id="${inputId}_box" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <label style="flex:1;min-width:200px;padding:10px 14px;background:var(--surf2);border:1px dashed var(--bdr2);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;text-align:center;color:${hasUrl ? 'var(--txt2)' : 'var(--acc)'}" title="PDF / JPG / PNG até 20MB">
+        ${hasUrl ? '🔄 Substituir arquivo' : '📎 Subir arquivo do dispositivo'}
+        <input type="file" data-up="${inputId}" accept=".pdf,.jpg,.jpeg,.png,image/*,application/pdf" style="display:none">
+      </label>
+      ${hasUrl ? `<a href="${esc(currentUrl)}" target="_blank" rel="noopener" style="padding:10px 12px;font-size:14px;color:var(--acc);text-decoration:none;border:1px solid var(--bdr);border-radius:6px" title="Abrir documento atual">📄 ver</a>
+        <button type="button" data-rm="${inputId}" style="padding:10px 12px;font-size:14px;background:rgba(220,38,38,0.12);border:1px solid var(--novo);color:#fca5a5;border-radius:6px" title="Remover anexo">🗑</button>` : ''}
     </div>
-    <div id="${inputId}_status" style="font-size:10px;color:var(--txt3);margin-top:4px;min-height:14px"></div>
+    <div id="${inputId}_status" style="font-size:10px;color:var(--txt3);margin-top:4px;min-height:14px">${hasUrl ? '✓ documento anexado' : 'Tire foto ou escolha um PDF/imagem'}</div>
   `;
 }
 
-// Conecta os inputs de upload em todos os file inputs do form
+// Conecta os inputs de upload em todos os file inputs + botões de remover do form
 function bindUploadInputs(){
   $$('#cadFormBody input[type=file][data-up]').forEach(input => {
     input.onchange = async () => {
@@ -2567,10 +2578,9 @@ function bindUploadInputs(){
         urlInput.value = data.url;
         if(status){
           status.style.color = '#16a34a';
-          status.textContent = '✓ ' + data.name + ' (' + (data.size/1024).toFixed(0) + 'KB) — link salvo';
+          status.textContent = '✓ ' + data.name + ' (' + (data.size/1024).toFixed(0) + 'KB) — salvo no Drive';
         }
-        // Atualiza visualização do link
-        renderCadForm_refreshLink(targetId, data.url);
+        rebuildDocUploadBox(targetId, data.url);
       } catch(err){
         console.error(err);
         if(status){ status.style.color = '#dc2626'; status.textContent = '❌ ' + err.message; }
@@ -2578,19 +2588,32 @@ function bindUploadInputs(){
       input.value = ''; // permite re-upload do mesmo arquivo
     };
   });
+  $$('#cadFormBody button[data-rm]').forEach(btn => {
+    btn.onclick = () => {
+      const targetId = btn.dataset.rm;
+      const urlInput = document.getElementById(targetId);
+      if(!urlInput) return;
+      if(!confirm('Remover anexo? O arquivo continua no Drive (não é deletado), apenas o vínculo com o cadastro é desfeito.')) return;
+      urlInput.value = '';
+      rebuildDocUploadBox(targetId, '');
+    };
+  });
 }
 
-function renderCadForm_refreshLink(targetId, url){
-  // Não tem necessidade de re-renderizar o form todo — apenas adiciona o link se ainda não tem
-  const wrap = document.getElementById(targetId)?.parentElement;
-  if(!wrap) return;
-  if(wrap.querySelector('a[href]')) return; // já tem link
-  const a = document.createElement('a');
-  a.href = url; a.target = '_blank'; a.rel = 'noopener';
-  a.textContent = '📄';
-  a.title = 'Abrir documento';
-  a.style.cssText = 'padding:8px 10px;font-size:14px;color:var(--acc);text-decoration:none;border:1px solid var(--bdr);border-radius:6px';
-  wrap.appendChild(a);
+// Re-renderiza o card de upload (botão muda entre "📎 Subir" e "🔄 Substituir") sem mexer no resto do form
+function rebuildDocUploadBox(targetId, url){
+  const box = document.getElementById(targetId + '_box');
+  if(!box) return;
+  const hasUrl = !!url;
+  box.innerHTML = `
+    <label style="flex:1;min-width:200px;padding:10px 14px;background:var(--surf2);border:1px dashed var(--bdr2);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;text-align:center;color:${hasUrl ? 'var(--txt2)' : 'var(--acc)'}" title="PDF / JPG / PNG até 20MB">
+      ${hasUrl ? '🔄 Substituir arquivo' : '📎 Subir arquivo do dispositivo'}
+      <input type="file" data-up="${targetId}" accept=".pdf,.jpg,.jpeg,.png,image/*,application/pdf" style="display:none">
+    </label>
+    ${hasUrl ? `<a href="${esc(url)}" target="_blank" rel="noopener" style="padding:10px 12px;font-size:14px;color:var(--acc);text-decoration:none;border:1px solid var(--bdr);border-radius:6px" title="Abrir documento atual">📄 ver</a>
+      <button type="button" data-rm="${targetId}" style="padding:10px 12px;font-size:14px;background:rgba(220,38,38,0.12);border:1px solid var(--novo);color:#fca5a5;border-radius:6px" title="Remover anexo">🗑</button>` : ''}
+  `;
+  bindUploadInputs();
 }
 
 function veiculoTipoIcon(t){ return { carro:'🚗', carreta:'🚛', moto:'🏍' }[t] || '🚗'; }
