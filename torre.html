@@ -652,6 +652,7 @@ let trails = {};              // {motoristaId: [{lat,lng,ts}, ...]}  últimas N 
 let trailLines = {};          // {motoristaId: L.polyline}
 let routeLines = {};          // {motoristaId: L.polyline}  rota OSRM multi-stop
 let routePending = {};        // {motoristaId: bool}  evita request duplicado
+let corridas = {};            // {chamadoId: ride} histórico de corridas finalizadas
 let motExpanded = new Set();  // ids de motoristas com fila expandida
 let sync = null;
 let lastSync = null;
@@ -730,6 +731,11 @@ const STORE = (() => {
         const data = s.val() || {};
         console.log('[STORE] queues sync', Object.keys(data).length, 'motoristas');
         if(handlers.onQueuesChanged) handlers.onQueuesChanged(data);
+      });
+      // Corridas finalizadas — pra exibir nota e histórico
+      fb.child('corridas').on('child_added', s => {
+        const v = s.val();
+        if(v && handlers.onCorridaAdded) handlers.onCorridaAdded(s.key, v);
       });
       return true;
     } catch(e){ console.warn('STORE init err:', e); return false; }
@@ -1514,6 +1520,12 @@ function renderList(){
     const slaBadge = al ? `<span class="b b-sla${al==='crit'?' crit':''}">⏱ ${fmtElapsed(c.ts)}</span>` : '';
     const trBadge = c.travada ? `<span class="b b-trav">⚠ TRAV</span>` : '';
     const arrivedBadge = c.arrived ? `<span class="b b-arrived">🎯 NO LOCAL</span>` : '';
+    const ride = corridas[c.id];
+    const notaBadge = (ride && ride.nota) ? (() => {
+      const v = ride.nota.final;
+      const cor = v >= 8 ? '#16a34a' : v >= 6 ? '#fbbf24' : '#dc2626';
+      return `<span class="b" style="background:${cor};color:#fff">⭐ ${v}</span>`;
+    })() : '';
     const queueBadge = ord ? `<span class="b b-queue${ord.order===1?' first':''}" title="Posição ${ord.order} na fila de ${ord.total}">${ord.order}/${ord.total}</span>` : '';
     const motBadge = mot ? `<span class="b b-mot" style="background:${mot.color}">${esc(mot.nome.split(' ')[0])}</span>` : '';
     const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>`;
@@ -1522,7 +1534,7 @@ function renderList(){
         <div class="nome">${esc(c.cliente||'?')}</div>
         <div class="ico">${ico(c.motivo)}</div>
       </div>
-      <div class="badges">${stBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
+      <div class="badges">${stBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
       <div class="motivo">${esc(c.motivo||'—')}</div>
       ${c.endereco ? `<div class="end">📍 ${esc(c.endereco)}</div>` : ''}
       <div class="meta"><span>${esc(c.placa||'—')}</span><span>${fmtTime(c.ts)} · ${fmtElapsed(c.ts)}</span></div>
@@ -1766,7 +1778,41 @@ function renderDetail(){
     </div>
     ${gmaps ? `<div class="links"><a href="${gmaps}" target="_blank" rel="noopener">🗺 Google Maps</a>${c.lat && c.lng ? `<a href="https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes" target="_blank">🚗 Waze</a>` : ''}${c.backofficeUrl ? `<a href="${esc(c.backofficeUrl)}" target="_blank">🔗 Backoffice</a>`:''}<a href="#" id="trackcopy" style="background:linear-gradient(135deg,#00B4E5,#0099c4);color:#fff;border:none;font-weight:700">📤 Link p/ cliente</a></div>`:''}
     ${(() => {
-      // Busca rota do motorista atribuído a este chamado
+      // Card de NOTA da corrida (se chamado já foi finalizado)
+      const ride = corridas[c.id];
+      if(!ride || !ride.nota) return '';
+      const n = ride.nota;
+      const star = n.final >= 8 ? '⭐' : n.final >= 6 ? '👍' : '⚠';
+      const cor = n.final >= 8 ? '#16a34a' : n.final >= 6 ? '#fbbf24' : '#dc2626';
+      const fmtMin = (s) => s == null ? '—' : (s < 60 ? s+'s' : Math.floor(s/60)+'min'+(s%60>0?' '+(s%60)+'s':''));
+      return `<div style="margin-top:10px;padding:12px;background:rgba(255,255,255,0.05);border:1px solid ${cor};border-radius:8px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="font-size:32px;font-weight:800;color:${cor};font-family:var(--mono);line-height:1">${n.final}</div>
+          <div style="flex:1">
+            <div style="font-size:11px;font-weight:700;color:${cor}">${star} NOTA DO ATENDIMENTO</div>
+            <div style="font-size:10px;color:var(--txt2);margin-top:2px">${esc(ride.motoristaNome)} · ${ride.totalKm}km · ${fmtMin(ride.totalDurationSec)}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:10px">
+          <div style="text-align:center;padding:6px;background:var(--surf2);border-radius:4px">
+            <div style="font-weight:700;color:${n.rota >= 8 ? '#16a34a' : n.rota >= 6 ? '#fbbf24' : '#dc2626'};font-size:13px;font-family:var(--mono)">${n.rota}</div>
+            <div style="color:var(--txt2);margin-top:2px">rota</div>
+            <div style="color:var(--txt3);font-size:9px">${ride.deviations?.length || 0} desvio${(ride.deviations?.length || 0) === 1 ? '' : 's'}</div>
+          </div>
+          <div style="text-align:center;padding:6px;background:var(--surf2);border-radius:4px">
+            <div style="font-weight:700;color:${n.velocidade >= 8 ? '#16a34a' : n.velocidade >= 6 ? '#fbbf24' : '#dc2626'};font-size:13px;font-family:var(--mono)">${n.velocidade}</div>
+            <div style="color:var(--txt2);margin-top:2px">velocidade</div>
+            <div style="color:var(--txt3);font-size:9px">máx ${Math.round(ride.maxKmh||0)}km/h</div>
+          </div>
+          <div style="text-align:center;padding:6px;background:var(--surf2);border-radius:4px">
+            <div style="font-weight:700;color:${n.tempo >= 8 ? '#16a34a' : n.tempo >= 6 ? '#fbbf24' : '#dc2626'};font-size:13px;font-family:var(--mono)">${n.tempo}</div>
+            <div style="color:var(--txt2);margin-top:2px">tempo</div>
+            <div style="color:var(--txt3);font-size:9px">${ride.serviceDurationSec ? fmtMin(ride.serviceDurationSec) + ' no local' : 'sem chegada'}</div>
+          </div>
+        </div>
+      </div>`;
+    })()}
+    ${(() => {
       if(!c.motoristaId) return '';
       const r = routeLines[c.motoristaId];
       if(!r) return '';
@@ -2496,6 +2542,18 @@ function setupStoreListeners(){
       recountMotoristas();
       scheduleUpdateRoutes();
       scheduleRender();
+    },
+    onCorridaAdded: (rideId, ride) => {
+      if(!ride.chamadoId) return;
+      corridas[ride.chamadoId] = ride;
+      // Re-render se for o chamado aberto no detail
+      if(selId === ride.chamadoId) renderDetail();
+      // Toast de notificação quando chega uma nova nota (>30s atrás conta como histórico)
+      const isFresh = ride.completedTs && (Date.now() - ride.completedTs) < 30000;
+      if(isFresh && ride.nota){
+        const star = ride.nota.final >= 8 ? '⭐' : ride.nota.final >= 6 ? '👍' : '⚠';
+        showToast(`${star} ${ride.motoristaNome}: nota ${ride.nota.final}/10 · ${ride.totalKm}km · ${ride.cliente}`);
+      }
     }
   });
 }

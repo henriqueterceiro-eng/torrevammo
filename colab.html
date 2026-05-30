@@ -449,6 +449,167 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+// ============== LOG DE CORRIDA + NOTA ==============
+// Cada chamado atendido gera um registro com trajeto, km, tempos e nota 0-10.
+
+function rideStart(ch){
+  // Se já tem corrida com esse chamadoId, preserva (recovery)
+  if(currentRide && currentRide.chamadoId === ch.id) return;
+  currentRide = {
+    id: 'r_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2,6),
+    chamadoId: ch.id,
+    motoristaId: me.id,
+    motoristaNome: me.nome,
+    motoristaPlaca: me.placa || '',
+    motoristaVehicle: me.vehicle || 'pickup_carreta',
+    motoristaColor: me.color,
+    cliente: ch.cliente || '',
+    motivo: ch.motivo || '',
+    endereco: ch.endereco || '',
+    destLat: ch.lat || null,
+    destLng: ch.lng || null,
+    assignedTs: Date.now(),       // atribuído
+    enRouteTs: null,              // clicou "iniciar" ou status virou em_rota
+    arrivedTs: null,              // chegou no local (geofence)
+    completedTs: null,            // concluído
+    trajeto: [],
+    deviations: [],
+    maxKmh: 0,
+    sumKmhSamples: 0,
+    countKmhSamples: 0
+  };
+  // Trajetória inicial = posição atual do motorista
+  if(myPos){
+    currentRide.trajeto.push({ lat: myPos.lat, lng: myPos.lng, ts: Date.now(), kmh: myPos.kmh||0 });
+  }
+}
+
+function rideTrackPos(pos){
+  if(!currentRide) return;
+  const last = currentRide.trajeto[currentRide.trajeto.length-1];
+  // Só grava se moveu >10m (economiza storage sem perder rota)
+  if(last && haversine(last, pos) < 10) return;
+  currentRide.trajeto.push({ lat: pos.lat, lng: pos.lng, ts: pos.ts || Date.now(), kmh: pos.kmh||0 });
+  if(pos.kmh != null){
+    if(pos.kmh > currentRide.maxKmh) currentRide.maxKmh = pos.kmh;
+    if(pos.kmh > 0){ // só conta nas amostras "em movimento"
+      currentRide.sumKmhSamples += pos.kmh;
+      currentRide.countKmhSamples++;
+    }
+  }
+}
+
+function rideMarkEnRoute(){
+  if(currentRide && !currentRide.enRouteTs) currentRide.enRouteTs = Date.now();
+}
+
+function rideMarkArrived(){
+  if(currentRide && !currentRide.arrivedTs) currentRide.arrivedTs = Date.now();
+}
+
+function rideMarkDeviation(dist){
+  if(!currentRide) return;
+  // Limita a 1 marca por 60s pra não inflar (desvio prolongado vira só 1)
+  const last = currentRide.deviations[currentRide.deviations.length-1];
+  if(last && (Date.now() - last.ts) < 60000) return;
+  currentRide.deviations.push({ ts: Date.now(), dist: Math.round(dist) });
+}
+
+function calcKmFromTrajeto(traj){
+  let total = 0;
+  for(let i = 1; i < traj.length; i++){ total += haversine(traj[i-1], traj[i]); }
+  return total / 1000;
+}
+
+// Tempos ideais por motivo (em SEGUNDOS de atendimento no local)
+const IDEAL_SERVICE_SEC = {
+  'Pneu furado': 25 * 60,
+  'Bateria descarregada': 15 * 60,
+  'Moto não liga': 25 * 60,
+  'Acidente': 40 * 60,
+  'Devolução': 20 * 60,
+  'Recolhimento': 30 * 60,
+  'Vazamento': 30 * 60,
+  'Freio': 35 * 60,
+  'Travada': 25 * 60,
+  'default': 30 * 60
+};
+function idealServiceForMotivo(m){
+  if(!m) return IDEAL_SERVICE_SEC.default;
+  const lc = m.toLowerCase();
+  for(const k in IDEAL_SERVICE_SEC){
+    if(k !== 'default' && lc.includes(k.toLowerCase())) return IDEAL_SERVICE_SEC[k];
+  }
+  return IDEAL_SERVICE_SEC.default;
+}
+
+function calculateNota(ride){
+  // 3 critérios (0-10 cada), peso 40/30/30
+  // 1) ROTA — desvios penalizam
+  let rotaScore = 10;
+  if(ride.deviations && ride.deviations.length > 0){
+    rotaScore = Math.max(0, 10 - ride.deviations.length * 1.5);
+  }
+  // 2) VELOCIDADE — limite urbano padrão BR é 60km/h, vias rápidas 80
+  // Penaliza se max > 80km/h
+  let velScore = 10;
+  if(ride.maxKmh > 80){
+    velScore = Math.max(0, 10 - (ride.maxKmh - 80) / 5);
+  }
+  // 3) TEMPO DE ATENDIMENTO — chegou → concluído
+  let tempoScore = 10;
+  let serviceDurSec = null;
+  if(ride.arrivedTs && ride.completedTs){
+    serviceDurSec = (ride.completedTs - ride.arrivedTs) / 1000;
+    const ideal = idealServiceForMotivo(ride.motivo);
+    if(serviceDurSec > ideal){
+      const excessoMin = (serviceDurSec - ideal) / 60;
+      tempoScore = Math.max(0, 10 - excessoMin * 0.4); // -0.4 ponto por min extra
+    }
+  } else if(!ride.arrivedTs){
+    // Nunca disparou chegou — não tem como medir, neutro
+    tempoScore = 7;
+  }
+  const final = (rotaScore * 0.4) + (velScore * 0.3) + (tempoScore * 0.3);
+  return {
+    final: Math.round(final * 10) / 10,
+    rota: Math.round(rotaScore * 10) / 10,
+    velocidade: Math.round(velScore * 10) / 10,
+    tempo: Math.round(tempoScore * 10) / 10,
+    serviceDurSec: serviceDurSec
+  };
+}
+
+function rideFinalize(status){
+  if(!currentRide) return;
+  currentRide.completedTs = Date.now();
+  currentRide.endStatus = status; // 'concluido' ou 'cancelado'
+  currentRide.totalKm = +calcKmFromTrajeto(currentRide.trajeto).toFixed(2);
+  currentRide.totalDurationSec = Math.round((currentRide.completedTs - currentRide.assignedTs) / 1000);
+  currentRide.travelDurationSec = currentRide.arrivedTs
+    ? Math.round((currentRide.arrivedTs - (currentRide.enRouteTs || currentRide.assignedTs)) / 1000)
+    : null;
+  currentRide.serviceDurationSec = currentRide.arrivedTs
+    ? Math.round((currentRide.completedTs - currentRide.arrivedTs) / 1000)
+    : null;
+  currentRide.avgKmh = currentRide.countKmhSamples > 0
+    ? Math.round((currentRide.sumKmhSamples / currentRide.countKmhSamples) * 10) / 10
+    : 0;
+  // Calcula nota
+  currentRide.nota = calculateNota(currentRide);
+  // Limpa campos auxiliares de cálculo
+  delete currentRide.sumKmhSamples;
+  delete currentRide.countKmhSamples;
+  // Salva no Firebase (vammo/corridas/{rideId}) — também sobe via STORE no torre
+  try {
+    if(typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length){
+      firebase.database().ref('vammo/corridas/' + currentRide.id).set(currentRide);
+    }
+  } catch(e){ console.warn('save ride fail:', e); }
+  console.log('[ride] finalizada nota=', currentRide.nota.final, 'km=', currentRide.totalKm);
+  currentRide = null;
+}
+
 function iconFromMotivo(motivo){
   if(!motivo) return '🔧';
   const m = motivo.toLowerCase();
@@ -545,6 +706,7 @@ function checkOffRoute(){
         distFromRoute: Math.round(d),
         pos: { lat: myPos.lat, lng: myPos.lng }
       });
+      rideMarkDeviation(d);
       // Força recalcular rota
       routeFromQueueIds = '';
       updateRoute();
@@ -579,6 +741,7 @@ function checkArrived(){
         cliente: ativo.cliente,
         pos: { lat: myPos.lat, lng: myPos.lng }
       });
+      rideMarkArrived();
       renderChamadoCard();
       updateChamadoMarkers();
     }
@@ -642,6 +805,7 @@ function onGPSUpdate(pos){
 function sendPos(pos){
   if(!me) return;
   bufferLastPos(pos);
+  rideTrackPos(pos);
   sync.send('motorista:posicao', {
     id: me.id,
     nome: me.nome,
@@ -769,6 +933,7 @@ const ARRIVED_TIME_MS = 8 * 1000;        // tempo perto antes de marcar chegada
 let offRouteSince = null;
 let offRouteAlerted = false;
 let nearDestSince = {};                  // {chamadoId: ts}
+let currentRide = null;                  // corrida em andamento (trajeto + métricas)
 
 async function fetchTomtomRoute(from, stops){
   const all = [from, ...stops];
@@ -1016,6 +1181,7 @@ function handleAction(act){
     ativo.status = 'em_rota';
     setStatus('busy');
     vibrate(50);
+    rideMarkEnRoute();
     sync.send('chamado:status', { chamadoId: ativo.id, status: 'em_rota', motoristaId: me.id });
     renderChamadoCard();
     updateChamadoMarkers();
@@ -1023,6 +1189,7 @@ function handleAction(act){
   }
 
   if(act === 'concluido'){
+    rideFinalize('concluido');
     sync.send('chamado:status', { chamadoId: ativo.id, status: 'concluido', motoristaId: me.id });
     vibrate([50, 30, 50]);
     fila.shift();
@@ -1041,9 +1208,21 @@ function handleAction(act){
 }
 
 function afterFilaChange(msg){
+  // Sincroniza estado da corrida com o ativo da fila
+  if(fila.length > 0){
+    const ativo = fila[0];
+    if(!currentRide || currentRide.chamadoId !== ativo.id){
+      rideStart(ativo);
+    }
+    // Se o ativo entrou como em_rota, marca
+    if(ativo.status === 'em_rota') rideMarkEnRoute();
+    if(ativo.arrived) rideMarkArrived();
+  } else {
+    // Fila esvaziou — se tinha corrida ativa e não foi finalizada por concluído, cancela
+    if(currentRide) rideFinalize('cancelado');
+  }
   updateChamadoMarkers();
   renderChamadoCard();
-  // Força refresh da rota
   routeFromQueueIds = '';
   if(myPos && fila.length > 0) updateRoute();
   if(msg) showToast(msg);
