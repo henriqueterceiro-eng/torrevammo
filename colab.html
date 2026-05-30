@@ -94,6 +94,14 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 .osrm-route{filter:drop-shadow(0 0 6px rgba(0,180,229,0.7));animation:dashflow 1.2s linear infinite;stroke-dasharray:14,10}
 @keyframes dashflow{to{stroke-dashoffset:-24}}
 
+.base-icon{background:transparent !important;border:none !important}
+.base-icon .pin{width:40px;height:50px;position:relative;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.5))}
+.base-icon .pin .body{position:absolute;top:0;left:0;width:40px;height:40px;background:#fff;border:3px solid var(--acc);border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center}
+.base-icon .pin .body svg{transform:rotate(45deg);height:16px;width:auto;color:var(--acc)}
+.base-icon .pin::after{content:'';position:absolute;top:-3px;left:-3px;width:46px;height:46px;border-radius:50%;border:2px solid rgba(0,180,229,0.3);opacity:0.5;pointer-events:none;animation:basePulse 3s ease-out infinite}
+@keyframes basePulse{0%{transform:scale(1);opacity:0.5}100%{transform:scale(1.4);opacity:0}}
+.base-icon .lbl{position:absolute;top:44px;left:50%;transform:translateX(-50%);background:#fff;color:#001823;padding:2px 7px;border-radius:9px;font-size:9px;font-weight:800;white-space:nowrap;border:1px solid var(--acc);font-family:'IBM Plex Mono',monospace;z-index:3;letter-spacing:0.3px}
+
 /* GPS marker pulse */
 .gps-marker{background:transparent !important;border:none !important}
 .gps-marker .dot{width:18px;height:18px;border-radius:50%;background:var(--acc);border:3px solid #fff;box-shadow:0 0 0 4px rgba(0,180,229,0.3);position:relative}
@@ -437,16 +445,52 @@ function createSync(){
 }
 
 // Listener direto no nó dos chamados — fonte da verdade
-// Quando torre atribui, motoristaId muda no Firebase → cai aqui sem depender de eventos
 function setupChamadosListener(){
   if(typeof firebase === 'undefined' || !firebase.apps.length) return;
   const ref = firebase.database().ref('vammo/chamados');
-  // Usa 'value' (snapshot completo) pra ser robusto contra background/reconexão
   ref.on('value', snap => {
     const data = snap.val() || {};
     console.log('[colab] vammo/chamados sync:', Object.keys(data).length, 'chamados');
     syncFilaFromSnapshot(data);
   });
+  // Bases Vammo (fixas no mapa)
+  firebase.database().ref('vammo/bases').on('value', snap => {
+    bases = snap.val() || {};
+    renderBaseMarkers();
+  });
+}
+
+// ============== BASES VAMMO no mapa ==============
+let bases = {};
+let baseMarkers = {};
+const VAMMO_V_SVG = '<svg viewBox="0 0 134 147" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M78 140H54L3 7H36L67 96 99 7H131Z"/></svg>';
+
+function renderBaseMarkers(){
+  if(!map) return;
+  const seen = new Set();
+  for(const id in bases){
+    const b = bases[id];
+    if(b.ativo === false || b.lat == null || b.lng == null) continue;
+    seen.add(id);
+    const html = `<div class="pin">
+      <div class="body">${VAMMO_V_SVG}</div>
+      <div class="lbl">${esc(b.nome || 'Base')}</div>
+    </div>`;
+    const icon = L.divIcon({ className:'base-icon', html, iconSize:[40,60], iconAnchor:[20,48] });
+    const tip = `<b>🏠 ${esc(b.nome)}</b><br><small>${esc(b.endereco || '')}</small>`;
+    if(baseMarkers[id]){
+      baseMarkers[id].setIcon(icon);
+      baseMarkers[id].setLatLng([b.lat, b.lng]);
+      baseMarkers[id].setTooltipContent(tip);
+    } else {
+      const m = L.marker([b.lat, b.lng], { icon, zIndexOffset: 200 }).addTo(map);
+      m.bindTooltip(tip, { direction:'top', offset:[0,-46], sticky:false });
+      baseMarkers[id] = m;
+    }
+  }
+  for(const id in baseMarkers){
+    if(!seen.has(id)){ map.removeLayer(baseMarkers[id]); delete baseMarkers[id]; }
+  }
 }
 
 function syncFilaFromSnapshot(data){
