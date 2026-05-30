@@ -299,6 +299,29 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #config textarea{font-family:var(--mono);font-size:11px;min-height:120px;resize:vertical}
 #config .actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
 
+/* Ranking modal */
+.rkp, .rko{padding:6px 12px;font-size:11px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt2);cursor:pointer;border-radius:6px;font-weight:600}
+.rkp:hover, .rko:hover{background:var(--surf2);color:var(--txt)}
+.rkp.active, .rko.active{background:var(--acc);color:#001823;border-color:var(--acc)}
+.rk-totais{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.rk-tot{background:var(--surf2);border-radius:8px;padding:10px 12px;text-align:center}
+.rk-tot .v{font-size:20px;font-weight:800;color:var(--acc);font-family:var(--mono);line-height:1.1}
+.rk-tot .l{font-size:9px;color:var(--txt2);margin-top:4px;letter-spacing:0.4px;text-transform:uppercase;font-weight:600}
+.rk-row{display:grid;grid-template-columns:42px 42px 1fr 60px 60px 60px 80px 80px 80px 80px;gap:12px;align-items:center;padding:10px 20px;border-bottom:1px solid var(--bdr);font-size:12px}
+.rk-row.hdr{background:var(--bg);font-size:9px;letter-spacing:0.4px;text-transform:uppercase;color:var(--txt2);font-weight:700;padding:8px 20px}
+.rk-row:hover:not(.hdr){background:var(--surf2)}
+.rk-row .rk-pos{font-size:18px;font-weight:800;font-family:var(--mono);text-align:center}
+.rk-row .rk-pos.p1{color:#fbbf24}
+.rk-row .rk-pos.p2{color:#94a3b8}
+.rk-row .rk-pos.p3{color:#a16207}
+.rk-row .rk-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px}
+.rk-row .rk-nm{font-weight:700}
+.rk-row .rk-sub{font-size:10px;color:var(--txt2);font-family:var(--mono);margin-top:1px}
+.rk-row .rk-val{font-family:var(--mono);font-weight:700;font-size:13px;text-align:center}
+.rk-row .rk-val small{font-size:9px;color:var(--txt3);font-weight:500;display:block;margin-top:1px;letter-spacing:0.2px;text-transform:uppercase}
+.rk-empty{padding:60px 20px;text-align:center;color:var(--txt2)}
+.rk-empty .ic{font-size:48px;opacity:0.4;margin-bottom:12px}
+
 /* TOAST */
 #toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-200%);background:var(--acc);color:#001823;padding:12px 20px;border-radius:24px;font-weight:700;font-size:13px;z-index:10001;box-shadow:0 10px 30px rgba(0,180,229,0.4);transition:transform 0.3s;max-width:90vw}
 #toast.show{transform:translateX(-50%) translateY(0)}
@@ -327,6 +350,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <div class="pills" id="pills"></div>
     <div class="spacer"></div>
     <div id="syncind" title="Status da sincronização"><span class="d" id="syncdot"></span><span id="synctxt">conectando…</span></div>
+    <button class="iconbtn" id="rankbtn" title="Ver ranking e estatísticas dos colaboradores">📊 Ranking</button>
     <button class="iconbtn" id="demobtn" title="Modo demo: crie chamados manualmente sem Slack">🧪 Demo</button>
     <button class="iconbtn" id="configbtn" title="Configurações">⚙</button>
     <button class="iconbtn" id="colaburlbtn" title="Link do app do colaborador">📱 Colab</button>
@@ -370,6 +394,32 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         <button id="clearall">🗑 Limpar todos chamados</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- MODAL RANKING / ESTATÍSTICAS -->
+<div id="rankmodal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;flex-direction:column;z-index:10001;padding:30px">
+  <div style="max-width:1100px;width:100%;margin:0 auto;background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 60px);overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:14px">
+      <div style="flex:1">
+        <h2 style="font-size:18px">📊 Ranking de Colaboradores</h2>
+        <div style="font-size:11px;color:var(--txt2);margin-top:2px" id="rkmeta">—</div>
+      </div>
+      <div style="display:flex;gap:4px" id="rkperiodo">
+        <button class="rkp" data-p="hoje">Hoje</button>
+        <button class="rkp" data-p="7d">7 dias</button>
+        <button class="rkp" data-p="30d">30 dias</button>
+        <button class="rkp active" data-p="tudo">Tudo</button>
+      </div>
+      <div style="display:flex;gap:4px" id="rkordem">
+        <button class="rko active" data-o="nota">⭐ por nota</button>
+        <button class="rko" data-o="count"># chamados</button>
+        <button class="rko" data-o="km">km</button>
+      </div>
+      <button onclick="closeRank()" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button>
+    </div>
+    <div style="padding:14px 20px;border-bottom:1px solid var(--bdr)" id="rktotais">—</div>
+    <div style="flex:1;overflow:auto" id="rklist"></div>
   </div>
 </div>
 
@@ -2153,6 +2203,154 @@ function addSampleChamados(){
   showToast('✓ 5 chamados aleatórios adicionados');
 }
 
+// ============== RANKING / ESTATÍSTICAS ==============
+let rankPeriodo = 'tudo';
+let rankOrdem = 'nota';
+
+function openRank(){
+  document.getElementById('rankmodal').style.display = 'flex';
+  renderRank();
+}
+function closeRank(){
+  document.getElementById('rankmodal').style.display = 'none';
+}
+window.closeRank = closeRank;
+
+function periodoCutoff(){
+  const now = Date.now();
+  if(rankPeriodo === 'hoje'){
+    const d = new Date(); d.setHours(0,0,0,0);
+    return d.getTime();
+  }
+  if(rankPeriodo === '7d') return now - 7 * 86400000;
+  if(rankPeriodo === '30d') return now - 30 * 86400000;
+  return 0; // tudo
+}
+
+function calcRanking(){
+  const cutoff = periodoCutoff();
+  const all = Object.values(corridas).filter(r => r.completedTs >= cutoff);
+  // Agrega por motorista
+  const byMot = {};
+  for(const r of all){
+    if(!r.motoristaId) continue;
+    if(!byMot[r.motoristaId]){
+      byMot[r.motoristaId] = {
+        id: r.motoristaId,
+        nome: r.motoristaNome || '?',
+        placa: r.motoristaPlaca || '',
+        vehicle: r.motoristaVehicle || 'pickup_carreta',
+        color: r.motoristaColor || '#00B4E5',
+        count: 0, completedCount: 0, canceledCount: 0,
+        totalKm: 0,
+        sumNota: 0, sumNotaRota: 0, sumNotaVel: 0, sumNotaTempo: 0,
+        sumService: 0, sumServiceCount: 0,
+        maxKmh: 0, totalDeviations: 0
+      };
+    }
+    const m = byMot[r.motoristaId];
+    m.count++;
+    if(r.endStatus === 'concluido') m.completedCount++;
+    else if(r.endStatus === 'cancelado') m.canceledCount++;
+    m.totalKm += r.totalKm || 0;
+    if(r.nota){
+      m.sumNota += r.nota.final;
+      m.sumNotaRota += r.nota.rota;
+      m.sumNotaVel += r.nota.velocidade;
+      m.sumNotaTempo += r.nota.tempo;
+    }
+    if(r.serviceDurationSec){
+      m.sumService += r.serviceDurationSec;
+      m.sumServiceCount++;
+    }
+    if((r.maxKmh||0) > m.maxKmh) m.maxKmh = r.maxKmh;
+    m.totalDeviations += (r.deviations?.length || 0);
+  }
+  // Médias
+  const arr = Object.values(byMot).map(m => ({
+    ...m,
+    avgNota: m.count > 0 ? m.sumNota / m.count : 0,
+    avgNotaRota: m.count > 0 ? m.sumNotaRota / m.count : 0,
+    avgNotaVel: m.count > 0 ? m.sumNotaVel / m.count : 0,
+    avgNotaTempo: m.count > 0 ? m.sumNotaTempo / m.count : 0,
+    avgService: m.sumServiceCount > 0 ? m.sumService / m.sumServiceCount : 0
+  }));
+  // Ordena
+  if(rankOrdem === 'nota'){ arr.sort((a,b) => b.avgNota - a.avgNota); }
+  else if(rankOrdem === 'count'){ arr.sort((a,b) => b.count - a.count); }
+  else if(rankOrdem === 'km'){ arr.sort((a,b) => b.totalKm - a.totalKm); }
+  return { ranking: arr, totalCorridas: all.length };
+}
+
+function renderRank(){
+  const { ranking, totalCorridas } = calcRanking();
+  const totalKm = ranking.reduce((s,m) => s + m.totalKm, 0);
+  const totalNotaSum = ranking.reduce((s,m) => s + m.sumNota, 0);
+  const totalNotaCount = ranking.reduce((s,m) => s + m.count, 0);
+  const mediaGeral = totalNotaCount > 0 ? totalNotaSum / totalNotaCount : 0;
+  const avgKmPorChamado = totalCorridas > 0 ? totalKm / totalCorridas : 0;
+  const totalDeviations = ranking.reduce((s,m) => s + m.totalDeviations, 0);
+
+  document.getElementById('rkmeta').textContent =
+    `${ranking.length} colaborador(es) · ${totalCorridas} corrida(s) no período`;
+
+  document.getElementById('rktotais').innerHTML = `
+    <div class="rk-totais">
+      <div class="rk-tot"><div class="v">${totalCorridas}</div><div class="l">Atendimentos</div></div>
+      <div class="rk-tot"><div class="v" style="color:${mediaGeral >= 8 ? '#16a34a' : mediaGeral >= 6 ? '#fbbf24' : '#dc2626'}">${mediaGeral.toFixed(1)}</div><div class="l">Nota média</div></div>
+      <div class="rk-tot"><div class="v">${totalKm.toFixed(1)}</div><div class="l">km rodados</div></div>
+      <div class="rk-tot"><div class="v">${avgKmPorChamado.toFixed(1)}</div><div class="l">km/chamado</div></div>
+      <div class="rk-tot"><div class="v" style="color:${totalDeviations > 0 ? '#fbbf24' : '#16a34a'}">${totalDeviations}</div><div class="l">Desvios totais</div></div>
+    </div>
+  `;
+
+  if(ranking.length === 0){
+    document.getElementById('rklist').innerHTML = `
+      <div class="rk-empty">
+        <div class="ic">📋</div>
+        <div style="font-weight:700;color:var(--txt)">Sem corridas no período</div>
+        <div style="font-size:12px;margin-top:6px">Atendimentos concluídos aparecem aqui automaticamente.</div>
+      </div>`;
+    return;
+  }
+
+  const fmtMin = (s) => s < 60 ? Math.round(s)+'s' : Math.floor(s/60)+'min';
+
+  document.getElementById('rklist').innerHTML = `
+    <div class="rk-row hdr">
+      <div style="text-align:center">#</div>
+      <div></div>
+      <div>Colaborador</div>
+      <div class="rk-val">Atend.</div>
+      <div class="rk-val">⭐ Média</div>
+      <div class="rk-val">Km</div>
+      <div class="rk-val">Rota</div>
+      <div class="rk-val">Veloc.</div>
+      <div class="rk-val">Tempo</div>
+      <div class="rk-val">T. médio</div>
+    </div>
+    ${ranking.map((m, i) => {
+      const cor = m.avgNota >= 8 ? '#16a34a' : m.avgNota >= 6 ? '#fbbf24' : '#dc2626';
+      const veh = { moto: '🏍', pickup: '🛻', pickup_carreta: '🛻+', caminhao: '🚛' }[m.vehicle] || '🛻';
+      return `<div class="rk-row">
+        <div class="rk-pos ${i===0?'p1':i===1?'p2':i===2?'p3':''}">${i+1}º</div>
+        <div class="rk-av" style="background:${m.color}">${esc((m.nome||'?').charAt(0).toUpperCase())}</div>
+        <div>
+          <div class="rk-nm">${esc(m.nome)}</div>
+          <div class="rk-sub">${veh} ${esc(m.placa) || 'sem placa'}</div>
+        </div>
+        <div class="rk-val">${m.count}<small>${m.completedCount} ok</small></div>
+        <div class="rk-val" style="color:${cor};font-size:18px">${m.avgNota.toFixed(1)}</div>
+        <div class="rk-val">${m.totalKm.toFixed(1)}<small>km</small></div>
+        <div class="rk-val">${m.avgNotaRota.toFixed(1)}<small>${m.totalDeviations} desv</small></div>
+        <div class="rk-val">${m.avgNotaVel.toFixed(1)}<small>${Math.round(m.maxKmh)}km/h max</small></div>
+        <div class="rk-val">${m.avgNotaTempo.toFixed(1)}<small>nota</small></div>
+        <div class="rk-val">${m.sumServiceCount > 0 ? fmtMin(m.avgService) : '—'}<small>no local</small></div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
 function openAddCh(){
   $('#addrEndereco').value = '';
   $('#addrCliente').value = '';
@@ -2676,6 +2874,19 @@ function init(){
   $('#addsample').onclick = addSampleChamados;
   $('#clearall').onclick = clearAllChamados;
   $('#addbyaddr').onclick = openAddCh;
+  $('#rankbtn').onclick = openRank;
+  $$('#rkperiodo .rkp').forEach(b => b.onclick = () => {
+    $$('#rkperiodo .rkp').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    rankPeriodo = b.dataset.p;
+    renderRank();
+  });
+  $$('#rkordem .rko').forEach(b => b.onclick = () => {
+    $$('#rkordem .rko').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    rankOrdem = b.dataset.o;
+    renderRank();
+  });
   $('#addrMotivo').onchange = (e) => {
     $('#addrMotivoCustom').style.display = e.target.value === '__custom' ? 'block' : 'none';
     if(e.target.value === '__custom') setTimeout(() => $('#addrMotivoCustom').focus(), 50);
