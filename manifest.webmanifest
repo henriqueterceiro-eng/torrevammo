@@ -2,7 +2,7 @@
   "name": "Vammo Colaborador",
   "short_name": "Vammo",
   "description": "App do colaborador Vammo — recebe e atende chamados em tempo real",
-  "start_url": "/colab.html",
+  "start_url": "/colab",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

@@ -1,9 +1,9 @@
 // Service Worker do Vammo Colaborador
 // Faz cache dos assets pra abrir offline + sobreviver a quedas de rede
-const CACHE_VERSION = 'vammo-colab-v4';
+const CACHE_VERSION = 'vammo-colab-v5';
 const CORE_ASSETS = [
   '/',
-  '/colab.html',
+  '/colab',
   '/manifest.webmanifest',
   '/icon-192.svg',
   '/icon-512.svg'
@@ -57,7 +57,7 @@ self.addEventListener('fetch', e => {
         return resp;
       }).catch(() => {
         // Offline: tenta servir index do cache
-        if(req.mode === 'navigate') return caches.match('/colab.html');
+        if(req.mode === 'navigate') return caches.match('/colab');
       });
     })
   );
@@ -68,8 +68,8 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      for(const c of list){ if(c.url.includes('colab.html')){ return c.focus(); } }
-      return self.clients.openWindow('/colab.html');
+      for(const c of list){ if(c.url.includes('/colab')){ return c.focus(); } }
+      return self.clients.openWindow('/colab');
     })
   );
 });

@@ -1,5 +1,7 @@
-# Cloudflare Pages — desabilita strip de .html
-# Sintaxe: /from /to 200 (= rewrite interno, não redirect HTTP)
-/colab.html /colab.html 200
-/torre.html /torre.html 200
-/track.html /track.html 200
+# Cloudflare Pages aplica "strip .html" antes do _redirects, então não dá pra
+# servir /colab.html direto. A solução foi usar /colab (sem extensão) em todos
+# os links e no PWA (start_url, service-worker, manifest).
+# Mantemos um redirect explícito pra qualquer link velho que ainda use .html:
+/colab.html /colab 301
+/torre.html /torre 301
+/track.html /track 301

@@ -1762,7 +1762,7 @@ function renderMot(){
   const ids = Object.keys(motoristas);
   $('#tab2n').textContent = '(' + ids.length + ')';
   if(!ids.length){
-    const url = location.origin + '/colab.html';
+    const url = location.origin + '/colab';
     $('#motwrap').innerHTML = `<div id="motempty">
       <div class="ic">📱</div>
       <div><strong>Nenhum colaborador conectado</strong></div>
@@ -3629,7 +3629,7 @@ function init(){
 
   // Link do colab
   $('#colaburlbtn').onclick = () => {
-    const url = location.origin + '/colab.html';
+    const url = location.origin + '/colab';
     if(navigator.clipboard){
       navigator.clipboard.writeText(url);
       showToast('📋 Link copiado: ' + url);
