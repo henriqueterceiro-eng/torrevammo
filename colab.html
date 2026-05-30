@@ -52,6 +52,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #login button:hover{box-shadow:0 8px 32px rgba(0,180,229,0.45)}
 #login button:active{transform:scale(0.98)}
 #login .hint{margin-top:22px;font-size:11px;color:var(--txt3);text-align:center;line-height:1.6;position:relative;z-index:1;max-width:320px}
+#login .ver{position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:0;right:0;text-align:center;font-size:9px;color:var(--txt3);opacity:0.6;font-family:'IBM Plex Mono',monospace;letter-spacing:0.5px}
 
 /* ===== WIZARD DE CHECK-IN / CHECK-OUT ===== */
 #turno{position:fixed;inset:0;background:linear-gradient(135deg,#0a1428 0%,#1e3050 100%);display:none;flex-direction:column;z-index:90}
@@ -336,6 +337,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   <div class="hint" id="loginhint">
     Ao entrar, vamos compartilhar sua localização<br>com a torre de controle em tempo real.
   </div>
+  <div class="ver">build · 2026-05-30 · v4</div>
 </div>
 
 <!-- WIZARD DE TURNO (check-in e check-out) -->
