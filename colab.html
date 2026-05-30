@@ -39,22 +39,27 @@ input{font-family:inherit;font-size:16px;padding:14px;border:1px solid var(--bdr
 input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transparent}
 
 /* ===== LOGIN ===== */
-#login{position:fixed;inset:0;background:linear-gradient(135deg,#0a1428 0%,#1e3050 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:100}
+#login{position:fixed;inset:0;background:radial-gradient(circle at 30% 20%,#0d2647 0%,#0a1428 60%,#050a18 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:100;overflow:hidden}
+#login::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,180,229,0.15) 0%,transparent 60%);top:-200px;left:-200px;pointer-events:none}
+#login::after{content:'';position:absolute;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(0,180,229,0.08) 0%,transparent 60%);bottom:-100px;right:-100px;pointer-events:none}
 #login.hide{display:none}
-#login .logo{height:54px;color:var(--acc);margin-bottom:8px;display:flex;align-items:center;justify-content:center}
-#login .logo svg{height:100%;width:auto;filter:drop-shadow(0 4px 16px rgba(0,180,229,0.4))}
-#login .sub{color:var(--txt2);font-size:13px;margin-bottom:36px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600}
-#login form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
-#login button{padding:16px;border-radius:10px;background:var(--acc);color:#001823;font-size:16px;font-weight:700;margin-top:8px}
+#login .logo{height:60px;color:var(--acc);margin-bottom:14px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1}
+#login .logo svg{height:100%;width:auto;filter:drop-shadow(0 0 32px rgba(0,180,229,0.55)) drop-shadow(0 4px 12px rgba(0,180,229,0.3))}
+#login .sub{color:#fff;font-size:11px;margin-bottom:40px;letter-spacing:8px;text-transform:uppercase;font-weight:800;position:relative;z-index:1;text-shadow:0 0 12px rgba(0,180,229,0.5)}
+#login .sub::before, #login .sub::after{content:'';display:inline-block;width:24px;height:1px;background:var(--acc);vertical-align:middle;margin:0 12px;opacity:0.6}
+#login form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px;position:relative;z-index:1}
+#login button{padding:16px;border-radius:10px;background:linear-gradient(135deg,var(--acc) 0%,#0099c4 100%);color:#001823;font-size:16px;font-weight:800;margin-top:8px;letter-spacing:0.5px;text-transform:uppercase;box-shadow:0 8px 24px rgba(0,180,229,0.3)}
+#login button:hover{box-shadow:0 8px 32px rgba(0,180,229,0.45)}
 #login button:active{transform:scale(0.98)}
-#login .hint{margin-top:18px;font-size:11px;color:var(--txt3);text-align:center;line-height:1.5}
+#login .hint{margin-top:22px;font-size:11px;color:var(--txt3);text-align:center;line-height:1.6;position:relative;z-index:1;max-width:320px}
 
 /* ===== APP ===== */
 #app{display:none;flex-direction:column;height:100vh;height:100dvh}
 #app.show{display:flex}
 
-#topbar{flex:0 0 auto;background:var(--surf);border-bottom:1px solid var(--bdr);padding:12px 14px;display:flex;align-items:center;gap:10px;padding-top:max(12px,env(safe-area-inset-top))}
-#topbar .av{width:36px;height:36px;border-radius:50%;background:var(--acc);color:#001823;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex:0 0 36px}
+#topbar{flex:0 0 auto;background:linear-gradient(180deg,var(--surf) 0%,#152339 100%);border-bottom:1px solid var(--bdr);padding:12px 14px;display:flex;align-items:center;gap:10px;padding-top:max(12px,env(safe-area-inset-top));position:relative}
+#topbar::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--acc) 50%,transparent 100%);opacity:0.6}
+#topbar .av{width:36px;height:36px;border-radius:50%;background:var(--acc);color:#001823;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex:0 0 36px;box-shadow:0 0 0 2px rgba(0,180,229,0.25)}
 #topbar .info{flex:1;min-width:0}
 #topbar .nm{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #topbar .pl{color:var(--txt2);font-size:11px;display:flex;align-items:center;gap:6px}
@@ -194,7 +199,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
       <path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/>
     </svg>
   </div>
-  <div class="sub">Painel do Colaborador</div>
+  <div class="sub">Colaborador</div>
   <form id="loginform">
     <input type="text" id="lognome" placeholder="Seu nome" autocomplete="name" required>
     <input type="text" id="logplaca" placeholder="Placa do guincho (ex: ABC1D23)" autocomplete="off" maxlength="8">

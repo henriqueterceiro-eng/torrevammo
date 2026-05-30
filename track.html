@@ -29,12 +29,13 @@ a{color:var(--acc);text-decoration:none}
 #app{display:flex;flex-direction:column;height:100vh;height:100dvh}
 
 /* TOP BAR com logo */
-#topbar{flex:0 0 auto;background:#fff;padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.04);z-index:10}
-#topbar .lg{height:28px;color:var(--acc);display:block}
+#topbar{flex:0 0 auto;background:linear-gradient(135deg,#fff 0%,#f0f9ff 100%);padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(0,180,229,0.08);z-index:10;position:relative}
+#topbar::before{content:'';position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,var(--acc) 0%,#0099c4 100%)}
+#topbar .lg{height:32px;color:var(--acc);display:flex;align-items:center;filter:drop-shadow(0 2px 4px rgba(0,180,229,0.2))}
 #topbar .lg svg{height:100%;width:auto;display:block}
-#topbar .ti{flex:1;min-width:0}
-#topbar .ti .h{font-weight:700;font-size:13px;line-height:1.2}
-#topbar .ti .s{color:var(--txt2);font-size:11px;margin-top:2px}
+#topbar .ti{flex:1;min-width:0;border-left:1px solid var(--bdr);padding-left:14px}
+#topbar .ti .h{font-weight:800;font-size:14px;line-height:1.2;color:var(--txt)}
+#topbar .ti .s{color:var(--txt2);font-size:11px;margin-top:3px;letter-spacing:0.3px}
 #topbar .pulse{width:10px;height:10px;border-radius:50%;background:var(--on);position:relative;flex:0 0 10px}
 #topbar .pulse::before{content:'';position:absolute;inset:-4px;border-radius:50%;background:var(--on);opacity:0.3;animation:pulse 1.6s infinite}
 @keyframes pulse{0%{transform:scale(1);opacity:0.4}100%{transform:scale(2.5);opacity:0}}
