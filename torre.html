@@ -1441,13 +1441,17 @@ function renderMotoristaMarkers(){
     const ageS = Math.round((now - (m.lastSeen || 0))/1000);
     const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
     const isStale = !isOff && ageS > 30; // > 30s sem update mas ainda dentro do TTL
-    const ringColor = m.status === 'busy' ? '#d97706' : isOff ? '#6b7280' : isStale ? '#fbbf24' : '#10b981';
+    let ringColor = m.status === 'busy' ? '#d97706' : isOff ? '#6b7280' : isStale ? '#fbbf24' : '#10b981';
+    if(m.modo === 'descarregando') ringColor = '#dc2626';
+    else if(m.isFull) ringColor = '#dc2626';
     const initial = (m.nome || '?').charAt(0).toUpperCase();
+    const lblExtra = m.isFull ? ' FULL' : m.modo === 'descarregando' ? ' 🔴' : '';
+    const lblColor = (m.isFull || m.modo === 'descarregando') ? '#dc2626' : '';
     const html = `<div class="marker">
       <div class="pulse" style="background:${ringColor}"></div>
       <div class="ring" style="background:${m.color || '#00B4E5'};border-color:${ringColor}">${initial}</div>
       ${m.activeCount ? `<div class="badge">${m.activeCount}</div>` : ''}
-      <div class="lbl">${esc(m.nome.split(' ')[0])}</div>
+      <div class="lbl"${lblColor?` style="border-color:${lblColor};color:${lblColor}"`:''}>${esc(m.nome.split(' ')[0])}${lblExtra}</div>
     </div>`;
     const warnCls = m._offRoute ? ' warn' : '';
     const staleCls = isStale ? ' stale' : '';
@@ -1592,8 +1596,8 @@ async function updateRouteFor(motoristaId){
   try {
     const route = await fetchMultiRoute({lat:m.lat,lng:m.lng}, stops);
     if(routeLines[motoristaId]){ map.removeLayer(routeLines[motoristaId]); }
-    // Cor única por colaborador — facilita ver de quem é cada rota quando tem muitos
-    const routeColor = m.color || '#00B4E5';
+    // Cor da rota: vermelha se descarregando, senão cor única do colab
+    const routeColor = (m.modo === 'descarregando') ? '#dc2626' : (m.color || '#00B4E5');
     const line = L.polyline(route.coords, {
       color: routeColor,
       weight: 5,
@@ -1772,8 +1776,10 @@ function renderMot(){
     const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
     const isStale = !isOff && ageS > 30;
     const stCls = isOff ? 'off' : m.status === 'busy' ? 'busy' : 'online';
-    const stLbl = isOff ? 'offline' : m.status === 'busy' ? 'em rota' : 'online';
+    const stLbl = isOff ? 'offline' : m.modo === 'descarregando' ? '🔴 descarregando' : m.status === 'busy' ? 'em rota' : 'online';
     const ageLbl = isStale ? ` · <span style="color:#fbbf24;font-weight:700">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
+    const slotsLbl = (m.slotsTotal != null && m.slotsTotal > 0)
+      ? ` · <span style="color:${m.isFull?'#dc2626':'var(--txt)'};font-weight:700">${m.slotsOcupados||0}/${m.slotsTotal} 🏍${m.isFull?' FULL':''}</span>` : '';
     const hasGeo = m.lat != null && m.lng != null;
     const filaStr = ac > 0
       ? `<span style="color:var(--acc);font-weight:700">${ac} na fila</span>`
@@ -1814,7 +1820,7 @@ function renderMot(){
         <div class="info">
           <div class="nm">${esc(m.nome)}</div>
           <div class="pl">${esc(m.placa||'sem placa')}</div>
-          <div class="st">${stLbl} · ${filaStr} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}${m.kmh != null ? ` · <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : m.kmh+' km/h'}</span>` : ''}${ageLbl}</div>
+          <div class="st">${stLbl} · ${filaStr}${slotsLbl} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}${m.kmh != null ? ` · <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : m.kmh+' km/h'}</span>` : ''}${ageLbl}</div>
           ${m.currentStreet ? `<div class="st" style="color:var(--acc);font-size:9px;margin-top:2px">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</div>` : ''}
         </div>
         <button class="motrm" data-act="rm-mot" title="Remover este colaborador do mapa (se for fantasma de teste antigo)" style="background:transparent;border:none;color:var(--txt3);font-size:14px;padding:4px 8px;cursor:pointer;border-radius:4px">✕</button>
@@ -1961,7 +1967,9 @@ function renderDetail(){
     motIds.map(id => {
       const m = motoristas[id];
       const isOn = onlineMots.includes(id);
-      return `<option value="${id}"${id===c.motoristaId?' selected':''}>${esc(m.nome)} ${m.placa?'('+esc(m.placa)+')':''} ${isOn?'🟢':'⚫'}</option>`;
+      const fullMark = m.isFull ? ' 🔒 FULL' : '';
+      const descarregando = m.modo === 'descarregando' ? ' 🔴 descarregando' : '';
+      return `<option value="${id}"${id===c.motoristaId?' selected':''}>${esc(m.nome)} ${m.placa?'('+esc(m.placa)+')':''} ${isOn?'🟢':'⚫'}${fullMark}${descarregando}</option>`;
     }).join('');
 
   const gmaps = c.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.endereco + ', São Paulo, SP')}` : '';
@@ -2190,6 +2198,14 @@ function atribuir(chamadoId, motoristaId){
   if(!c) return;
   const a = loadAsgn();
   if(motoristaId){
+    // Bloqueia se o colab tá full ou descarregando
+    const mot = motoristas[motoristaId];
+    if(mot && mot.isFull){
+      if(!confirm(`⚠ ${mot.nome} está com slots cheios (FULL). Atribuir mesmo assim?\n\nRecomendação: deixa o colab descarregar primeiro numa base.`)) return;
+    }
+    if(mot && mot.modo === 'descarregando'){
+      if(!confirm(`🔴 ${mot.nome} está indo descarregar numa base. Atribuir mesmo assim vai interromper.\n\nContinuar?`)) return;
+    }
     queueRemove(chamadoId);
     queueAdd(motoristaId, chamadoId);
     a[chamadoId] = motoristaId;
@@ -3145,6 +3161,22 @@ function setupSyncListeners(){
       renderMotoristaMarkers();
       renderMot();
     }
+  });
+
+  // Turno do colab (slots, modo, base destino)
+  sync.on('colab:turno', (data) => {
+    if(!motoristas[data.motoristaId]) return;
+    const m = motoristas[data.motoristaId];
+    m.slotsOcupados = data.slotsOcupados;
+    m.slotsTotal = data.slotsTotal;
+    m.isFull = data.isFull;
+    m.modo = data.modo || 'normal';
+    m.baseDestinoId = data.baseDestinoId || null;
+    renderMotoristaMarkers();
+    renderMot();
+    // Refaz rota dele com cor nova
+    updateRouteFor(data.motoristaId);
+    if(selId) renderDetail();
   });
 
   // Heartbeat

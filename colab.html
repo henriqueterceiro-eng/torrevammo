@@ -326,6 +326,44 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   <button class="x" onclick="document.getElementById('screentip').classList.remove('show')">×</button>
 </div>
 
+<!-- Modal: atualizar carga antes de concluir -->
+<div id="cargaModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;padding:24px;z-index:200">
+  <div style="background:var(--surf);border-radius:14px;padding:22px;width:100%;max-width:380px">
+    <div style="font-size:20px;font-weight:800;text-align:center;margin-bottom:6px">🏍 Atualize a carga</div>
+    <div style="text-align:center;color:var(--txt2);font-size:12px;margin-bottom:18px">Antes de concluir, marque o que houve com motos:</div>
+    <div id="cargaSlotsInfo" style="text-align:center;padding:10px;background:var(--surf2);border-radius:8px;margin-bottom:14px;font-size:12px"></div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--txt2);font-weight:600;margin-bottom:6px">📥 Você PEGOU moto do cliente?</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="cargaPegouMinus" style="padding:10px 14px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;font-size:18px;font-weight:800">−</button>
+        <div id="cargaPegouQtd" style="flex:1;text-align:center;font-size:24px;font-weight:800;color:var(--acc);font-family:'IBM Plex Mono',monospace">0</div>
+        <button id="cargaPegouPlus" style="padding:10px 14px;background:var(--acc);color:#001823;border:none;border-radius:8px;font-size:18px;font-weight:800">+</button>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--txt2);font-weight:600;margin-bottom:6px">📤 Você DEIXOU moto pro cliente?</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="cargaDeixouMinus" style="padding:10px 14px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;font-size:18px;font-weight:800">−</button>
+        <div id="cargaDeixouQtd" style="flex:1;text-align:center;font-size:24px;font-weight:800;color:#16a34a;font-family:'IBM Plex Mono',monospace">0</div>
+        <button id="cargaDeixouPlus" style="padding:10px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:18px;font-weight:800">+</button>
+      </div>
+    </div>
+    <button id="cargaConfirmar" style="width:100%;padding:14px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;margin-bottom:8px">✓ Confirmar e concluir chamado</button>
+    <button id="cargaCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: full → ir pra base -->
+<div id="baseModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;padding:24px;z-index:200">
+  <div style="background:var(--surf);border-radius:14px;padding:22px;width:100%;max-width:380px">
+    <div style="font-size:36px;text-align:center">🏍🏍🏍</div>
+    <div style="font-size:18px;font-weight:800;text-align:center;margin:6px 0">Slots cheios!</div>
+    <div style="text-align:center;color:var(--txt2);font-size:12px;margin-bottom:16px">Selecione uma base Vammo pra descarregar. A rota vai ficar <strong style="color:#dc2626">vermelha</strong> e você não recebe novos chamados.</div>
+    <div id="baseList" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+    <button id="baseCancelar" style="width:100%;padding:10px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:10px">Decidir depois</button>
+  </div>
+</div>
+
 <!-- Banner pra instalar PWA -->
 <div id="installbanner">
   <div class="ic">📲</div>
@@ -922,6 +960,7 @@ function onGPSUpdate(pos){
   if(movedEnough && timeEnough){ sendPos(pos); }
   checkOffRoute();
   checkArrived();
+  checkArrivedAtBase();
 }
 
 function sendPos(pos){
@@ -1013,7 +1052,12 @@ function updateMeMarker(){
   } else {
     meMarker.setLatLng([myPos.lat, myPos.lng]);
   }
-  if(fila.length > 0) updateRoute();
+  // Se descarregando, prioriza rota pra base
+  if(turnoAtivo?.modo === 'descarregando' && turnoAtivo.baseDestinoId){
+    updateRouteToBase();
+  } else if(fila.length > 0){
+    updateRoute();
+  }
 }
 
 function updateChamadoMarkers(){
@@ -1312,22 +1356,107 @@ function handleAction(act){
   }
 
   if(act === 'concluido'){
-    rideFinalize('concluido');
-    sync.send('chamado:status', { chamadoId: ativo.id, status: 'concluido', motoristaId: me.id });
-    vibrate([50, 30, 50]);
-    fila.shift();
-    if(fila.length === 0){
-      setStatus('online');
-      afterFilaChange('✓ Todos chamados concluídos!');
-    } else {
-      const next = fila[0];
-      next.status = 'novo'; // próximo começa como novo
-      setStatus('busy');    // continua busy porque ainda tem fila
-      playBeep();
-      afterFilaChange(`✓ Concluído! Próximo: ${next.cliente}`);
+    // Antes de concluir, abre modal de atualizar carga (se tem turno com slots)
+    if(turnoAtivo && slotsTotalCount() > 0){
+      abrirModalCarga(ativo, () => continuarConclusao(ativo));
+      return;
     }
+    continuarConclusao(ativo);
     return;
   }
+}
+
+function continuarConclusao(ativo){
+  rideFinalize('concluido');
+  sync.send('chamado:status', { chamadoId: ativo.id, status: 'concluido', motoristaId: me.id });
+  vibrate([50, 30, 50]);
+  // Continua o fluxo original
+  _doShiftAndAfter(ativo);
+}
+
+function _doShiftAndAfter(ativo){
+  fila.shift();
+  if(fila.length === 0){
+    setStatus('online');
+    afterFilaChange('✓ Todos chamados concluídos!');
+  } else {
+    const next = fila[0];
+    next.status = 'novo';
+    setStatus('busy');
+    playBeep();
+    afterFilaChange(`✓ Concluído! Próximo: ${next.cliente}`);
+  }
+  // Se ficou full, sugere ir pra base
+  if(isFull() && (!turnoAtivo || turnoAtivo.modo !== 'descarregando')){
+    setTimeout(() => abrirModalBase(), 400);
+  }
+}
+
+// ============== MODAL: atualizar carga ==============
+let _cargaPegou = 0;
+let _cargaDeixou = 0;
+let _cargaChamado = null;
+let _cargaCallback = null;
+
+function abrirModalCarga(chamado, onConfirm){
+  _cargaPegou = 0; _cargaDeixou = 0;
+  _cargaChamado = chamado; _cargaCallback = onConfirm;
+  atualizaCargaUI();
+  document.getElementById('cargaModal').style.display = 'flex';
+}
+function fecharModalCarga(){
+  document.getElementById('cargaModal').style.display = 'none';
+  _cargaChamado = null; _cargaCallback = null;
+}
+function atualizaCargaUI(){
+  document.getElementById('cargaPegouQtd').textContent = _cargaPegou;
+  document.getElementById('cargaDeixouQtd').textContent = _cargaDeixou;
+  const slotsAtuais = slotsCount();
+  const slotsAposOp = Math.max(0, slotsAtuais + _cargaPegou - _cargaDeixou);
+  const total = slotsTotalCount();
+  const cor = slotsAposOp >= total ? '#dc2626' : slotsAposOp >= total * 0.7 ? '#fbbf24' : '#16a34a';
+  document.getElementById('cargaSlotsInfo').innerHTML = `
+    <div style="color:var(--txt2);font-size:11px">Slots agora: <strong style="color:var(--txt)">${slotsAtuais}/${total}</strong></div>
+    <div style="font-size:13px;font-weight:700;color:${cor};margin-top:4px">Após operação: ${slotsAposOp}/${total} 🏍 ${slotsAposOp >= total ? '· FULL!' : ''}</div>
+  `;
+  // Desabilita botões fora do range
+  document.getElementById('cargaPegouPlus').disabled = (slotsAtuais + _cargaPegou - _cargaDeixou >= total);
+  document.getElementById('cargaPegouMinus').disabled = _cargaPegou <= 0;
+  document.getElementById('cargaDeixouPlus').disabled = (_cargaDeixou >= slotsAtuais + _cargaPegou);
+  document.getElementById('cargaDeixouMinus').disabled = _cargaDeixou <= 0;
+}
+
+// ============== MODAL: ir pra base ==============
+function abrirModalBase(){
+  const list = document.getElementById('baseList');
+  const ativas = Object.values(bases).filter(b => b.ativo !== false && b.lat != null);
+  if(ativas.length === 0){
+    list.innerHTML = `<div style="text-align:center;color:var(--txt2);padding:20px;font-size:12px">Nenhuma base cadastrada ainda.<br>Fale com a torre.</div>`;
+  } else {
+    // Calcula distância pra cada base e ordena
+    const comDist = ativas.map(b => ({
+      ...b,
+      dist: myPos ? haversine(myPos, {lat:b.lat,lng:b.lng}) : 0
+    })).sort((a,b) => a.dist - b.dist);
+    list.innerHTML = comDist.map(b => {
+      const distTxt = b.dist > 0 ? (b.dist < 1000 ? Math.round(b.dist)+'m' : (b.dist/1000).toFixed(1)+'km') : '—';
+      return `<button data-baseid="${b.id}" style="padding:12px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;text-align:left;cursor:pointer">
+        <div style="font-weight:700;font-size:14px">🏠 ${esc(b.nome)}</div>
+        <div style="color:var(--txt2);font-size:11px;margin-top:2px">${esc(b.endereco || '')} · <strong style="color:var(--acc)">${distTxt}</strong></div>
+      </button>`;
+    }).join('');
+    Array.from(list.querySelectorAll('button[data-baseid]')).forEach(btn => {
+      btn.onclick = () => {
+        const baseId = btn.dataset.baseid;
+        fecharModalBase();
+        entrarModoDescarga(baseId);
+      };
+    });
+  }
+  document.getElementById('baseModal').style.display = 'flex';
+}
+function fecharModalBase(){
+  document.getElementById('baseModal').style.display = 'none';
 }
 
 function afterFilaChange(msg){
@@ -1476,6 +1605,10 @@ function bootApp(){
     color: me.color,
     status: me.status
   });
+  // Anuncia estado do turno (slots, modo, etc) pra torre logo após conectar
+  if(turnoAtivo){
+    setTimeout(() => syncTurnoToTorre(), 800);
+  }
 
   // Heartbeat: re-anuncia a cada 15s pra torre saber que tá vivo
   setInterval(() => {
@@ -1504,6 +1637,24 @@ function bootApp(){
 
   // Toca som de welcome (precisa gesto do user, mas o submit do form vale)
   setTimeout(() => playBeep(), 200);
+
+  // Wire modais de carga e base
+  document.getElementById('cargaPegouPlus').onclick = () => { _cargaPegou++; atualizaCargaUI(); };
+  document.getElementById('cargaPegouMinus').onclick = () => { if(_cargaPegou > 0){ _cargaPegou--; atualizaCargaUI(); } };
+  document.getElementById('cargaDeixouPlus').onclick = () => { _cargaDeixou++; atualizaCargaUI(); };
+  document.getElementById('cargaDeixouMinus').onclick = () => { if(_cargaDeixou > 0){ _cargaDeixou--; atualizaCargaUI(); } };
+  document.getElementById('cargaCancelar').onclick = fecharModalCarga;
+  document.getElementById('cargaConfirmar').onclick = () => {
+    // Aplica check-in (pegou) e check-out (deixou)
+    if(_cargaDeixou > 0) checkOutMotos(_cargaDeixou);
+    for(let i = 0; i < _cargaPegou; i++){
+      checkInMoto({ source: 'cliente', chamadoId: _cargaChamado?.id });
+    }
+    const cb = _cargaCallback;
+    fecharModalCarga();
+    if(cb) cb();
+  };
+  document.getElementById('baseCancelar').onclick = fecharModalBase;
 
   // Mantém tela ativa durante turno (Wake Lock)
   requestWakeLock();
@@ -1535,6 +1686,9 @@ async function loadVeiculosDisponiveis(){
   await ensureFb();
   const snap = await firebase.database().ref('vammo/veiculos').once('value');
   _turnoVeiculos = snap.val() || {};
+  // Também pré-carrega bases (pra modal de descarga)
+  const baseSnap = await firebase.database().ref('vammo/bases').once('value');
+  bases = baseSnap.val() || {};
   return _turnoVeiculos;
 }
 async function loadTurnoExistente(colabId){
@@ -1735,6 +1889,168 @@ async function iniciarTurno(){
     console.error(err);
     showToast('❌ Erro ao iniciar turno: ' + err.message, true);
     btn.disabled = false; btn.textContent = '▶ Iniciar turno';
+  }
+}
+
+// ============== SLOTS DE MOTOS (check-in / check-out) ==============
+function slotsCount(){ return turnoAtivo?.slotsOcupados?.length || 0; }
+function slotsTotalCount(){ return turnoAtivo?.slotsTotal || 0; }
+function slotsDisponiveis(){ return Math.max(0, slotsTotalCount() - slotsCount()); }
+function isFull(){ return turnoAtivo && slotsCount() >= slotsTotalCount() && slotsTotalCount() > 0; }
+
+async function saveTurno(){
+  if(!turnoAtivo) return;
+  try {
+    await ensureFb();
+    await firebase.database().ref('vammo/turnos/' + me.id).set(cleanForFb(turnoAtivo));
+  } catch(e){ console.warn('saveTurno fail:', e); }
+}
+
+function checkInMoto(opts){
+  if(isFull()){
+    showToast('⚠ Slots cheios — vá pra uma base descarregar', true);
+    return false;
+  }
+  turnoAtivo.slotsOcupados = turnoAtivo.slotsOcupados || [];
+  turnoAtivo.slotsOcupados.push({
+    id: 'slot_' + Date.now() + '_' + Math.random().toString(36).substring(2,5),
+    ocupadoEm: Date.now(),
+    source: opts.source || 'cliente',
+    chamadoId: opts.chamadoId || null,
+    placa: opts.placa || null
+  });
+  saveTurno();
+  syncTurnoToTorre();
+  renderTopBar();
+  // Se ficou full agora, sugere ir pra base
+  if(isFull() && (!turnoAtivo || turnoAtivo.modo !== 'descarregando')){
+    setTimeout(() => {
+      vibrate([200, 100, 200]);
+      playBeep();
+      abrirModalBase();
+    }, 600);
+  }
+  return true;
+}
+
+function checkOutMotos(qtd){
+  if(!turnoAtivo) return 0;
+  turnoAtivo.slotsOcupados = turnoAtivo.slotsOcupados || [];
+  const removed = Math.min(qtd, turnoAtivo.slotsOcupados.length);
+  for(let i = 0; i < removed; i++) turnoAtivo.slotsOcupados.shift(); // FIFO
+  saveTurno();
+  syncTurnoToTorre();
+  renderTopBar();
+  return removed;
+}
+
+function syncTurnoToTorre(){
+  if(!sync || !me) return;
+  sync.send('colab:turno', {
+    motoristaId: me.id,
+    slotsOcupados: slotsCount(),
+    slotsTotal: slotsTotalCount(),
+    isFull: isFull(),
+    modo: turnoAtivo?.modo || 'normal',
+    baseDestinoId: turnoAtivo?.baseDestinoId || null
+  });
+}
+
+// ============== MODO DESCARREGANDO (cor vermelha + rota pra base) ==============
+let baseDestinoMarker = null;
+let routeColorOverride = null; // 'red' quando descarregando
+
+function entrarModoDescarga(baseId){
+  const base = bases[baseId];
+  if(!base) return;
+  turnoAtivo.modo = 'descarregando';
+  turnoAtivo.baseDestinoId = baseId;
+  saveTurno();
+  syncTurnoToTorre();
+  routeColorOverride = '#dc2626';
+  // Adiciona marker da base destino com destaque
+  drawBaseDestinoMarker(base);
+  // Refaz rota até a base (cor vermelha)
+  routeFromQueueIds = ''; // invalida cache
+  updateRouteToBase();
+  showToast('🔴 Modo descarga ativado — siga pra ' + base.nome);
+  renderChamadoCard();
+}
+
+function sairModoDescarga(){
+  if(!turnoAtivo) return;
+  turnoAtivo.modo = 'normal';
+  turnoAtivo.baseDestinoId = null;
+  saveTurno();
+  syncTurnoToTorre();
+  routeColorOverride = null;
+  if(baseDestinoMarker){ map.removeLayer(baseDestinoMarker); baseDestinoMarker = null; }
+  if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+  routeInfo = null;
+  routeFromQueueIds = '';
+  // Volta a desenhar rota normal se tiver fila
+  if(fila.length > 0) updateRoute();
+}
+
+function drawBaseDestinoMarker(base){
+  if(baseDestinoMarker){ map.removeLayer(baseDestinoMarker); baseDestinoMarker = null; }
+  const html = `<div class="pin" style="filter:drop-shadow(0 0 12px rgba(220,38,38,0.6))">
+    <div class="body" style="border-color:#dc2626;background:#fff">${VAMMO_V_SVG}</div>
+    <div class="lbl" style="background:#dc2626;color:#fff;border-color:#dc2626">🔴 DESCARGA · ${esc(base.nome)}</div>
+  </div>`;
+  const icon = L.divIcon({ className:'base-icon', html, iconSize:[40,60], iconAnchor:[20,48] });
+  baseDestinoMarker = L.marker([base.lat, base.lng], { icon, zIndexOffset: 700 }).addTo(map);
+}
+
+async function updateRouteToBase(){
+  if(!turnoAtivo?.baseDestinoId || !myPos) return;
+  const base = bases[turnoAtivo.baseDestinoId];
+  if(!base || base.lat == null) return;
+  try {
+    const route = await fetchOsrmRoute({lat:myPos.lat,lng:myPos.lng}, [{lat:base.lat,lng:base.lng}]);
+    if(routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline(route.coords, {
+      color:'#dc2626', weight:5, opacity:0.9, lineCap:'round',
+      className:'osrm-route'
+    }).addTo(map);
+    routeInfo = { distance: route.distance, duration: route.duration, legs: route.legs, trafficDelay: route.trafficDelay || 0 };
+    map.fitBounds(L.latLngBounds([[myPos.lat,myPos.lng],[base.lat,base.lng]]), { padding:[60,60], maxZoom:15 });
+    renderChamadoCard();
+  } catch(e){ console.warn('rota base fail:', e); }
+}
+
+function checkArrivedAtBase(){
+  if(!turnoAtivo || turnoAtivo.modo !== 'descarregando' || !myPos) return;
+  const baseId = turnoAtivo.baseDestinoId;
+  const base = bases[baseId];
+  if(!base || base.lat == null) return;
+  const d = haversine(myPos, { lat: base.lat, lng: base.lng });
+  if(d < ARRIVED_THRESHOLD_M){
+    if(!nearDestSince['_base_' + baseId]) nearDestSince['_base_' + baseId] = Date.now();
+    else if(Date.now() - nearDestSince['_base_' + baseId] > ARRIVED_TIME_MS){
+      delete nearDestSince['_base_' + baseId];
+      onArrivedAtBase(base);
+    }
+  } else {
+    delete nearDestSince['_base_' + baseId];
+  }
+}
+
+function onArrivedAtBase(base){
+  vibrate([100, 50, 100, 50, 300]);
+  playBeep(); setTimeout(playBeep, 250);
+  const qtd = slotsCount();
+  if(qtd === 0){
+    if(confirm(`🏠 Chegou em ${base.nome}.\n\nSair do modo descarga?`)){
+      sairModoDescarga();
+      showToast('✓ Modo normal');
+    }
+    return;
+  }
+  if(confirm(`🏠 Chegou em ${base.nome}!\n\nDescarregar ${qtd} moto${qtd>1?'s':''} aqui?`)){
+    checkOutMotos(qtd);
+    sairModoDescarga();
+    showToast(`✓ ${qtd} moto${qtd>1?'s descarregadas':' descarregada'} em ${base.nome}`);
   }
 }
 
