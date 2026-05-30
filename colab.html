@@ -123,6 +123,32 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 .sig-box .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px;pointer-events:none}
 .sig-box.has .ph{display:none}
 
+/* Slide-to-confirm — evita toque acidental */
+.slide-confirm{position:relative;height:60px;background:var(--surf2);border-radius:30px;overflow:hidden;user-select:none;touch-action:none;border:2px solid var(--bdr)}
+.slide-confirm.green{border-color:#16a34a}
+.slide-confirm.cyan{border-color:var(--acc)}
+.slide-confirm .slide-fill{position:absolute;top:0;left:0;height:100%;background:linear-gradient(90deg,var(--acc) 0%,#16a34a 100%);transition:width 0.25s cubic-bezier(0.4,0,0.2,1);width:0;border-radius:30px}
+.slide-confirm.green .slide-fill{background:linear-gradient(90deg,#16a34a 0%,#16a34a 100%)}
+.slide-confirm .slide-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--txt2);font-weight:800;text-transform:uppercase;letter-spacing:2px;font-size:13px;pointer-events:none;transition:opacity 0.2s}
+.slide-confirm .slide-thumb{position:absolute;top:4px;left:4px;width:48px;height:48px;background:#fff;color:#001823;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;touch-action:none;cursor:grab;box-shadow:0 2px 8px rgba(0,0,0,0.4);transition:left 0.25s cubic-bezier(0.4,0,0.2,1)}
+.slide-confirm .slide-thumb.dragging{transition:none;cursor:grabbing}
+.slide-confirm.armed .slide-thumb{background:#16a34a;color:#fff}
+
+/* Rotina de atendimento (checklist) */
+.rotina-box{margin-top:12px;padding:14px;background:rgba(0,180,229,0.05);border:1px solid var(--acc);border-radius:10px}
+.rotina-box .rot-tit{font-size:11px;font-weight:800;color:var(--acc);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.rotina-box .rot-tit .ct{margin-left:auto;background:var(--acc);color:#001823;padding:2px 8px;border-radius:10px;font-size:10px;font-family:'IBM Plex Mono',monospace}
+.rot-step{padding:10px;background:var(--surf);border:1px solid var(--bdr);border-radius:8px;margin-bottom:6px}
+.rot-step.done{border-color:#16a34a;background:rgba(22,163,74,0.08)}
+.rot-step .rot-lbl{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:4px;cursor:pointer}
+.rot-step .rot-lbl input[type=checkbox]{width:18px;height:18px;accent-color:#16a34a;flex:0 0 18px}
+.rot-step textarea{width:100%;min-height:50px;padding:8px;border:1px solid var(--bdr);background:var(--surf2);color:var(--txt);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;margin-top:4px}
+.rot-step .rot-foto{margin-top:6px;display:flex;gap:8px;align-items:center}
+.rot-step .rot-foto label{padding:8px 14px;background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;flex:0 0 auto;position:relative;overflow:hidden}
+.rot-step .rot-foto label input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.rot-step .rot-foto img{max-width:80px;max-height:80px;border-radius:6px;object-fit:cover;border:1px solid #16a34a}
+.rot-step .rot-tipo{display:inline-block;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;background:var(--surf2);color:var(--txt3);margin-left:auto}
+
 /* Resumo */
 .res-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--bdr);font-size:12px}
 .res-row:last-child{border-bottom:none}
@@ -364,6 +390,25 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   <span style="font-size:16px">⚠</span>
   <span style="flex:1">Sua tela ficou bloqueada — o GPS pausa nesse momento. Mantenha o app aberto pra rastreio contínuo.</span>
   <button class="x" onclick="document.getElementById('screentip').classList.remove('show')">×</button>
+</div>
+
+<!-- Modal: chegou no local, slide pra iniciar atendimento -->
+<div id="iniModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:flex-end;justify-content:center;z-index:200">
+  <div style="background:var(--surf);border-radius:18px 18px 0 0;padding:22px;padding-bottom:max(22px,env(safe-area-inset-bottom));width:100%;max-width:480px">
+    <div style="font-size:48px;text-align:center">🎯</div>
+    <div style="font-size:20px;font-weight:800;text-align:center;margin:6px 0">Você chegou!</div>
+    <div id="iniCliente" style="text-align:center;color:var(--txt);font-size:14px;margin-bottom:4px">—</div>
+    <div id="iniEndereco" style="text-align:center;color:var(--txt2);font-size:11px;margin-bottom:14px">—</div>
+    <div id="iniDistInfo" style="text-align:center;font-size:11px;margin-bottom:14px;color:#16a34a;font-weight:700">📍 dentro do range</div>
+    <div class="slide-confirm cyan" id="iniSlide">
+      <div class="slide-fill"></div>
+      <div class="slide-text">→ deslize para iniciar →</div>
+      <div class="slide-thumb">▶</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button id="iniMaisTarde" style="flex:1;padding:10px;background:transparent;color:var(--txt3);border:none;font-size:12px">Iniciar depois</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: atualizar carga antes de concluir -->
@@ -826,6 +871,258 @@ function rideFinalize(status){
   currentRide = null;
 }
 
+// ============== ROTINAS DE ATENDIMENTO ==============
+// tipo: 'check' (só marcar) | 'obs' (texto obrigatório) | 'foto' (1 foto obrigatória)
+const ROTINAS = {
+  'moto não liga': [
+    { id:'bateria', label:'Verificar tensão da bateria', tipo:'check' },
+    { id:'partida',  label:'Tentar partida assistida', tipo:'check' },
+    { id:'comb',     label:'Verificar nível de combustível', tipo:'check' },
+    { id:'inspec',   label:'Inspeção visual (chicote, conexões)', tipo:'check' },
+    { id:'decisao',  label:'Decisão (reparar ou recolher)', tipo:'obs', placeholder:'Ex: bateria boa, problema na partida — recolher' },
+    { id:'foto',     label:'Foto da moto', tipo:'foto' },
+    { id:'cliente',  label:'Cliente acompanhou o diagnóstico', tipo:'check' }
+  ],
+  'pneu':[
+    { id:'achar',    label:'Identificar o furo', tipo:'check' },
+    { id:'reparo',   label:'Aplicar reparo (macarrão/agulha)', tipo:'check' },
+    { id:'calibrar', label:'Calibrar o pneu', tipo:'check' },
+    { id:'foto',     label:'Foto do reparo', tipo:'foto' },
+    { id:'cliente',  label:'Cliente conferiu', tipo:'check' }
+  ],
+  'acidente':[
+    { id:'cliente_ok', label:'Verificar estado do cliente', tipo:'check' },
+    { id:'moto_ok',    label:'Verificar estado da moto', tipo:'check' },
+    { id:'fotos',      label:'Foto geral dos danos', tipo:'foto' },
+    { id:'bo',         label:'BO ou declaração (se aplicável)', tipo:'obs', placeholder:'Nº BO ou observação · digite "n/a" se não houver' },
+    { id:'decisao',    label:'Continuar ou rebocar?', tipo:'obs', placeholder:'Ex: rebocar até oficina X' },
+    { id:'foto_final', label:'Foto da retirada/entrega', tipo:'foto' }
+  ],
+  'bateria':[
+    { id:'tensao',    label:'Verificar tensão', tipo:'check' },
+    { id:'partida',   label:'Tentar partida com bateria reserva', tipo:'check' },
+    { id:'troca',     label:'Carregar ou substituir', tipo:'check' },
+    { id:'foto',      label:'Foto da bateria nova/recarregada', tipo:'foto' },
+    { id:'cliente',   label:'Cliente conferiu', tipo:'check' }
+  ],
+  'devolução':[
+    { id:'estado',   label:'Verificar estado geral', tipo:'check' },
+    { id:'comb',     label:'Verificar nível de combustível', tipo:'check' },
+    { id:'4_lados',  label:'Foto dos 4 lados', tipo:'foto' },
+    { id:'hodom',    label:'Foto do hodômetro', tipo:'foto' },
+    { id:'recibo',   label:'Cliente assinou recibo', tipo:'check' }
+  ],
+  'vazamento':[
+    { id:'origem',   label:'Identificar origem do vazamento', tipo:'obs', placeholder:'Ex: cárter, junta da tampa, mangueira' },
+    { id:'nivel',    label:'Verificar nível do óleo', tipo:'check' },
+    { id:'foto',     label:'Foto do vazamento', tipo:'foto' },
+    { id:'reparo',   label:'Reparo provisório ou recolhimento', tipo:'obs', placeholder:'Ação tomada' },
+    { id:'oriento',  label:'Cliente foi orientado', tipo:'check' }
+  ],
+  'recolhimento':[
+    { id:'doc',        label:'Conferir documentação do recolhimento', tipo:'check' },
+    { id:'foto_inicio',label:'Foto da moto no recolhimento', tipo:'foto' },
+    { id:'placa',      label:'Foto da placa', tipo:'foto' },
+    { id:'id_cliente', label:'Confirmar identidade do ex-cliente', tipo:'check' },
+    { id:'foto_load',  label:'Foto da moto carregada', tipo:'foto' },
+    { id:'termo',      label:'Cliente assinou termo (ou recusa registrada)', tipo:'obs', placeholder:'Ex: assinado / recusou / não estava no local' }
+  ],
+  'freio':[
+    { id:'liquido', label:'Verificar líquido de freio', tipo:'check' },
+    { id:'pastilha',label:'Inspecionar pastilhas/discos', tipo:'check' },
+    { id:'foto',    label:'Foto do problema', tipo:'foto' },
+    { id:'decisao', label:'Ajustar ou recolher?', tipo:'obs', placeholder:'Decisão tomada' },
+    { id:'oriento', label:'Cliente foi orientado', tipo:'check' }
+  ],
+  'travada':[
+    { id:'status',     label:'Verificar status no Tracksolution', tipo:'check' },
+    { id:'destrava',   label:'Tentar destravar via app', tipo:'check' },
+    { id:'inspec',     label:'Inspeção visual da moto', tipo:'check' },
+    { id:'foto',       label:'Foto da moto', tipo:'foto' },
+    { id:'resultado',  label:'Destravada ou recolhida?', tipo:'obs', placeholder:'Resultado final' }
+  ]
+};
+const ROTINA_DEFAULT = [
+  { id:'descricao', label:'Descrever atendimento realizado', tipo:'obs', placeholder:'O que foi feito' },
+  { id:'foto',      label:'Foto do atendimento', tipo:'foto' },
+  { id:'cliente',   label:'Cliente conferiu', tipo:'check' }
+];
+
+function getRotina(motivo){
+  if(!motivo) return ROTINA_DEFAULT;
+  const m = motivo.toLowerCase();
+  for(const k in ROTINAS){
+    if(m.includes(k)) return ROTINAS[k];
+  }
+  return ROTINA_DEFAULT;
+}
+
+// ============== MODAL "INICIAR ATENDIMENTO" + SLIDE ==============
+const RANGE_INICIO_M = 80; // margem maior que ARRIVED (60m)
+let _iniChamadoId = null;
+let _iniDistTimer = null;
+let _aguardandoAutorizacao = null; // {chamadoId, motivo, ts}
+
+function distanciaAteChamado(c){
+  if(!myPos || !c || !c.lat) return Infinity;
+  return haversine(myPos, { lat: c.lat, lng: c.lng });
+}
+
+function abrirModalIniciar(chamado){
+  _iniChamadoId = chamado.id;
+  document.getElementById('iniCliente').textContent = chamado.cliente || 'Cliente';
+  document.getElementById('iniEndereco').textContent = chamado.endereco || '';
+  document.getElementById('iniModal').style.display = 'flex';
+  // Reset slide
+  resetSlide(document.getElementById('iniSlide'));
+  setupSlideConfirm(document.getElementById('iniSlide'), () => onIniciarConfirmado(chamado));
+  atualizarDistInfo(chamado);
+  if(_iniDistTimer) clearInterval(_iniDistTimer);
+  _iniDistTimer = setInterval(() => atualizarDistInfo(chamado), 2000);
+}
+function fecharModalIniciar(){
+  document.getElementById('iniModal').style.display = 'none';
+  _iniChamadoId = null;
+  if(_iniDistTimer){ clearInterval(_iniDistTimer); _iniDistTimer = null; }
+}
+function atualizarDistInfo(chamado){
+  const c = fila.find(x => x.id === chamado.id) || chamado;
+  const d = distanciaAteChamado(c);
+  const info = document.getElementById('iniDistInfo');
+  if(d <= RANGE_INICIO_M){
+    info.innerHTML = `📍 dentro do range · ${Math.round(d)}m do local`;
+    info.style.color = '#16a34a';
+  } else {
+    info.innerHTML = `⚠ fora do range · ${Math.round(d)}m do local · iniciar pede autorização da torre`;
+    info.style.color = '#fbbf24';
+  }
+}
+
+function onIniciarConfirmado(chamado){
+  const d = distanciaAteChamado(chamado);
+  if(d <= RANGE_INICIO_M){
+    iniciarAtendimento(chamado);
+  } else {
+    pedirAutorizacaoTorre(chamado, d);
+  }
+}
+
+function iniciarAtendimento(chamado){
+  chamado.iniciadoEm = Date.now();
+  chamado.status = 'em_rota';
+  chamado.rotinaSteps = chamado.rotinaSteps || {};
+  rideMarkArrived();
+  sync.send('chamado:atendimento-iniciado', {
+    chamadoId: chamado.id,
+    motoristaId: me.id,
+    pos: { lat: myPos?.lat, lng: myPos?.lng }
+  });
+  persistRotina(chamado);
+  fecharModalIniciar();
+  vibrate([50, 30, 50]);
+  showToast(`▶ Atendimento iniciado: ${chamado.cliente}`);
+  renderChamadoCard();
+}
+
+function pedirAutorizacaoTorre(chamado, dist){
+  fecharModalIniciar();
+  const motivo = prompt(
+    `⚠ Você está a ${Math.round(dist)}m do local (range é ${RANGE_INICIO_M}m).\n\nPra iniciar fora do range, precisa de autorização da torre.\n\nMotivo:`,
+    ''
+  );
+  if(motivo == null) return;
+  if(!motivo.trim()){ showToast('⚠ Motivo é obrigatório', true); return; }
+  _aguardandoAutorizacao = { chamadoId: chamado.id, motivo: motivo.trim(), ts: Date.now() };
+  sync.send('colab:solicitar-inicio-fora-range', {
+    chamadoId: chamado.id,
+    motoristaId: me.id,
+    motoristaNome: me.nome,
+    cliente: chamado.cliente,
+    dist: Math.round(dist),
+    motivo: motivo.trim(),
+    pos: { lat: myPos?.lat, lng: myPos?.lng }
+  });
+  showToast(`⏳ Solicitação enviada à torre — aguarde aprovação`);
+}
+
+// ============== SLIDE-TO-CONFIRM ==============
+function resetSlide(container){
+  const thumb = container.querySelector('.slide-thumb');
+  const fill = container.querySelector('.slide-fill');
+  const text = container.querySelector('.slide-text');
+  thumb.style.left = '4px';
+  fill.style.width = '0';
+  if(text) text.style.opacity = '1';
+  container.classList.remove('armed');
+}
+
+function setupSlideConfirm(container, onConfirm){
+  const thumb = container.querySelector('.slide-thumb');
+  const fill = container.querySelector('.slide-fill');
+  const text = container.querySelector('.slide-text');
+  let dragging = false;
+  let startX = 0;
+  let maxX = 0;
+  let curX = 4;
+
+  function start(e){
+    e.preventDefault();
+    dragging = true;
+    const t = e.touches ? e.touches[0] : e;
+    const rect = thumb.getBoundingClientRect();
+    startX = t.clientX - rect.left;
+    maxX = container.offsetWidth - thumb.offsetWidth - 8;
+    thumb.classList.add('dragging');
+  }
+  function move(e){
+    if(!dragging) return;
+    e.preventDefault();
+    const t = e.touches ? e.touches[0] : e;
+    const rect = container.getBoundingClientRect();
+    let x = t.clientX - rect.left - startX;
+    x = Math.max(4, Math.min(maxX, x));
+    curX = x;
+    thumb.style.left = x + 'px';
+    const progress = (x - 4) / (maxX - 4);
+    fill.style.width = (x + thumb.offsetWidth) + 'px';
+    if(text) text.style.opacity = String(Math.max(0, 1 - progress * 1.3));
+    if(progress >= 0.95){
+      dragging = false;
+      thumb.classList.remove('dragging');
+      container.classList.add('armed');
+      thumb.style.left = maxX + 'px';
+      fill.style.width = '100%';
+      if(text) text.style.opacity = '0';
+      onConfirm();
+    }
+  }
+  function end(){
+    if(!dragging) return;
+    dragging = false;
+    thumb.classList.remove('dragging');
+    if((curX - 4) / (maxX - 4) < 0.95) resetSlide(container);
+  }
+  thumb.addEventListener('mousedown', start);
+  thumb.addEventListener('touchstart', start, {passive:false});
+  window.addEventListener('mousemove', move);
+  window.addEventListener('touchmove', move, {passive:false});
+  window.addEventListener('mouseup', end);
+  window.addEventListener('touchend', end);
+}
+
+function rotinaCompleta(chamado){
+  const rot = getRotina(chamado.motivo);
+  const steps = chamado.rotinaSteps || {};
+  return rot.every(s => {
+    const v = steps[s.id];
+    if(!v) return false;
+    if(s.tipo === 'check') return v === true;
+    if(s.tipo === 'obs') return typeof v === 'string' && v.trim().length > 0;
+    if(s.tipo === 'foto') return typeof v === 'string' && v.startsWith('data:');
+    return false;
+  });
+}
+
 function iconFromMotivo(motivo){
   if(!motivo) return '🔧';
   const m = motivo.toLowerCase();
@@ -938,7 +1235,6 @@ function checkArrived(){
   const ativo = fila[0];
   if(!ativo || !ativo.lat || !ativo.lng) return;
   if(ativo.arrived) return;
-  // Dispara em novo OU em_rota — mesmo se motorista não clicou "iniciar"
   if(ativo.status !== 'em_rota' && ativo.status !== 'novo') return;
   const d = haversine(myPos, { lat: ativo.lat, lng: ativo.lng });
   if(d < ARRIVED_THRESHOLD_M){
@@ -950,7 +1246,6 @@ function checkArrived(){
       vibrate([100, 50, 100, 50, 300]);
       playBeep();
       setTimeout(playBeep, 250);
-      showToast('🎯 Você chegou no local!');
       sync.send('chamado:chegou', {
         chamadoId: ativo.id,
         motoristaId: me.id,
@@ -960,6 +1255,10 @@ function checkArrived(){
       rideMarkArrived();
       renderChamadoCard();
       updateChamadoMarkers();
+      // Abre modal de iniciar atendimento (se ainda não iniciou)
+      if(!ativo.iniciadoEm){
+        setTimeout(() => abrirModalIniciar(ativo), 600);
+      }
     }
   } else {
     delete nearDestSince[ativo.id];
@@ -1387,9 +1686,10 @@ function renderChamadoCard(){
       ${waze ? `<a href="${waze}" target="_blank" rel="noopener">🚗 Waze</a>` : ''}
       ${tel ? `<a href="${tel}">📞 Ligar</a>` : ''}
     </div>
+    ${c.iniciadoEm ? renderRotinaHtml(c) : ''}
     <div class="actions">
-      ${c.status === 'novo' ? '<button class="go" data-act="em_rota">▶ Iniciar rota</button>' : ''}
-      ${c.status === 'em_rota' ? `<button class="done" data-act="concluido">✓ Concluir${fila.length>1?' → Próximo':''}</button>` : ''}
+      ${c.status === 'novo' && !c.iniciadoEm ? '<button class="go" data-act="em_rota">▶ Iniciar rota</button>' : ''}
+      ${c.iniciadoEm ? `<button class="done" data-act="concluido" ${rotinaCompleta(c)?'':'disabled style="opacity:0.45;cursor:not-allowed"'}>${rotinaCompleta(c)?`✓ Concluir${fila.length>1?' → Próximo':''}`:'⏳ Complete a rotina pra concluir'}</button>` : ''}
       <button class="canc" data-act="recusar">Recusar este</button>
     </div>
     ${proxHtml}
@@ -1398,6 +1698,90 @@ function renderChamadoCard(){
   el.querySelectorAll('button[data-act]').forEach(b => {
     b.onclick = () => handleAction(b.dataset.act);
   });
+  bindRotinaInputs(c);
+}
+
+function renderRotinaHtml(c){
+  const rot = getRotina(c.motivo);
+  const steps = c.rotinaSteps = c.rotinaSteps || {};
+  const done = rot.filter(s => {
+    const v = steps[s.id];
+    if(!v) return false;
+    if(s.tipo === 'check') return v === true;
+    if(s.tipo === 'obs') return typeof v === 'string' && v.trim().length > 0;
+    if(s.tipo === 'foto') return typeof v === 'string' && v.startsWith('data:');
+    return false;
+  }).length;
+  return `<div class="rotina-box">
+    <div class="rot-tit">🔧 Rotina do atendimento <span class="ct">${done}/${rot.length}</span></div>
+    ${rot.map(s => {
+      const v = steps[s.id];
+      const isDone = (s.tipo === 'check' && v === true)
+        || (s.tipo === 'obs' && typeof v === 'string' && v.trim())
+        || (s.tipo === 'foto' && typeof v === 'string' && v.startsWith('data:'));
+      const tipoLbl = s.tipo === 'check' ? '✓' : s.tipo === 'obs' ? '✏' : '📷';
+      return `<div class="rot-step ${isDone?'done':''}" data-stepid="${s.id}" data-tipo="${s.tipo}">
+        <label class="rot-lbl">
+          ${s.tipo === 'check' ? `<input type="checkbox" ${v===true?'checked':''}>` : ''}
+          <span>${esc(s.label)}</span>
+          <span class="rot-tipo">${tipoLbl}</span>
+        </label>
+        ${s.tipo === 'obs' ? `<textarea placeholder="${esc(s.placeholder || 'Digite aqui')}">${esc(v || '')}</textarea>` : ''}
+        ${s.tipo === 'foto' ? `<div class="rot-foto">
+          <label>${v ? '🔄 Trocar foto' : '📸 Tirar foto'}<input type="file" accept="image/*" capture="environment"></label>
+          ${v ? `<img src="${v}" alt="foto">` : ''}
+        </div>` : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function bindRotinaInputs(c){
+  const el = document.getElementById('chamadocard');
+  const steps = c.rotinaSteps = c.rotinaSteps || {};
+  el.querySelectorAll('.rot-step').forEach(step => {
+    const id = step.dataset.stepid;
+    const tipo = step.dataset.tipo;
+    if(tipo === 'check'){
+      const cb = step.querySelector('input[type=checkbox]');
+      cb.onchange = () => {
+        steps[id] = cb.checked;
+        persistRotina(c);
+        renderChamadoCard();
+      };
+    } else if(tipo === 'obs'){
+      const ta = step.querySelector('textarea');
+      ta.oninput = () => { steps[id] = ta.value; persistRotina(c); };
+      ta.onblur = () => renderChamadoCard();
+    } else if(tipo === 'foto'){
+      const inp = step.querySelector('input[type=file]');
+      inp.onchange = async (e) => {
+        const f = e.target.files[0]; if(!f) return;
+        try {
+          const dataUrl = await compressToDataUrl(f, 1024, 0.7);
+          steps[id] = dataUrl;
+          persistRotina(c);
+          renderChamadoCard();
+        } catch(err){ showToast('❌ Erro na foto: '+err.message, true); }
+      };
+    }
+  });
+}
+
+function persistRotina(c){
+  // Salva rotina junto com a corrida ativa (ride)
+  if(currentRide && currentRide.chamadoId === c.id){
+    currentRide.rotinaSteps = c.rotinaSteps;
+  }
+  // Sync simples — manda update do chamado pro Firebase
+  try {
+    if(typeof firebase !== 'undefined' && firebase.apps?.length){
+      firebase.database().ref('vammo/chamados/' + c.id).update({
+        iniciadoEm: c.iniciadoEm,
+        rotinaSteps: c.rotinaSteps
+      }).catch(()=>{});
+    }
+  } catch(_){}
 }
 
 function handleAction(act){
@@ -1723,6 +2107,25 @@ function setupSyncListeners(){
     if(!me || !myPos) return;
     sendPos(myPos);
   });
+
+  // Resposta da torre à solicitação de início fora do range
+  sync.on('torre:autorizar-inicio', (data) => {
+    if(!me || data.motoristaId !== me.id) return;
+    if(!_aguardandoAutorizacao || _aguardandoAutorizacao.chamadoId !== data.chamadoId) return;
+    const c = fila.find(x => x.id === data.chamadoId);
+    if(!c) return;
+    if(data.aprovado){
+      _aguardandoAutorizacao = null;
+      vibrate([100, 50, 100]); playBeep();
+      showToast('✅ Torre autorizou — iniciando atendimento');
+      iniciarAtendimento(c);
+    } else {
+      _aguardandoAutorizacao = null;
+      vibrate([300, 100, 300]); playBeep();
+      const obs = data.observacao ? `\n\nObservação da torre: ${data.observacao}` : '';
+      alert(`❌ Torre NEGOU o início fora do range.${obs}\n\nVá até o local pra iniciar o atendimento.`);
+    }
+  });
 }
 
 // ====================== BEEP ======================
@@ -1789,6 +2192,9 @@ function bootApp(){
 
   // Toca som de welcome (precisa gesto do user, mas o submit do form vale)
   setTimeout(() => playBeep(), 200);
+
+  // Wire botões do modal "iniciar atendimento"
+  document.getElementById('iniMaisTarde').onclick = fecharModalIniciar;
 
   // Wire modais de carga e base
   document.getElementById('cargaPegouPlus').onclick = () => { _cargaPegou++; atualizaCargaUI(); };

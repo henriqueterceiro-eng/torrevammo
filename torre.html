@@ -3039,6 +3039,26 @@ function setTab(t){
 }
 
 // ============== TOAST ==============
+// Som de alerta crítico (autorização etc) — diferente do beep normal
+let _alertCtx = null;
+function playAlertSound(){
+  try {
+    if(!_alertCtx){ const AC = window.AudioContext || window.webkitAudioContext; if(AC) _alertCtx = new AC(); }
+    if(!_alertCtx) return;
+    if(_alertCtx.state === 'suspended') _alertCtx.resume();
+    const t0 = _alertCtx.currentTime;
+    [1000, 800, 1000, 800].forEach((freq, i) => {
+      const o = _alertCtx.createOscillator(), g = _alertCtx.createGain();
+      o.frequency.value = freq; o.type = 'square';
+      g.gain.setValueAtTime(0, t0 + i*0.15);
+      g.gain.linearRampToValueAtTime(0.15, t0 + i*0.15 + 0.02);
+      g.gain.linearRampToValueAtTime(0, t0 + i*0.15 + 0.12);
+      o.connect(g); g.connect(_alertCtx.destination);
+      o.start(t0 + i*0.15); o.stop(t0 + i*0.15 + 0.13);
+    });
+  } catch(_){}
+}
+
 function showToast(msg, isErr){
   const t = $('#toast');
   t.textContent = msg;
@@ -3228,6 +3248,60 @@ function setupSyncListeners(){
     }
     renderAll();
     showToast(`Chamado de ${c.cliente}: ${data.status === 'em_rota' ? '▶ em rota' : data.status === 'concluido' ? '✓ concluído' : data.status}`);
+  });
+
+  // Colaborador pediu autorização pra iniciar atendimento fora do range
+  sync.on('colab:solicitar-inicio-fora-range', (data) => {
+    const html = `
+      <div style="background:var(--surf);border:2px solid #fbbf24;padding:20px;border-radius:12px;width:100%;max-width:440px;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
+        <div style="font-size:32px;text-align:center;margin-bottom:6px">⚠</div>
+        <div style="font-size:16px;font-weight:800;text-align:center;color:#fbbf24;margin-bottom:14px">Solicitação de autorização</div>
+        <div style="font-size:13px;line-height:1.5;color:var(--txt);margin-bottom:12px">
+          <strong>${esc(data.motoristaNome || 'Colaborador')}</strong> está a <strong style="color:#fbbf24">${data.dist}m</strong> do local de <strong>${esc(data.cliente || 'cliente')}</strong>
+          e quer <strong>iniciar o atendimento fora do range</strong> (limite 80m).
+        </div>
+        <div style="padding:10px;background:var(--surf2);border-radius:6px;font-size:12px;margin-bottom:14px;color:var(--txt2)">
+          <strong style="color:var(--txt)">Motivo:</strong> ${esc(data.motivo || '—')}
+        </div>
+        <textarea id="autObs" placeholder="Observação opcional (motivo da decisão)" style="width:100%;min-height:60px;font-size:12px;margin-bottom:10px"></textarea>
+        <div style="display:flex;gap:8px">
+          <button id="autNegar" style="flex:1;padding:12px;background:var(--novo);color:#fff;border:none;border-radius:8px;font-weight:800">❌ NEGAR</button>
+          <button id="autAprovar" style="flex:1;padding:12px;background:var(--conc);color:#fff;border:none;border-radius:8px;font-weight:800">✅ APROVAR</button>
+        </div>
+      </div>
+    `;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10003;padding:20px';
+    wrap.innerHTML = html;
+    document.body.appendChild(wrap);
+    const responder = (aprovado) => {
+      const obs = wrap.querySelector('#autObs').value.trim();
+      sync.send('torre:autorizar-inicio', {
+        chamadoId: data.chamadoId,
+        motoristaId: data.motoristaId,
+        aprovado,
+        observacao: obs
+      });
+      showToast(aprovado ? `✅ Autorizado: ${data.motoristaNome}` : `❌ Negado: ${data.motoristaNome}`);
+      document.body.removeChild(wrap);
+    };
+    wrap.querySelector('#autAprovar').onclick = () => responder(true);
+    wrap.querySelector('#autNegar').onclick = () => responder(false);
+    // Som de alerta
+    playAlertSound();
+    showToast(`⚠ ${data.motoristaNome} pediu autorização — veja modal`, true);
+  });
+
+  // Atendimento iniciado pelo colab
+  sync.on('chamado:atendimento-iniciado', (data) => {
+    const c = chamados.find(x => x.id === data.chamadoId);
+    if(c){
+      c.iniciadoEm = Date.now();
+      STORE.updateChamado(c.id, { iniciadoEm: c.iniciadoEm });
+      const mot = motoristas[data.motoristaId];
+      showToast(`▶ ${mot?.nome || 'Colab'} iniciou atendimento de ${c.cliente}`);
+      if(selId === c.id) renderDetail();
+    }
   });
 
   // Colaborador saiu da rota — alerta gestor
