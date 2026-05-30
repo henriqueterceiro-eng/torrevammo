@@ -2514,7 +2514,8 @@ function fileToBase64(file){
 }
 
 // Sobe arquivo pra Apps Script Web App → retorna URL pública do Drive
-async function uploadFile(file, onProgress){
+// docType (opcional) = 'cnh' | 'crlv' faz o Apps Script chamar Gemini Vision e retornar `extracted`
+async function uploadFile(file, onProgress, docType){
   if(!cfg.uploadUrl){
     throw new Error('Upload não configurado. Vá em ⚙ Config → URL de upload');
   }
@@ -2523,22 +2524,124 @@ async function uploadFile(file, onProgress){
   }
   if(onProgress) onProgress('lendo arquivo…');
   const base64 = await fileToBase64(file);
-  if(onProgress) onProgress('enviando ' + (file.size/1024).toFixed(0) + 'KB…');
+  if(onProgress) onProgress('enviando ' + (file.size/1024).toFixed(0) + 'KB' + (docType ? ' + 🤖 lendo…' : '…'));
   const r = await fetch(cfg.uploadUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // simple request — evita preflight CORS
-    body: JSON.stringify({ name: file.name, mimeType: file.type, base64 })
+    body: JSON.stringify({ name: file.name, mimeType: file.type, base64, docType: docType || '' })
   });
   if(!r.ok) throw new Error('HTTP ' + r.status);
   const data = await r.json();
   if(data.error) throw new Error(data.error);
-  return data; // { id, url, previewUrl, name, size }
+  return data; // { id, url, previewUrl, name, size, extracted? }
+}
+
+// Mapeia o JSON estruturado retornado pelo Gemini pros campos do form de cadastro
+function applyExtractedToCadForm(docType, ex){
+  if(!ex || typeof ex !== 'object') return 0;
+  // Sanitiza datas comuns: "DD/MM/YYYY" → "YYYY-MM-DD"
+  const normalizeDate = (s) => {
+    if(!s) return s;
+    const m = String(s).match(/^(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})$/);
+    if(m) return `${m[3]}-${m[2]}-${m[1]}`;
+    return s;
+  };
+  // Sanitiza categoria CNH: maiúscula, remove espaços
+  const normalizeCat = (s) => String(s||'').toUpperCase().replace(/[^A-E]/g,'');
+
+  const cleanInt = (v) => { const n = parseInt(v); return n > 1900 && n < 2100 ? n : ''; };
+  const cleanText = (v) => String(v).trim();
+  const cleanDigits = (v) => String(v).replace(/\D/g,'');
+  const cleanEar = (v) => {
+    const s = String(v).trim().toLowerCase();
+    if(/sim|true|1|^s$/.test(s)) return 'sim';
+    if(/não|nao|false|0|^n$/.test(s)) return 'nao';
+    return '';
+  };
+  const cleanCombustivel = (v) => {
+    const s = String(v).toLowerCase();
+    if(s.includes('flex') || (s.includes('álc') && s.includes('gas')) || (s.includes('alc') && s.includes('gas'))) return 'flex';
+    if(s.includes('gasol')) return 'gasolina';
+    if(s.includes('etan') || s.includes('álc') || s.includes('alc')) return 'etanol';
+    if(s.includes('diesel')) return 'diesel';
+    if(s.includes('gnv') || s.includes('gas natural')) return 'gnv';
+    if(s.includes('elét') || s.includes('elet')) return 'eletrico';
+    if(s.includes('híbr') || s.includes('hibr')) return 'hibrido';
+    return '';
+  };
+  const cleanCategoria = (v) => {
+    const s = String(v).toLowerCase();
+    if(s.includes('partic')) return 'particular';
+    if(s.includes('alug')) return 'aluguel';
+    if(s.includes('ofic')) return 'oficial';
+    if(s.includes('apre')) return 'aprendizagem';
+    return '';
+  };
+
+  let mapping;
+  if(docType === 'cnh'){
+    mapping = {
+      nome: { id: 'f_nome', clean: cleanText },
+      cpf: { id: 'f_cpf', clean: cleanText },
+      rg: { id: 'f_rg', clean: cleanText },
+      dataNascimento: { id: 'f_dtnasc', clean: normalizeDate },
+      nomeMae: { id: 'f_mae', clean: cleanText },
+      cnhNumero: { id: 'f_cnh', clean: cleanDigits },
+      cnhCategoria: { id: 'f_cnhcat', clean: normalizeCat },
+      cnhValidade: { id: 'f_cnhval', clean: normalizeDate },
+      cnhPrimeira: { id: 'f_cnhprimeira', clean: normalizeDate },
+      cnhUf: { id: 'f_cnhuf', clean: (v) => String(v).toUpperCase().replace(/[^A-Z]/g,'').substring(0,2) },
+      cnhEar: { id: 'f_cnhear', clean: cleanEar },
+      cnhObs: { id: 'f_cnhobs', clean: cleanText }
+    };
+  } else if(docType === 'crlv'){
+    mapping = {
+      placa: { id: 'f_placa', clean: (v) => String(v).toUpperCase().replace(/[^A-Z0-9]/g,'') },
+      renavam: { id: 'f_renavam', clean: cleanDigits },
+      chassi: { id: 'f_chassi', clean: (v) => String(v).toUpperCase().replace(/[^A-Z0-9]/g,'') },
+      marca: { id: 'f_marca', clean: cleanText },
+      modelo: { id: 'f_modelo', clean: cleanText },
+      anoFabricacao: { id: 'f_anofab', clean: cleanInt },
+      ano: { id: 'f_ano', clean: cleanInt },
+      cor: { id: 'f_cor', clean: cleanText },
+      combustivel: { id: 'f_combustivel', clean: cleanCombustivel },
+      categoria: { id: 'f_categoria', clean: cleanCategoria },
+      municipio: { id: 'f_municipio', clean: cleanText }
+    };
+  } else return 0;
+
+  let filled = 0, skipped = 0;
+  for(const [k, { id, clean }] of Object.entries(mapping)){
+    const raw = ex[k];
+    if(raw == null || raw === '') continue;
+    const val = clean(raw);
+    if(val === '' || val == null) continue;
+    const el = document.getElementById(id);
+    if(!el) continue;
+    if(el.value && String(el.value) !== String(val)){ skipped++; continue; } // não sobrescreve o que o usuário já digitou
+    // Para <select>: só preenche se a option existir
+    if(el.tagName === 'SELECT'){
+      const opt = Array.from(el.options).find(o => o.value === String(val));
+      if(!opt){ skipped++; continue; }
+    }
+    el.value = val;
+    el.style.background = 'rgba(0,180,229,0.08)';
+    setTimeout(() => { el.style.background = ''; }, 3000);
+    filled++;
+  }
+  if(filled){
+    showToast(`🤖 IA preencheu ${filled} campo(s)${skipped ? ` (${skipped} mantido(s))` : ''} — confira antes de salvar`);
+  } else if(skipped){
+    showToast(`🤖 IA leu ${skipped} campo(s) mas você já tinha preenchido — não sobrescrevi`);
+  }
+  return filled;
 }
 
 // Helper pro form: upload de arquivo direto pro Drive (sem opção de colar URL)
-function docUploadField(inputId, currentUrl, label){
+// docType = 'cnh' | 'crlv' habilita extração automática de campos via Gemini Vision
+function docUploadField(inputId, currentUrl, label, docType){
   const hasUrl = !!currentUrl;
-  // input hidden guarda a URL retornada pelo Apps Script — não é editável pelo usuário
+  const dt = docType || '';
   if(!cfg.uploadUrl){
     return `
       <label>${label}</label>
@@ -2548,18 +2651,19 @@ function docUploadField(inputId, currentUrl, label){
       </div>
     `;
   }
+  const aiHint = dt ? ` <span style="font-size:10px;color:var(--acc);font-weight:600">· 🤖 IA preenche o form</span>` : '';
   return `
-    <label>${label}</label>
+    <label>${label}${aiHint}</label>
     <input id="${inputId}" type="hidden" value="${esc(currentUrl || '')}">
     <div id="${inputId}_box" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <label style="flex:1;min-width:200px;padding:10px 14px;background:var(--surf2);border:1px dashed var(--bdr2);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;text-align:center;color:${hasUrl ? 'var(--txt2)' : 'var(--acc)'}" title="PDF / JPG / PNG até 20MB">
         ${hasUrl ? '🔄 Substituir arquivo' : '📎 Subir arquivo do dispositivo'}
-        <input type="file" data-up="${inputId}" accept=".pdf,.jpg,.jpeg,.png,image/*,application/pdf" style="display:none">
+        <input type="file" data-up="${inputId}" data-doctype="${esc(dt)}" accept=".pdf,.jpg,.jpeg,.png,image/*,application/pdf" style="display:none">
       </label>
       ${hasUrl ? `<a href="${esc(currentUrl)}" target="_blank" rel="noopener" style="padding:10px 12px;font-size:14px;color:var(--acc);text-decoration:none;border:1px solid var(--bdr);border-radius:6px" title="Abrir documento atual">📄 ver</a>
         <button type="button" data-rm="${inputId}" style="padding:10px 12px;font-size:14px;background:rgba(220,38,38,0.12);border:1px solid var(--novo);color:#fca5a5;border-radius:6px" title="Remover anexo">🗑</button>` : ''}
     </div>
-    <div id="${inputId}_status" style="font-size:10px;color:var(--txt3);margin-top:4px;min-height:14px">${hasUrl ? '✓ documento anexado' : 'Tire foto ou escolha um PDF/imagem'}</div>
+    <div id="${inputId}_status" style="font-size:10px;color:var(--txt3);margin-top:4px;min-height:14px">${hasUrl ? '✓ documento anexado' : (dt ? '📎 Anexe a foto — a IA lê e preenche os campos' : 'Tire foto ou escolha um PDF/imagem')}</div>
   `;
 }
 
@@ -2570,17 +2674,25 @@ function bindUploadInputs(){
       const file = input.files[0];
       if(!file) return;
       const targetId = input.dataset.up;
+      const docType = input.dataset.doctype || '';
       const urlInput = document.getElementById(targetId);
       const status = document.getElementById(targetId + '_status');
       try {
         if(status){ status.style.color = 'var(--acc)'; status.textContent = '⏳ enviando…'; }
-        const data = await uploadFile(file, (msg) => { if(status) status.textContent = '⏳ ' + msg; });
+        const data = await uploadFile(file, (msg) => { if(status) status.textContent = '⏳ ' + msg; }, docType);
         urlInput.value = data.url;
+        let extraMsg = '';
+        if(docType && data.extracted){
+          const filled = applyExtractedToCadForm(docType, data.extracted);
+          extraMsg = filled ? ` · 🤖 ${filled} campo(s) preenchido(s)` : ' · 🤖 nada extraído';
+        } else if(docType && data.extractError){
+          extraMsg = ' · ⚠ OCR falhou: ' + data.extractError;
+        }
         if(status){
           status.style.color = '#16a34a';
-          status.textContent = '✓ ' + data.name + ' (' + (data.size/1024).toFixed(0) + 'KB) — salvo no Drive';
+          status.textContent = '✓ ' + data.name + ' (' + (data.size/1024).toFixed(0) + 'KB) — salvo no Drive' + extraMsg;
         }
-        rebuildDocUploadBox(targetId, data.url);
+        rebuildDocUploadBox(targetId, data.url, docType);
       } catch(err){
         console.error(err);
         if(status){ status.style.color = '#dc2626'; status.textContent = '❌ ' + err.message; }
@@ -2780,20 +2892,35 @@ function openCadForm(tab, id){
       <div class="cdform-field"><label>Nome completo *</label><input id="f_nome" type="text" placeholder="Ex: João Silva" value="${esc(item?.nome || '')}"></div>
       <div class="cdform-grid2">
         <div class="cdform-field"><label>Email * <small style="color:var(--txt3)">(login + reset de senha)</small></label><input id="f_email" type="email" placeholder="joao@vammo.com" value="${esc(item?.email || '')}"></div>
-        <div class="cdform-field"><label>CPF</label><input id="f_cpf" type="text" placeholder="000.000.000-00" value="${esc(item?.cpf || '')}"></div>
+        <div class="cdform-field"><label>Telefone</label><input id="f_tel" type="text" placeholder="(11) 99999-9999" value="${esc(item?.telefone || '')}"></div>
       </div>
-      <div class="cdform-field"><label>Telefone</label><input id="f_tel" type="text" placeholder="(11) 99999-9999" value="${esc(item?.telefone || '')}"></div>
       ${item?.senhaHash
         ? `<div style="padding:10px;background:rgba(16,163,74,0.12);border:1px solid #16a34a;border-radius:6px;font-size:11px;color:#16a34a;margin-bottom:10px">🔒 Senha já cadastrada pelo colaborador${item.senhaCriadaEm ? ' em '+new Date(item.senhaCriadaEm).toLocaleDateString('pt-BR') : ''}. Use o botão 🔄 na lista pra resetar.</div>`
         : (item ? `<div style="padding:10px;background:rgba(245,158,11,0.12);border:1px solid #fbbf24;border-radius:6px;font-size:11px;color:#fbbf24;margin-bottom:10px">⏱ Senha pendente. O colaborador define no primeiro acesso.</div>` : '')}
+      <div class="cdform-field">${docUploadField('f_cnhdoc', item?.cnhDocUrl, 'Documento CNH (PDF / foto)', 'cnh')}</div>
+      <div style="margin:8px 0 4px;padding:6px 10px;background:var(--surf2);border-left:3px solid var(--acc);font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:var(--txt2);font-weight:700">Dados pessoais</div>
       <div class="cdform-grid3">
-        <div class="cdform-field"><label>CNH nº</label><input id="f_cnh" type="text" placeholder="00000000000" value="${esc(item?.cnhNumero || '')}"></div>
-        <div class="cdform-field"><label>Categoria</label><select id="f_cnhcat">
-          ${['','A','B','AB','C','D','E'].map(c => `<option value="${c}"${item?.cnhCat===c?' selected':''}>${c || '—'}</option>`).join('')}
-        </select></div>
-        <div class="cdform-field"><label>Validade CNH</label><input id="f_cnhval" type="date" value="${esc(item?.cnhValidade || '')}"></div>
+        <div class="cdform-field"><label>CPF</label><input id="f_cpf" type="text" placeholder="000.000.000-00" value="${esc(item?.cpf || '')}"></div>
+        <div class="cdform-field"><label>RG</label><input id="f_rg" type="text" placeholder="00.000.000-0" value="${esc(item?.rg || '')}"></div>
+        <div class="cdform-field"><label>Data de nascimento</label><input id="f_dtnasc" type="date" value="${esc(item?.dataNascimento || '')}"></div>
       </div>
-      <div class="cdform-field">${docUploadField('f_cnhdoc', item?.cnhDocUrl, 'Documento CNH (PDF / foto)')}</div>
+      <div class="cdform-field"><label>Nome da mãe</label><input id="f_mae" type="text" placeholder="Ex: Maria Silva" value="${esc(item?.nomeMae || '')}"></div>
+      <div style="margin:8px 0 4px;padding:6px 10px;background:var(--surf2);border-left:3px solid var(--acc);font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:var(--txt2);font-weight:700">Habilitação (CNH)</div>
+      <div class="cdform-grid3">
+        <div class="cdform-field"><label>Nº de registro</label><input id="f_cnh" type="text" placeholder="00000000000" value="${esc(item?.cnhNumero || '')}"></div>
+        <div class="cdform-field"><label>Categoria</label><select id="f_cnhcat">
+          ${['','A','B','AB','C','D','E','AC','AD','AE'].map(c => `<option value="${c}"${item?.cnhCat===c?' selected':''}>${c || '—'}</option>`).join('')}
+        </select></div>
+        <div class="cdform-field"><label>Validade</label><input id="f_cnhval" type="date" value="${esc(item?.cnhValidade || '')}"></div>
+      </div>
+      <div class="cdform-grid3">
+        <div class="cdform-field"><label>1ª habilitação</label><input id="f_cnhprimeira" type="date" value="${esc(item?.cnhPrimeira || '')}"></div>
+        <div class="cdform-field"><label>UF emissão</label><input id="f_cnhuf" type="text" maxlength="2" placeholder="SP" style="text-transform:uppercase" value="${esc(item?.cnhUf || '')}"></div>
+        <div class="cdform-field"><label>EAR (atividade remunerada)</label><select id="f_cnhear">
+          ${[['','—'],['sim','✓ Sim'],['nao','✗ Não']].map(([v,l]) => `<option value="${v}"${item?.cnhEar===v?' selected':''}>${l}</option>`).join('')}
+        </select></div>
+      </div>
+      <div class="cdform-field"><label>Restrições / Observações da CNH <small style="color:var(--txt3)">(ex: lentes corretivas, prótese)</small></label><input id="f_cnhobs" type="text" placeholder="Opcional" value="${esc(item?.cnhObs || '')}"></div>
       <div class="cdform-grid2">
         <div class="cdform-field"><label>Turno</label><select id="f_turno">
           ${[['','—'],['manha','☀ Manhã'],['tarde','🌇 Tarde'],['noite','🌙 Noite']].map(([v,l]) => `<option value="${v}"${item?.turno===v?' selected':''}>${l}</option>`).join('')}
@@ -2844,19 +2971,37 @@ function openCadForm(tab, id){
     }, 50);
   } else {
     $('#cadFormBody').innerHTML = `
-      <div class="cdform-grid2">
+      <div class="cdform-field">${docUploadField('f_doc', item?.docUrl, 'Documento CRLV (PDF / foto)', 'crlv')}</div>
+      <div style="margin:8px 0 4px;padding:6px 10px;background:var(--surf2);border-left:3px solid var(--acc);font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:var(--txt2);font-weight:700">Identificação</div>
+      <div class="cdform-grid3">
         <div class="cdform-field"><label>Placa *</label><input id="f_placa" type="text" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase;font-family:var(--mono)" value="${esc(item?.placa || '')}"></div>
-        <div class="cdform-field"><label>Ano</label><input id="f_ano" type="number" min="1990" max="2030" placeholder="2024" value="${item?.ano || ''}"></div>
+        <div class="cdform-field"><label>RENAVAM</label><input id="f_renavam" type="text" placeholder="00000000000" maxlength="11" style="font-family:var(--mono)" value="${esc(item?.renavam || '')}"></div>
+        <div class="cdform-field"><label>Chassi</label><input id="f_chassi" type="text" placeholder="9BD..." maxlength="17" style="font-family:var(--mono);text-transform:uppercase" value="${esc(item?.chassi || '')}"></div>
       </div>
+      <div style="margin:8px 0 4px;padding:6px 10px;background:var(--surf2);border-left:3px solid var(--acc);font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:var(--txt2);font-weight:700">Características</div>
       <div class="cdform-grid2">
         <div class="cdform-field"><label>Marca</label><input id="f_marca" type="text" placeholder="${tab==='moto'?'Honda':tab==='carreta'?'Randon':'Fiat'}" value="${esc(item?.marca || '')}"></div>
         <div class="cdform-field"><label>Modelo</label><input id="f_modelo" type="text" placeholder="${tab==='moto'?'CG 160':tab==='carreta'?'Plataforma':'Strada'}" value="${esc(item?.modelo || '')}"></div>
       </div>
-      <div class="cdform-grid2">
-        <div class="cdform-field"><label>Último km registrado</label><input id="f_km" type="number" min="0" placeholder="123456" value="${item?.ultimoKm ?? ''}"></div>
-        <div class="cdform-field"><label>Slots de motos <small style="color:var(--txt3)">${tab==='moto'?'(motos não levam)':tab==='carreta'?'(quantas motos cabem)':'(geralmente 0 — carreta carrega)'}</small></label><input id="f_slots" type="number" min="0" max="20" placeholder="${tab==='carreta'?'2':tab==='moto'?'0':'0'}" value="${item?.slots ?? (tab==='carreta'?2:0)}"></div>
+      <div class="cdform-grid3">
+        <div class="cdform-field"><label>Ano fabricação</label><input id="f_anofab" type="number" min="1990" max="2030" placeholder="2024" value="${item?.anoFabricacao || ''}"></div>
+        <div class="cdform-field"><label>Ano modelo</label><input id="f_ano" type="number" min="1990" max="2030" placeholder="2024" value="${item?.ano || ''}"></div>
+        <div class="cdform-field"><label>Cor</label><input id="f_cor" type="text" placeholder="Branco" value="${esc(item?.cor || '')}"></div>
       </div>
-      <div class="cdform-field">${docUploadField('f_doc', item?.docUrl, 'Documento CRLV (PDF / foto)')}</div>
+      <div class="cdform-grid2">
+        <div class="cdform-field"><label>Combustível</label><select id="f_combustivel">
+          ${[['','—'],['gasolina','Gasolina'],['etanol','Etanol'],['flex','Flex (Álcool/Gasolina)'],['diesel','Diesel'],['gnv','GNV'],['eletrico','Elétrico'],['hibrido','Híbrido']].map(([v,l]) => `<option value="${v}"${item?.combustivel===v?' selected':''}>${l}</option>`).join('')}
+        </select></div>
+        <div class="cdform-field"><label>Categoria</label><select id="f_categoria">
+          ${[['','—'],['particular','Particular'],['aluguel','Aluguel'],['oficial','Oficial'],['aprendizagem','Aprendizagem']].map(([v,l]) => `<option value="${v}"${item?.categoria===v?' selected':''}>${l}</option>`).join('')}
+        </select></div>
+      </div>
+      <div style="margin:8px 0 4px;padding:6px 10px;background:var(--surf2);border-left:3px solid var(--acc);font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:var(--txt2);font-weight:700">Operação</div>
+      <div class="cdform-grid3">
+        <div class="cdform-field"><label>Último km registrado</label><input id="f_km" type="number" min="0" placeholder="123456" value="${item?.ultimoKm ?? ''}"></div>
+        <div class="cdform-field"><label>Slots de motos <small style="color:var(--txt3)">${tab==='moto'?'(motos não levam)':tab==='carreta'?'(quantas motos cabem)':'(0 — carreta carrega)'}</small></label><input id="f_slots" type="number" min="0" max="20" placeholder="${tab==='carreta'?'2':tab==='moto'?'0':'0'}" value="${item?.slots ?? (tab==='carreta'?2:0)}"></div>
+        <div class="cdform-field"><label>Município licenciamento</label><input id="f_municipio" type="text" placeholder="São Paulo / SP" value="${esc(item?.municipio || '')}"></div>
+      </div>
       <div class="cdform-field"><label>Observações</label><input id="f_obs" type="text" placeholder="Opcional" value="${esc(item?.obs || '')}"></div>
     `;
   }
@@ -2886,12 +3031,22 @@ function openCadForm(tab, id){
         tipo: 'colab',
         nome,
         email,
-        cpf: $('#f_cpf').value.trim(),
         telefone: $('#f_tel').value.trim(),
+        // Dados pessoais
+        cpf: $('#f_cpf').value.trim(),
+        rg: $('#f_rg').value.trim(),
+        dataNascimento: $('#f_dtnasc').value,
+        nomeMae: $('#f_mae').value.trim(),
+        // CNH
         cnhNumero: $('#f_cnh').value.trim(),
         cnhCat: $('#f_cnhcat').value,
         cnhValidade: $('#f_cnhval').value,
+        cnhPrimeira: $('#f_cnhprimeira').value,
+        cnhUf: $('#f_cnhuf').value.trim().toUpperCase(),
+        cnhEar: $('#f_cnhear').value,
+        cnhObs: $('#f_cnhobs').value.trim(),
         cnhDocUrl: $('#f_cnhdoc').value.trim(),
+        // Operação
         turno: $('#f_turno').value,
         base: $('#f_base').value.trim(),
         ativo: true,
@@ -2930,13 +3085,23 @@ function openCadForm(tab, id){
       const data = {
         id: id || cadGenId('veh'),
         tipo: tab,
+        // Identificação
         placa,
-        ano: +$('#f_ano').value || null,
+        renavam: $('#f_renavam').value.trim().replace(/\D/g,''),
+        chassi: $('#f_chassi').value.trim().toUpperCase(),
+        // Características
         marca: $('#f_marca').value.trim(),
         modelo: $('#f_modelo').value.trim(),
+        anoFabricacao: +$('#f_anofab').value || null,
+        ano: +$('#f_ano').value || null,
+        cor: $('#f_cor').value.trim(),
+        combustivel: $('#f_combustivel').value,
+        categoria: $('#f_categoria').value,
+        // Operação
         ultimoKm: km || null,
         ultimoKmTs: (item?.ultimoKm !== km) ? Date.now() : (item?.ultimoKmTs || Date.now()),
         slots,
+        municipio: $('#f_municipio').value.trim(),
         docUrl: $('#f_doc').value.trim(),
         obs: $('#f_obs').value.trim(),
         ativo: true,
