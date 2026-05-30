@@ -2330,21 +2330,37 @@ function renderCad(){
 
   if(cadTab === 'colab'){
     $('#cadlist').innerHTML = `
-      <div class="cdrow hdr" style="grid-template-columns:1fr 120px 120px 100px 80px 60px">
-        <div>Nome / CPF</div><div>Habilitação</div><div>Base</div><div>Turno</div><div style="text-align:center">CNH</div><div></div>
+      <div class="cdrow hdr" style="grid-template-columns:1fr 130px 100px 90px 70px 80px 70px 80px">
+        <div>Nome / CPF</div><div>Email</div><div>Base</div><div>Turno</div><div style="text-align:center">CNH</div><div style="text-align:center">Senha</div><div style="text-align:center">Reset</div><div></div>
       </div>
       ${items.map(c => {
         const t = { manha:'☀ Manhã', tarde:'🌇 Tarde', noite:'🌙 Noite' }[c.turno] || c.turno || '—';
-        return `<div class="cdrow" data-cid="${c.id}" style="grid-template-columns:1fr 120px 120px 100px 80px 60px">
-          <div><div class="cd-nm">${esc(c.nome || '?')}</div><div class="cd-sub">${esc(c.cpf || 'sem CPF')}</div></div>
-          <div>${esc(c.cnhNumero || '—')}${c.cnhCat ? ` <span class="cd-pill" style="background:var(--surf2);color:var(--txt2)">${esc(c.cnhCat)}</span>` : ''}</div>
+        const senhaSt = c.senhaHash
+          ? `<span class="cd-pill" style="background:rgba(16,163,74,0.2);color:#16a34a">✓ ok</span>`
+          : `<span class="cd-pill" style="background:rgba(245,158,11,0.2);color:#fbbf24">⏱ pendente</span>`;
+        return `<div class="cdrow" data-cid="${c.id}" style="grid-template-columns:1fr 130px 100px 90px 70px 80px 70px 80px">
+          <div><div class="cd-nm">${esc(c.nome || '?')}</div><div class="cd-sub">${esc(c.cpf || 'sem CPF')}${c.cnhNumero ? ' · CNH '+esc(c.cnhNumero) : ''}</div></div>
+          <div style="font-size:11px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.email || '—')}</div>
           <div>${esc(c.base || '—')}</div>
           <div>${t}</div>
           <div style="text-align:center">${c.cnhDocUrl ? `<a href="${esc(c.cnhDocUrl)}" target="_blank" rel="noopener" class="cd-doc" title="Abrir CNH" onclick="event.stopPropagation()">📄</a>` : '<span style="color:var(--txt3)">—</span>'}</div>
+          <div style="text-align:center">${senhaSt}</div>
+          <div style="text-align:center">${c.senhaHash ? `<button data-reset="${c.id}" style="padding:3px 6px;font-size:10px;background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#fbbf24" title="Forçar troca de senha no próximo login">🔄</button>` : '<span style="color:var(--txt3)">—</span>'}</div>
           <div style="text-align:right"><button data-edit="${c.id}" style="padding:4px 8px;font-size:10px">✏</button></div>
         </div>`;
       }).join('')}
     `;
+    // Botões de reset
+    $$('#cadlist button[data-reset]').forEach(b => b.onclick = (e) => {
+      e.stopPropagation();
+      const cid = b.dataset.reset;
+      const c = colaboradores[cid];
+      if(!c) return;
+      if(!confirm(`Resetar a senha de ${c.nome}?\n\nNo próximo acesso ele será forçado a criar nova senha. Avise ele por WhatsApp.`)) return;
+      const updated = { ...c, senhaHash: null, senhaSalt: null, precisaResetSenha: true, senhaResetadaEm: Date.now() };
+      STORE.saveColaborador(updated);
+      showToast(`✓ Senha de ${c.nome} resetada — ele cria nova no próximo login`);
+    });
   } else {
     $('#cadlist').innerHTML = `
       <div class="cdrow hdr" style="grid-template-columns:100px 1fr 60px 90px 90px 70px 60px">
@@ -2391,9 +2407,13 @@ function openCadForm(tab, id){
     $('#cadFormBody').innerHTML = `
       <div class="cdform-field"><label>Nome completo *</label><input id="f_nome" type="text" placeholder="Ex: João Silva" value="${esc(item?.nome || '')}"></div>
       <div class="cdform-grid2">
+        <div class="cdform-field"><label>Email * <small style="color:var(--txt3)">(login + reset de senha)</small></label><input id="f_email" type="email" placeholder="joao@vammo.com" value="${esc(item?.email || '')}"></div>
         <div class="cdform-field"><label>CPF</label><input id="f_cpf" type="text" placeholder="000.000.000-00" value="${esc(item?.cpf || '')}"></div>
-        <div class="cdform-field"><label>Telefone</label><input id="f_tel" type="text" placeholder="(11) 99999-9999" value="${esc(item?.telefone || '')}"></div>
       </div>
+      <div class="cdform-field"><label>Telefone</label><input id="f_tel" type="text" placeholder="(11) 99999-9999" value="${esc(item?.telefone || '')}"></div>
+      ${item?.senhaHash
+        ? `<div style="padding:10px;background:rgba(16,163,74,0.12);border:1px solid #16a34a;border-radius:6px;font-size:11px;color:#16a34a;margin-bottom:10px">🔒 Senha já cadastrada pelo colaborador${item.senhaCriadaEm ? ' em '+new Date(item.senhaCriadaEm).toLocaleDateString('pt-BR') : ''}. Use o botão 🔄 na lista pra resetar.</div>`
+        : (item ? `<div style="padding:10px;background:rgba(245,158,11,0.12);border:1px solid #fbbf24;border-radius:6px;font-size:11px;color:#fbbf24;margin-bottom:10px">⏱ Senha pendente. O colaborador define no primeiro acesso.</div>` : '')}
       <div class="cdform-grid3">
         <div class="cdform-field"><label>CNH nº</label><input id="f_cnh" type="text" placeholder="00000000000" value="${esc(item?.cnhNumero || '')}"></div>
         <div class="cdform-field"><label>Categoria</label><select id="f_cnhcat">
@@ -2436,11 +2456,17 @@ function openCadForm(tab, id){
   $('#cadSaveBtn').onclick = () => {
     if(isColab){
       const nome = $('#f_nome').value.trim();
+      const email = $('#f_email').value.trim().toLowerCase();
       if(!nome){ showToast('⚠ Nome é obrigatório', true); return; }
+      if(!email){ showToast('⚠ Email é obrigatório (pra login)', true); return; }
+      // Verifica duplicidade de email
+      const dup = Object.values(colaboradores).find(c => c.id !== id && (c.email || '').toLowerCase() === email);
+      if(dup){ showToast('⚠ Email já cadastrado: ' + dup.nome, true); return; }
       const data = {
         id: id || cadGenId('col'),
         tipo: 'colab',
         nome,
+        email,
         cpf: $('#f_cpf').value.trim(),
         telefone: $('#f_tel').value.trim(),
         cnhNumero: $('#f_cnh').value.trim(),
@@ -2450,6 +2476,11 @@ function openCadForm(tab, id){
         turno: $('#f_turno').value,
         base: $('#f_base').value.trim(),
         ativo: true,
+        // Preserva senha existente em edição
+        senhaHash: item?.senhaHash || null,
+        senhaSalt: item?.senhaSalt || null,
+        senhaCriadaEm: item?.senhaCriadaEm || null,
+        precisaResetSenha: item?.precisaResetSenha || false,
         criadoEm: item?.criadoEm || Date.now(),
         atualizadoEm: Date.now()
       };

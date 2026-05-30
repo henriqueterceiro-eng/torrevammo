@@ -200,12 +200,25 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     </svg>
   </div>
   <div class="sub">Colaborador</div>
+  <!-- Login com email/senha (padrão pra colab cadastrado) -->
   <form id="loginform">
-    <input type="text" id="lognome" placeholder="Seu nome" autocomplete="name" required>
-    <input type="text" id="logplaca" placeholder="Placa do guincho (ex: ABC1D23)" autocomplete="off" maxlength="8">
-    <button type="submit">Entrar no turno</button>
+    <input type="email" id="logemail" placeholder="Seu email" autocomplete="email" required>
+    <input type="password" id="logsenha" placeholder="Sua senha" autocomplete="current-password" required>
+    <button type="submit">Entrar</button>
+    <div style="text-align:center;margin-top:10px"><a href="#" id="logEsqueci" style="color:var(--txt3);font-size:11px;text-decoration:underline">Esqueci a senha</a></div>
   </form>
-  <div class="hint">
+
+  <!-- Form de criar/redefinir senha (primeiro acesso ou pós-reset) -->
+  <form id="senhaform" style="display:none;width:100%;max-width:360px;flex-direction:column;gap:12px;position:relative;z-index:1">
+    <div id="senhaTit" style="color:var(--acc);font-weight:800;font-size:13px;text-align:center;letter-spacing:1px;text-transform:uppercase"></div>
+    <div id="senhaUser" style="text-align:center;color:var(--txt);font-size:14px;font-weight:700"></div>
+    <input type="password" id="senhaNova" placeholder="Crie sua senha (mín 6 caracteres)" autocomplete="new-password" required minlength="6">
+    <input type="password" id="senhaConfirma" placeholder="Confirme a senha" autocomplete="new-password" required minlength="6">
+    <button type="submit">Salvar e entrar</button>
+    <div style="text-align:center"><a href="#" id="senhaVoltar" style="color:var(--txt3);font-size:11px;text-decoration:underline">Voltar</a></div>
+  </form>
+
+  <div class="hint" id="loginhint">
     Ao entrar, vamos compartilhar sua localização<br>com a torre de controle em tempo real.
   </div>
 </div>
@@ -1401,40 +1414,175 @@ function bootApp(){
   renderChamadoCard();
 }
 
-document.getElementById('loginform').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const nome = document.getElementById('lognome').value.trim();
-  const placa = document.getElementById('logplaca').value.trim().toUpperCase();
-  if(!nome) return;
-  const existing = loadMe();
-  me = existing && existing.nome === nome ? existing : {
-    id: genId(),
-    nome,
-    placa,
-    color: '#00B4E5',
+// ============== AUTH (login com email + senha do cadastro) ==============
+let _authPendingColab = null;
+
+async function hashSenha(senha, salt){
+  const buf = new TextEncoder().encode(senha + ':' + salt);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+function genSalt(){
+  return Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function ensureFb(){
+  if(typeof firebase === 'undefined' || !firebase.apps?.length){
+    await loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
+    await loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js');
+    firebase.initializeApp(FIREBASE_CONFIG);
+  }
+}
+
+async function loadColabByEmail(email){
+  await ensureFb();
+  const snap = await firebase.database().ref('vammo/colaboradores').once('value');
+  const data = snap.val() || {};
+  const lc = email.toLowerCase().trim();
+  return Object.values(data).find(c => (c.email || '').toLowerCase() === lc);
+}
+
+async function saveColabSenha(colab, novaSenha){
+  const salt = genSalt();
+  const hash = await hashSenha(novaSenha, salt);
+  const updated = {
+    ...colab,
+    senhaHash: hash,
+    senhaSalt: salt,
+    senhaCriadaEm: Date.now(),
+    precisaResetSenha: false
+  };
+  await firebase.database().ref('vammo/colaboradores/' + colab.id).set(cleanForFb(updated));
+  return updated;
+}
+
+function showSenhaForm(colab, titulo){
+  _authPendingColab = colab;
+  document.getElementById('loginform').style.display = 'none';
+  document.getElementById('loginhint').style.display = 'none';
+  const sf = document.getElementById('senhaform');
+  sf.style.display = 'flex';
+  document.getElementById('senhaTit').textContent = titulo;
+  document.getElementById('senhaUser').textContent = colab.nome;
+  document.getElementById('senhaNova').value = '';
+  document.getElementById('senhaConfirma').value = '';
+  setTimeout(() => document.getElementById('senhaNova').focus(), 100);
+}
+
+function backToLogin(){
+  _authPendingColab = null;
+  document.getElementById('loginform').style.display = 'flex';
+  document.getElementById('loginhint').style.display = 'block';
+  document.getElementById('senhaform').style.display = 'none';
+}
+
+function meFromColab(colab){
+  return {
+    id: colab.id,
+    nome: colab.nome,
+    placa: '',
+    email: colab.email,
+    cpf: colab.cpf,
+    base: colab.base,
+    turno: colab.turno,
+    color: colorFromId(colab.id),
     status: 'online'
   };
-  me.color = colorFromId(me.id);
-  me.nome = nome;
-  me.placa = placa;
-  me.status = 'online';
-  saveMe(me);
-  sync = createSync();
-  bootApp();
-});
+}
 
-// Auto-login se já tem sessão
-window.addEventListener('DOMContentLoaded', () => {
-  const saved = loadMe();
-  if(saved){
-    me = saved;
-    me.status = 'online'; // sempre começa online ao abrir
+document.getElementById('loginform').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('logemail').value.trim().toLowerCase();
+  const senha = document.getElementById('logsenha').value;
+  if(!email || !senha) return;
+  const btn = e.target.querySelector('button[type=submit]');
+  const origText = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Entrando…';
+  try {
+    const colab = await loadColabByEmail(email);
+    if(!colab){
+      showToast('❌ Email não cadastrado. Peça à torre pra te cadastrar.', true);
+      return;
+    }
+    if(!colab.ativo){
+      showToast('❌ Cadastro inativo. Fale com a torre.', true);
+      return;
+    }
+    if(!colab.senhaHash || colab.precisaResetSenha){
+      showSenhaForm(colab, colab.precisaResetSenha ? '🔄 Redefinir senha' : '🔒 Primeiro acesso · crie sua senha');
+      return;
+    }
+    const test = await hashSenha(senha, colab.senhaSalt);
+    if(test !== colab.senhaHash){
+      showToast('❌ Senha incorreta', true);
+      return;
+    }
+    me = meFromColab(colab);
     saveMe(me);
     sync = createSync();
     bootApp();
-  } else {
-    showLogin();
+  } catch(err){
+    console.error(err);
+    showToast('❌ Erro: ' + (err.message || 'tentar novamente'), true);
+  } finally {
+    btn.disabled = false; btn.textContent = origText;
   }
+});
+
+document.getElementById('senhaform').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nova = document.getElementById('senhaNova').value;
+  const conf = document.getElementById('senhaConfirma').value;
+  if(nova.length < 6){ showToast('⚠ Senha precisa ter ≥ 6 caracteres', true); return; }
+  if(nova !== conf){ showToast('⚠ Senhas não coincidem', true); return; }
+  if(!_authPendingColab) return;
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = '⏳ Salvando…';
+  try {
+    const colab = await saveColabSenha(_authPendingColab, nova);
+    showToast('✓ Senha definida!');
+    me = meFromColab(colab);
+    saveMe(me);
+    sync = createSync();
+    bootApp();
+  } catch(err){
+    console.error(err);
+    showToast('❌ Erro: ' + err.message, true);
+    btn.disabled = false; btn.textContent = 'Salvar e entrar';
+  }
+});
+
+document.getElementById('senhaVoltar').addEventListener('click', (e) => { e.preventDefault(); backToLogin(); });
+
+document.getElementById('logEsqueci').addEventListener('click', (e) => {
+  e.preventDefault();
+  alert('Esqueceu a senha?\n\n1) Avise a torre por WhatsApp\n2) O gestor abre 📋 Cadastros e clica no botão 🔄 ao lado do seu nome\n3) Volta aqui, digita seu email + qualquer senha pra continuar\n4) Você vai cair na tela de criar nova senha');
+});
+
+// Auto-login se já tem sessão — revalida no Firebase (cadastro pode ter sido desativado/resetado)
+window.addEventListener('DOMContentLoaded', async () => {
+  const saved = loadMe();
+  if(saved && saved.email){
+    try {
+      const colab = await loadColabByEmail(saved.email);
+      if(colab && colab.ativo !== false && !colab.precisaResetSenha){
+        me = meFromColab(colab);
+        me.status = 'online';
+        saveMe(me);
+        sync = createSync();
+        bootApp();
+        return;
+      }
+      if(colab && colab.precisaResetSenha){
+        showLogin();
+        showSenhaForm(colab, '🔄 Sua senha foi resetada pela torre');
+        return;
+      }
+    } catch(_){ /* sem rede — fallback abaixo */ }
+    // Cadastro sumiu ou inativo → limpa e volta pro login
+    clearMe();
+  }
+  showLogin();
 });
 
 // Mantém GPS ativo quando volta foreground + avisa se ficou bloqueado muito tempo
