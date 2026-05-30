@@ -61,9 +61,12 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #nav .iconbtn:hover{border-color:var(--bdr2);background:var(--surf2)}
 #nav .iconbtn.on{background:var(--acc);color:#001823;border-color:var(--acc);font-weight:700;box-shadow:0 0 0 1px rgba(0,180,229,0.3)}
 #nav .demo-on{background:var(--rota);color:#fff;border-color:var(--rota);font-weight:700}
-#syncind{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--txt2);padding:0 10px;border-left:1px solid var(--bdr);border-right:1px solid var(--bdr);height:32px}
-#syncind .d{width:8px;height:8px;border-radius:50%;background:var(--off)}
-#syncind .d.ok{background:var(--on);box-shadow:0 0 6px var(--on)}
+#syncind{display:flex;align-items:center;gap:6px;font-size:0;color:transparent;padding:0;height:32px;cursor:default}
+#syncind:hover{font-size:10px;color:var(--txt3);padding:0 8px}
+#syncind .d{width:7px;height:7px;border-radius:50%;background:var(--off);transition:background 0.2s}
+#syncind .d.ok{background:var(--on);box-shadow:0 0 4px var(--on)}
+#syncind #synctxt{display:none}
+#syncind:hover #synctxt{display:inline}
 
 /* MAIN */
 #main{flex:1;display:flex;min-height:0;overflow:hidden;position:relative}
