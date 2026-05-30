@@ -1461,7 +1461,14 @@ function renderMotoristaMarkers(){
     const filaTxt = m.activeCount > 0 ? ` · ${m.activeCount} na fila` : '';
     const ruaTxt = m.currentStreet ? `<br><small style="color:#00B4E5">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</small>` : '';
     const spdTxt = (m.kmh != null) ? `<br><small style="color:${m.kmh > 0 ? '#fbbf24' : '#9ca3af'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : `🏃 ${m.kmh} km/h`}</small>` : '';
-    const tip = `<b>${esc(m.nome)}</b><br><small>${esc(m.placa||'sem placa')} · ${stTxt}${filaTxt}${ageTxt}</small>${spdTxt}${ruaTxt}`;
+    let motosTip = '';
+    if(m.slotsDetalhe && m.slotsDetalhe.length > 0){
+      const placas = m.slotsDetalhe.map(s => s.placa || '—').join(', ');
+      motosTip = `<br><small style="color:#fbbf24">🏍 ${m.slotsDetalhe.length}/${m.slotsTotal}: ${esc(placas)}</small>`;
+    } else if(m.slotsTotal > 0){
+      motosTip = `<br><small style="color:var(--txt3)">🏍 0/${m.slotsTotal} (vazio)</small>`;
+    }
+    const tip = `<b>${esc(m.nome)}</b><br><small>${esc(m.placa||'sem placa')} · ${stTxt}${filaTxt}${ageTxt}</small>${motosTip}${spdTxt}${ruaTxt}`;
     if(motoristaMarkers[id]){
       motoristaMarkers[id].setIcon(icon);
       motoristaMarkers[id].setLatLng([m.lat, m.lng]);
@@ -1779,17 +1786,36 @@ function renderMot(){
     const stLbl = isOff ? 'offline' : m.modo === 'descarregando' ? '🔴 descarregando' : m.status === 'busy' ? 'em rota' : 'online';
     const ageLbl = isStale ? ` · <span style="color:#fbbf24;font-weight:700">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
     const slotsLbl = (m.slotsTotal != null && m.slotsTotal > 0)
-      ? ` · <span style="color:${m.isFull?'#dc2626':'var(--txt)'};font-weight:700">${m.slotsOcupados||0}/${m.slotsTotal} 🏍${m.isFull?' FULL':''}</span>` : '';
+      ? ` · <span style="color:${m.isFull?'#dc2626':'var(--txt)'};font-weight:700">${m.slotsCount||0}/${m.slotsTotal} 🏍${m.isFull?' FULL':''}</span>` : '';
     const hasGeo = m.lat != null && m.lng != null;
     const filaStr = ac > 0
       ? `<span style="color:var(--acc);font-weight:700">${ac} na fila</span>`
       : 'sem chamados';
     const isExp = expanded.has(id);
 
+    // Lista das motos carregadas (slots ocupados)
+    let motosHtml = '';
+    if(m.slotsDetalhe && m.slotsDetalhe.length > 0){
+      motosHtml = `<div style="margin-bottom:10px;padding:10px;background:rgba(0,180,229,0.06);border:1px solid var(--acc);border-radius:8px">
+        <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🏍 Motos a bordo · ${m.slotsDetalhe.length}/${m.slotsTotal}</div>
+        ${m.slotsDetalhe.map((s, i) => {
+          const idade = Math.floor((Date.now() - (s.ocupadoEm||Date.now())) / 60000);
+          const idadeTxt = idade < 60 ? idade+'min' : Math.floor(idade/60)+'h';
+          const origem = s.source === 'saida' ? '🚪 saída' : s.clienteName ? `👤 ${esc(s.clienteName)}` : '👤 cliente';
+          return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--surf);border-radius:6px;margin-bottom:3px;font-size:11px">
+            <span style="font-weight:800;color:var(--acc);width:18px">${i+1}</span>
+            <span style="font-family:var(--mono);font-weight:700;flex:1">${s.placa ? esc(s.placa) : '<span style="color:var(--txt3)">sem placa</span>'}</span>
+            <span style="color:var(--txt2);font-size:10px">${origem}</span>
+            <span style="color:var(--txt3);font-size:9px;font-family:var(--mono)">há ${idadeTxt}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
     // Fila expandida
-    let filaHtml = '';
+    let filaHtml = motosHtml;
     if(fila.length === 0){
-      filaHtml = `<div class="filaempty">Sem chamados atribuídos</div>`;
+      filaHtml += `<div class="filaempty">Sem chamados atribuídos</div>`;
     } else {
       filaHtml = fila.map((cid, i) => {
         const c = chamados.find(x => x.id === cid);
@@ -3187,14 +3213,15 @@ function setupSyncListeners(){
   sync.on('colab:turno', (data) => {
     if(!motoristas[data.motoristaId]) return;
     const m = motoristas[data.motoristaId];
-    m.slotsOcupados = data.slotsOcupados;
+    // Compat: aceita 'slotsCount' (novo) ou 'slotsOcupados' (antigo)
+    m.slotsCount = data.slotsCount != null ? data.slotsCount : (typeof data.slotsOcupados === 'number' ? data.slotsOcupados : 0);
     m.slotsTotal = data.slotsTotal;
+    m.slotsDetalhe = data.slotsDetalhe || [];
     m.isFull = data.isFull;
     m.modo = data.modo || 'normal';
     m.baseDestinoId = data.baseDestinoId || null;
     renderMotoristaMarkers();
     renderMot();
-    // Refaz rota dele com cor nova
     updateRouteFor(data.motoristaId);
     if(selId) renderDetail();
   });

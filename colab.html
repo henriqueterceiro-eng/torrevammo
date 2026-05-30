@@ -412,27 +412,32 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 </div>
 
 <!-- Modal: atualizar carga antes de concluir -->
-<div id="cargaModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;padding:24px;z-index:200">
-  <div style="background:var(--surf);border-radius:14px;padding:22px;width:100%;max-width:380px">
+<div id="cargaModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;padding:20px;z-index:200">
+  <div style="background:var(--surf);border-radius:14px;padding:20px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto">
     <div style="font-size:20px;font-weight:800;text-align:center;margin-bottom:6px">🏍 Atualize a carga</div>
-    <div style="text-align:center;color:var(--txt2);font-size:12px;margin-bottom:18px">Antes de concluir, marque o que houve com motos:</div>
+    <div style="text-align:center;color:var(--txt2);font-size:12px;margin-bottom:14px">Marque o que houve com as motos antes de concluir:</div>
     <div id="cargaSlotsInfo" style="text-align:center;padding:10px;background:var(--surf2);border-radius:8px;margin-bottom:14px;font-size:12px"></div>
-    <div style="margin-bottom:14px">
-      <div style="font-size:12px;color:var(--txt2);font-weight:600;margin-bottom:6px">📥 Você PEGOU moto do cliente?</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button id="cargaPegouMinus" style="padding:10px 14px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;font-size:18px;font-weight:800">−</button>
-        <div id="cargaPegouQtd" style="flex:1;text-align:center;font-size:24px;font-weight:800;color:var(--acc);font-family:'IBM Plex Mono',monospace">0</div>
-        <button id="cargaPegouPlus" style="padding:10px 14px;background:var(--acc);color:#001823;border:none;border-radius:8px;font-size:18px;font-weight:800">+</button>
+
+    <div style="margin-bottom:14px;padding:10px;background:rgba(0,180,229,0.06);border:1px solid var(--acc);border-radius:8px">
+      <div style="font-size:12px;color:var(--acc);font-weight:700;margin-bottom:8px">📥 Motos que vai PEGAR aqui</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input type="text" id="cargaPlacaInput" placeholder="Placa (ex: ABC1D23)" maxlength="8" style="flex:1;padding:8px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;font-size:14px;border:1px solid var(--bdr);background:var(--surf2);color:var(--txt);border-radius:6px">
+        <button id="cargaPlacaAdd" style="padding:8px 14px;background:var(--acc);color:#001823;border:none;border-radius:6px;font-weight:800">+ Adicionar</button>
       </div>
+      <div id="cargaPegouList" style="display:flex;flex-direction:column;gap:4px"></div>
+      <div style="font-size:10px;color:var(--txt3);margin-top:4px">💡 Placa opcional · pode adicionar sem placa também</div>
     </div>
-    <div style="margin-bottom:14px">
-      <div style="font-size:12px;color:var(--txt2);font-weight:600;margin-bottom:6px">📤 Você DEIXOU moto pro cliente?</div>
+
+    <div style="margin-bottom:14px;padding:10px;background:rgba(22,163,74,0.08);border:1px solid #16a34a;border-radius:8px">
+      <div style="font-size:12px;color:#16a34a;font-weight:700;margin-bottom:6px">📤 Você DEIXOU moto pro cliente?</div>
       <div style="display:flex;gap:8px;align-items:center">
         <button id="cargaDeixouMinus" style="padding:10px 14px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;font-size:18px;font-weight:800">−</button>
-        <div id="cargaDeixouQtd" style="flex:1;text-align:center;font-size:24px;font-weight:800;color:#16a34a;font-family:'IBM Plex Mono',monospace">0</div>
+        <div id="cargaDeixouQtd" style="flex:1;text-align:center;font-size:22px;font-weight:800;color:#16a34a;font-family:'IBM Plex Mono',monospace">0</div>
         <button id="cargaDeixouPlus" style="padding:10px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:18px;font-weight:800">+</button>
       </div>
+      <div style="font-size:10px;color:var(--txt3);margin-top:4px">Quantas motos suas você deixou aqui pro cliente (reserva, troca, etc)</div>
     </div>
+
     <button id="cargaConfirmar" style="width:100%;padding:14px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;margin-bottom:8px">✓ Confirmar e concluir chamado</button>
     <button id="cargaCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px">Cancelar</button>
   </div>
@@ -1845,37 +1850,78 @@ function _doShiftAndAfter(ativo){
 }
 
 // ============== MODAL: atualizar carga ==============
-let _cargaPegou = 0;
+let _cargaPegouList = []; // [{placa: 'ABC1234'|''}]
 let _cargaDeixou = 0;
 let _cargaChamado = null;
 let _cargaCallback = null;
 
 function abrirModalCarga(chamado, onConfirm){
-  _cargaPegou = 0; _cargaDeixou = 0;
+  _cargaPegouList = [];
+  _cargaDeixou = 0;
   _cargaChamado = chamado; _cargaCallback = onConfirm;
+  document.getElementById('cargaPlacaInput').value = '';
   atualizaCargaUI();
   document.getElementById('cargaModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('cargaPlacaInput').focus(), 100);
 }
 function fecharModalCarga(){
   document.getElementById('cargaModal').style.display = 'none';
   _cargaChamado = null; _cargaCallback = null;
+  _cargaPegouList = []; _cargaDeixou = 0;
 }
 function atualizaCargaUI(){
-  document.getElementById('cargaPegouQtd').textContent = _cargaPegou;
+  // Lista de motos pegas
+  const list = document.getElementById('cargaPegouList');
+  list.innerHTML = _cargaPegouList.map((m, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(0,180,229,0.1);border:1px solid var(--acc);border-radius:6px;font-size:12px">
+      <span style="font-weight:800;color:var(--acc)">🏍 #${i+1}</span>
+      <span style="flex:1;font-family:'IBM Plex Mono',monospace;font-weight:700">${m.placa ? esc(m.placa) : '<span style="color:var(--txt3)">sem placa</span>'}</span>
+      <button data-rm="${i}" style="padding:2px 8px;background:var(--surf);border:1px solid var(--bdr);color:var(--novo);border-radius:4px;font-size:11px;font-weight:700">✕</button>
+    </div>
+  `).join('') || '<div style="font-size:11px;color:var(--txt3);text-align:center;padding:4px">Nenhuma moto adicionada</div>';
+  list.querySelectorAll('button[data-rm]').forEach(b => b.onclick = () => {
+    _cargaPegouList.splice(+b.dataset.rm, 1);
+    atualizaCargaUI();
+  });
+
+  // Quantidade deixou
   document.getElementById('cargaDeixouQtd').textContent = _cargaDeixou;
+
+  // Resumo de slots
   const slotsAtuais = slotsCount();
-  const slotsAposOp = Math.max(0, slotsAtuais + _cargaPegou - _cargaDeixou);
+  const pegou = _cargaPegouList.length;
+  const slotsAposOp = Math.max(0, slotsAtuais + pegou - _cargaDeixou);
   const total = slotsTotalCount();
   const cor = slotsAposOp >= total ? '#dc2626' : slotsAposOp >= total * 0.7 ? '#fbbf24' : '#16a34a';
   document.getElementById('cargaSlotsInfo').innerHTML = `
     <div style="color:var(--txt2);font-size:11px">Slots agora: <strong style="color:var(--txt)">${slotsAtuais}/${total}</strong></div>
     <div style="font-size:13px;font-weight:700;color:${cor};margin-top:4px">Após operação: ${slotsAposOp}/${total} 🏍 ${slotsAposOp >= total ? '· FULL!' : ''}</div>
   `;
-  // Desabilita botões fora do range
-  document.getElementById('cargaPegouPlus').disabled = (slotsAtuais + _cargaPegou - _cargaDeixou >= total);
-  document.getElementById('cargaPegouMinus').disabled = _cargaPegou <= 0;
-  document.getElementById('cargaDeixouPlus').disabled = (_cargaDeixou >= slotsAtuais + _cargaPegou);
+
+  // Limites
+  const podeAdd = slotsAtuais + pegou - _cargaDeixou < total;
+  document.getElementById('cargaPlacaAdd').disabled = !podeAdd;
+  document.getElementById('cargaPlacaAdd').style.opacity = podeAdd ? 1 : 0.5;
+  document.getElementById('cargaDeixouPlus').disabled = (_cargaDeixou >= slotsAtuais + pegou);
   document.getElementById('cargaDeixouMinus').disabled = _cargaDeixou <= 0;
+}
+
+function adicionarMotoNaCarga(){
+  const inp = document.getElementById('cargaPlacaInput');
+  let placa = inp.value.trim().toUpperCase();
+  const slotsAtuais = slotsCount();
+  const total = slotsTotalCount();
+  if(slotsAtuais + _cargaPegouList.length - _cargaDeixou >= total){
+    showToast('⚠ Slots cheios', true); return;
+  }
+  // Verifica duplicidade
+  if(placa && _cargaPegouList.some(m => m.placa === placa)){
+    showToast('⚠ Placa já adicionada', true); return;
+  }
+  _cargaPegouList.push({ placa });
+  inp.value = '';
+  atualizaCargaUI();
+  inp.focus();
 }
 
 // ============== MODAL: ir pra base ==============
@@ -2196,21 +2242,24 @@ function bootApp(){
   // Wire botões do modal "iniciar atendimento"
   document.getElementById('iniMaisTarde').onclick = fecharModalIniciar;
 
-  // Wire modais de carga e base
-  document.getElementById('cargaPegouPlus').onclick = () => { _cargaPegou++; atualizaCargaUI(); };
-  document.getElementById('cargaPegouMinus').onclick = () => { if(_cargaPegou > 0){ _cargaPegou--; atualizaCargaUI(); } };
+  // Wire modal de carga
+  document.getElementById('cargaPlacaAdd').onclick = adicionarMotoNaCarga;
+  document.getElementById('cargaPlacaInput').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){ e.preventDefault(); adicionarMotoNaCarga(); }
+  });
   document.getElementById('cargaDeixouPlus').onclick = () => { _cargaDeixou++; atualizaCargaUI(); };
   document.getElementById('cargaDeixouMinus').onclick = () => { if(_cargaDeixou > 0){ _cargaDeixou--; atualizaCargaUI(); } };
   document.getElementById('cargaCancelar').onclick = fecharModalCarga;
   document.getElementById('cargaConfirmar').onclick = () => {
     if(_cargaDeixou > 0) checkOutMotos(_cargaDeixou);
-    for(let i = 0; i < _cargaPegou; i++){
+    _cargaPegouList.forEach(moto => {
       checkInMoto({
         source: 'cliente',
         chamadoId: _cargaChamado?.id,
-        clienteName: _cargaChamado?.cliente || ''
+        clienteName: _cargaChamado?.cliente || '',
+        placa: moto.placa || null
       });
-    }
+    });
     const cb = _cargaCallback;
     fecharModalCarga();
     if(cb) cb();
@@ -2967,10 +3016,21 @@ function checkOutMotos(qtd){
 
 function syncTurnoToTorre(){
   if(!sync || !me) return;
+  // Envia info completa dos slots (placa, source, chamadoId, cliente) pra gestor
+  // saber quais motos cada colab carrega
+  const slotsDetalhe = (turnoAtivo?.slotsOcupados || []).map(s => ({
+    id: s.id,
+    placa: s.placa || null,
+    source: s.source || 'cliente',
+    clienteName: s.clienteName || null,
+    chamadoId: s.chamadoId || null,
+    ocupadoEm: s.ocupadoEm
+  }));
   sync.send('colab:turno', {
     motoristaId: me.id,
-    slotsOcupados: slotsCount(),
+    slotsCount: slotsCount(),
     slotsTotal: slotsTotalCount(),
+    slotsDetalhe,
     isFull: isFull(),
     modo: turnoAtivo?.modo || 'normal',
     baseDestinoId: turnoAtivo?.baseDestinoId || null
