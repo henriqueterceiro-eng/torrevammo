@@ -424,6 +424,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         <button class="cdtab" data-t="carro">🚗 Carros</button>
         <button class="cdtab" data-t="carreta">🚛 Carretas</button>
         <button class="cdtab" data-t="moto">🏍 Motos</button>
+        <button class="cdtab" data-t="base">🏠 Bases</button>
       </div>
       <button onclick="closeCad()" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button>
     </div>
@@ -762,6 +763,8 @@ let routePending = {};        // {motoristaId: bool}  evita request duplicado
 let corridas = {};            // {chamadoId: ride} histórico de corridas finalizadas
 let colaboradores = {};       // {id: colab}
 let veiculos = {};            // {id: veiculo}
+let bases = {};               // {id: base Vammo}
+let turnos = {};              // {colabId: turno ativo}
 let motExpanded = new Set();  // ids de motoristas com fila expandida
 let sync = null;
 let lastSync = null;
@@ -855,6 +858,14 @@ const STORE = (() => {
         const data = s.val() || {};
         if(handlers.onVeiculosSnapshot) handlers.onVeiculosSnapshot(data);
       });
+      fb.child('bases').on('value', s => {
+        const data = s.val() || {};
+        if(handlers.onBasesSnapshot) handlers.onBasesSnapshot(data);
+      });
+      fb.child('turnos').on('value', s => {
+        const data = s.val() || {};
+        if(handlers.onTurnosSnapshot) handlers.onTurnosSnapshot(data);
+      });
       return true;
     } catch(e){ console.warn('STORE init err:', e); return false; }
   }
@@ -899,7 +910,19 @@ const STORE = (() => {
       try { fb.child('veiculos').child(v.id).set(cleanForFb(v)).catch(e => console.warn('fb saveVeic:', e)); }
       catch(e){ console.warn('saveVeic throw:', e); }
     },
-    deleteVeiculo(id){ if(fb) fb.child('veiculos').child(id).remove().catch(e => console.warn(e)); }
+    deleteVeiculo(id){ if(fb) fb.child('veiculos').child(id).remove().catch(e => console.warn(e)); },
+    saveBase(b){
+      if(!fb || !b.id) return;
+      try { fb.child('bases').child(b.id).set(cleanForFb(b)).catch(e => console.warn(e)); }
+      catch(e){ console.warn(e); }
+    },
+    deleteBase(id){ if(fb) fb.child('bases').child(id).remove().catch(e => console.warn(e)); },
+    saveTurno(t){
+      if(!fb || !t.colabId) return;
+      try { fb.child('turnos').child(t.colabId).set(cleanForFb(t)).catch(e => console.warn(e)); }
+      catch(e){ console.warn(e); }
+    },
+    deleteTurno(colabId){ if(fb) fb.child('turnos').child(colabId).remove().catch(e => console.warn(e)); }
   };
 })();
 
@@ -2402,6 +2425,8 @@ function renderCad(){
   let items = [];
   if(cadTab === 'colab'){
     items = Object.values(colaboradores);
+  } else if(cadTab === 'base'){
+    items = Object.values(bases);
   } else {
     items = Object.values(veiculos).filter(v => v.tipo === cadTab);
   }
@@ -2416,13 +2441,16 @@ function renderCad(){
   }
   items.sort((a,b) => (a.nome || a.placa || '').localeCompare(b.nome || b.placa || ''));
 
-  $('#cadcount').textContent = `${items.length} ${cadTab === 'colab' ? 'colaborador' : 'veículo'}${items.length === 1 ? '' : 's'}`;
+  const tipoLbl = cadTab === 'colab' ? 'colaborador' : cadTab === 'base' ? 'base' : 'veículo';
+  $('#cadcount').textContent = `${items.length} ${tipoLbl}${items.length === 1 ? '' : 's'}`;
 
   if(items.length === 0){
+    const ic = cadTab === 'colab' ? '👤' : cadTab === 'base' ? '🏠' : veiculoTipoIcon(cadTab);
+    const lbl = cadTab === 'colab' ? 'colaborador' : cadTab === 'base' ? 'base' : veiculoTipoLabel(cadTab).toLowerCase();
     $('#cadlist').innerHTML = `<div class="cd-empty">
-      <div class="ic">${cadTab === 'colab' ? '👤' : veiculoTipoIcon(cadTab)}</div>
-      <div style="font-weight:700;color:var(--txt)">Nenhum ${cadTab === 'colab' ? 'colaborador' : veiculoTipoLabel(cadTab).toLowerCase()} cadastrado</div>
-      <div style="font-size:11px;margin-top:6px">Clique em <strong>+ Adicionar</strong> pra criar o primeiro.</div>
+      <div class="ic">${ic}</div>
+      <div style="font-weight:700;color:var(--txt)">Nenhuma ${lbl} cadastrada</div>
+      <div style="font-size:11px;margin-top:6px">Clique em <strong>+ Adicionar</strong> pra criar a primeira.</div>
     </div>`;
     return;
   }
@@ -2460,19 +2488,39 @@ function renderCad(){
       STORE.saveColaborador(updated);
       showToast(`✓ Senha de ${c.nome} resetada — ele cria nova no próximo login`);
     });
-  } else {
+  } else if(cadTab === 'base'){
     $('#cadlist').innerHTML = `
-      <div class="cdrow hdr" style="grid-template-columns:100px 1fr 60px 90px 90px 70px 60px">
-        <div>Placa</div><div>Marca / Modelo</div><div>Ano</div><div>Último km</div><div>Última atualiz.</div><div style="text-align:center">CRLV</div><div></div>
+      <div class="cdrow hdr" style="grid-template-columns:1fr 1fr 80px 100px 60px">
+        <div>Nome</div><div>Endereço</div><div>Capacidade</div><div>Coords</div><div></div>
+      </div>
+      ${items.map(b => `<div class="cdrow" data-bid="${b.id}" style="grid-template-columns:1fr 1fr 80px 100px 60px">
+        <div class="cd-nm">${esc(b.nome || '?')}</div>
+        <div style="font-size:11px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.endereco || '—')}</div>
+        <div>${b.capacidade ? b.capacidade + ' motos' : '—'}</div>
+        <div style="font-size:10px;color:var(--txt3);font-family:var(--mono)">${b.lat != null ? b.lat.toFixed(4)+','+b.lng.toFixed(4) : '—'}</div>
+        <div style="text-align:right"><button data-edit="${b.id}" style="padding:4px 8px;font-size:10px">✏</button></div>
+      </div>`).join('')}
+    `;
+  } else {
+    // Veículos
+    $('#cadlist').innerHTML = `
+      <div class="cdrow hdr" style="grid-template-columns:100px 1fr 50px 50px 80px 100px 60px 70px">
+        <div>Placa</div><div>Marca / Modelo</div><div>Ano</div><div>Slots</div><div>Último km</div><div>Status</div><div style="text-align:center">CRLV</div><div></div>
       </div>
       ${items.map(v => {
         const fmtTs = (ts) => ts ? new Date(ts).toLocaleDateString('pt-BR') : '—';
-        return `<div class="cdrow" data-vid="${v.id}" style="grid-template-columns:100px 1fr 60px 90px 90px 70px 60px">
+        const atribuido = v.atribuidoA;
+        const colab = atribuido ? colaboradores[atribuido] : null;
+        const statusBadge = atribuido
+          ? `<span class="cd-pill" style="background:rgba(245,158,11,0.2);color:#fbbf24" title="Em uso por ${colab?.nome || '?'}">🔒 em uso</span>`
+          : `<span class="cd-pill" style="background:rgba(16,163,74,0.2);color:#16a34a">✓ livre</span>`;
+        return `<div class="cdrow" data-vid="${v.id}" style="grid-template-columns:100px 1fr 50px 50px 80px 100px 60px 70px">
           <div style="font-family:var(--mono);font-weight:700">${esc(v.placa || '—')}</div>
           <div><div class="cd-nm">${esc((v.marca || '') + ' ' + (v.modelo || '')).trim() || '—'}</div></div>
           <div>${v.ano || '—'}</div>
-          <div style="font-family:var(--mono)">${v.ultimoKm != null ? v.ultimoKm.toLocaleString('pt-BR') + ' km' : '—'}</div>
-          <div style="font-size:10px;color:var(--txt2)">${fmtTs(v.ultimoKmTs)}</div>
+          <div style="font-family:var(--mono);font-weight:700">${v.slots ?? 0}</div>
+          <div style="font-family:var(--mono);font-size:11px">${v.ultimoKm != null ? v.ultimoKm.toLocaleString('pt-BR') : '—'}</div>
+          <div>${statusBadge}</div>
           <div style="text-align:center">${v.docUrl ? `<a href="${esc(v.docUrl)}" target="_blank" rel="noopener" class="cd-doc" title="Abrir CRLV" onclick="event.stopPropagation()">📄</a>` : '<span style="color:var(--txt3)">—</span>'}</div>
           <div style="text-align:right"><button data-edit="${v.id}" style="padding:4px 8px;font-size:10px">✏</button></div>
         </div>`;
@@ -2484,7 +2532,7 @@ function renderCad(){
   $$('#cadlist .cdrow:not(.hdr)').forEach(row => {
     row.onclick = (e) => {
       if(e.target.tagName === 'A') return;
-      const id = row.dataset.cid || row.dataset.vid;
+      const id = row.dataset.cid || row.dataset.vid || row.dataset.bid;
       if(id) openCadForm(cadTab, id);
     };
   });
@@ -2494,13 +2542,13 @@ function openCadForm(tab, id){
   cadTab = tab;
   const isEdit = !!id;
   const isColab = tab === 'colab';
+  const isBase = tab === 'base';
   const item = isEdit
-    ? (isColab ? colaboradores[id] : veiculos[id])
+    ? (isColab ? colaboradores[id] : isBase ? bases[id] : veiculos[id])
     : null;
 
-  $('#cadFormTit').textContent = isEdit
-    ? `Editar ${isColab ? 'colaborador' : veiculoTipoLabel(tab).toLowerCase()}`
-    : `Novo ${isColab ? 'colaborador' : veiculoTipoLabel(tab).toLowerCase()}`;
+  const tipoLbl = isColab ? 'colaborador' : isBase ? 'base' : veiculoTipoLabel(tab).toLowerCase();
+  $('#cadFormTit').textContent = isEdit ? `Editar ${tipoLbl}` : `Nova(o) ${tipoLbl}`;
 
   if(isColab){
     $('#cadFormBody').innerHTML = `
@@ -2528,6 +2576,34 @@ function openCadForm(tab, id){
         <div class="cdform-field"><label>Base</label><input id="f_base" type="text" placeholder="Ex: Vila Maria" value="${esc(item?.base || '')}"></div>
       </div>
     `;
+  } else if(isBase){
+    $('#cadFormBody').innerHTML = `
+      <div class="cdform-field"><label>Nome da base *</label><input id="f_bnome" type="text" placeholder="Ex: Base Vila Maria" value="${esc(item?.nome || '')}"></div>
+      <div class="cdform-field"><label>Endereço</label><input id="f_bend" type="text" placeholder="Ex: Rua X, 123 — Vila Maria, SP" value="${esc(item?.endereco || '')}"></div>
+      <div class="cdform-grid2">
+        <div class="cdform-field"><label>Latitude</label><input id="f_blat" type="number" step="any" placeholder="-23.5505" value="${item?.lat ?? ''}"></div>
+        <div class="cdform-field"><label>Longitude</label><input id="f_blng" type="number" step="any" placeholder="-46.6333" value="${item?.lng ?? ''}"></div>
+      </div>
+      <button type="button" id="f_geocode" style="width:100%;padding:8px;font-size:11px;background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);font-weight:700;margin-bottom:10px">📍 Geocodificar endereço (TomTom)</button>
+      <div class="cdform-field"><label>Capacidade (slots totais de motos)</label><input id="f_bcap" type="number" min="0" placeholder="20" value="${item?.capacidade ?? ''}"></div>
+      <div class="cdform-field"><label>Observações</label><input id="f_bobs" type="text" placeholder="Opcional" value="${esc(item?.obs || '')}"></div>
+    `;
+    // Wire o botão de geocode
+    setTimeout(() => {
+      const btn = $('#f_geocode');
+      if(btn) btn.onclick = async () => {
+        const end = $('#f_bend').value.trim();
+        if(!end){ showToast('⚠ Digite o endereço primeiro', true); return; }
+        if(!TT.has()){ showToast('⚠ Sem chave TomTom', true); return; }
+        btn.disabled = true; btn.textContent = '⏳ buscando…';
+        try {
+          const r = await TT.geocode(end, { center:{lat:-23.5505,lng:-46.6333}, radius:80000 });
+          if(r){ $('#f_blat').value = r.lat.toFixed(6); $('#f_blng').value = r.lng.toFixed(6); showToast('✓ ' + r.address); }
+          else showToast('❌ Endereço não encontrado', true);
+        } catch(e){ showToast('❌ ' + e.message, true); }
+        btn.disabled = false; btn.textContent = '📍 Geocodificar endereço (TomTom)';
+      };
+    }, 50);
   } else {
     $('#cadFormBody').innerHTML = `
       <div class="cdform-grid2">
@@ -2538,7 +2614,10 @@ function openCadForm(tab, id){
         <div class="cdform-field"><label>Marca</label><input id="f_marca" type="text" placeholder="${tab==='moto'?'Honda':tab==='carreta'?'Randon':'Fiat'}" value="${esc(item?.marca || '')}"></div>
         <div class="cdform-field"><label>Modelo</label><input id="f_modelo" type="text" placeholder="${tab==='moto'?'CG 160':tab==='carreta'?'Plataforma':'Strada'}" value="${esc(item?.modelo || '')}"></div>
       </div>
-      <div class="cdform-field"><label>Último km registrado</label><input id="f_km" type="number" min="0" placeholder="123456" value="${item?.ultimoKm ?? ''}"></div>
+      <div class="cdform-grid2">
+        <div class="cdform-field"><label>Último km registrado</label><input id="f_km" type="number" min="0" placeholder="123456" value="${item?.ultimoKm ?? ''}"></div>
+        <div class="cdform-field"><label>Slots de motos <small style="color:var(--txt3)">${tab==='moto'?'(motos não levam)':tab==='carreta'?'(quantas motos cabem)':'(geralmente 0 — carreta carrega)'}</small></label><input id="f_slots" type="number" min="0" max="20" placeholder="${tab==='carreta'?'2':tab==='moto'?'0':'0'}" value="${item?.slots ?? (tab==='carreta'?2:0)}"></div>
+      </div>
       <div class="cdform-field">${docUploadField('f_doc', item?.docUrl, 'Documento CRLV (PDF / foto)')}</div>
       <div class="cdform-field"><label>Observações</label><input id="f_obs" type="text" placeholder="Opcional" value="${esc(item?.obs || '')}"></div>
     `;
@@ -2546,8 +2625,11 @@ function openCadForm(tab, id){
 
   $('#cadDelBtn').style.display = isEdit ? 'inline-block' : 'none';
   $('#cadDelBtn').onclick = () => {
-    if(!confirm(`Excluir ${isColab ? 'colaborador' : 'veículo'} "${isColab ? item.nome : item.placa}"?`)) return;
-    if(isColab) STORE.deleteColaborador(id); else STORE.deleteVeiculo(id);
+    const nome = isColab ? item.nome : isBase ? item.nome : item.placa;
+    if(!confirm(`Excluir ${tipoLbl} "${nome}"?`)) return;
+    if(isColab) STORE.deleteColaborador(id);
+    else if(isBase) STORE.deleteBase(id);
+    else STORE.deleteVeiculo(id);
     closeCadForm();
     showToast('✓ Excluído');
   };
@@ -2584,10 +2666,29 @@ function openCadForm(tab, id){
         atualizadoEm: Date.now()
       };
       STORE.saveColaborador(data);
+    } else if(isBase){
+      const nome = $('#f_bnome').value.trim();
+      if(!nome){ showToast('⚠ Nome é obrigatório', true); return; }
+      const lat = parseFloat($('#f_blat').value);
+      const lng = parseFloat($('#f_blng').value);
+      const data = {
+        id: id || cadGenId('base'),
+        nome,
+        endereco: $('#f_bend').value.trim(),
+        lat: isNaN(lat) ? null : lat,
+        lng: isNaN(lng) ? null : lng,
+        capacidade: +$('#f_bcap').value || null,
+        obs: $('#f_bobs').value.trim(),
+        ativo: true,
+        criadoEm: item?.criadoEm || Date.now(),
+        atualizadoEm: Date.now()
+      };
+      STORE.saveBase(data);
     } else {
       const placa = $('#f_placa').value.trim().toUpperCase();
       if(!placa){ showToast('⚠ Placa é obrigatória', true); return; }
       const km = +$('#f_km').value || 0;
+      const slots = Math.max(0, +$('#f_slots').value || 0);
       const data = {
         id: id || cadGenId('veh'),
         tipo: tab,
@@ -2597,9 +2698,13 @@ function openCadForm(tab, id){
         modelo: $('#f_modelo').value.trim(),
         ultimoKm: km || null,
         ultimoKmTs: (item?.ultimoKm !== km) ? Date.now() : (item?.ultimoKmTs || Date.now()),
+        slots,
         docUrl: $('#f_doc').value.trim(),
         obs: $('#f_obs').value.trim(),
         ativo: true,
+        // Preserva atribuição existente
+        atribuidoA: item?.atribuidoA || null,
+        atribuidoEm: item?.atribuidoEm || null,
         criadoEm: item?.criadoEm || Date.now(),
         atualizadoEm: Date.now()
       };
@@ -3164,6 +3269,13 @@ function setupStoreListeners(){
     onVeiculosSnapshot: (data) => {
       veiculos = data || {};
       if($('#cadmodal').style.display === 'flex') renderCad();
+    },
+    onBasesSnapshot: (data) => {
+      bases = data || {};
+      if($('#cadmodal').style.display === 'flex') renderCad();
+    },
+    onTurnosSnapshot: (data) => {
+      turnos = data || {};
     },
     onCorridaAdded: (rideId, ride) => {
       if(!ride.chamadoId) return;
