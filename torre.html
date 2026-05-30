@@ -2506,6 +2506,30 @@ function renderCadForm_refreshLink(targetId, url){
 function veiculoTipoIcon(t){ return { carro:'🚗', carreta:'🚛', moto:'🏍' }[t] || '🚗'; }
 function veiculoTipoLabel(t){ return { carro:'Carro', carreta:'Carreta', moto:'Moto' }[t] || t; }
 
+// Normaliza o campo `base` dos colabs pra casar com o nome canônico das bases cadastradas
+// (case-insensitive + trim). Idempotente — só grava quando há mismatch real.
+function normalizeColabBases(){
+  if(!colaboradores || !bases) return;
+  const baseList = Object.values(bases).filter(b => b && b.nome);
+  if(!baseList.length) return;
+  let fixedCount = 0;
+  for(const cid in colaboradores){
+    const c = colaboradores[cid];
+    const cur = (c.base || '').trim();
+    if(!cur) continue;
+    const match = baseList.find(b => (b.nome || '').trim().toLowerCase() === cur.toLowerCase());
+    if(match && match.nome !== c.base){
+      const upd = { ...c, base: match.nome, atualizadoEm: Date.now() };
+      colaboradores[cid] = upd;
+      try { STORE.saveColaborador(upd); fixedCount++; } catch(e){ console.warn('normalize fail', e); }
+    }
+  }
+  if(fixedCount){
+    console.log('[bases] normalizei', fixedCount, 'colab(s) pra nome canônico de base');
+    if($('#cadmodal').style.display === 'flex') renderCad();
+  }
+}
+
 function renderCad(){
   // Atualiza tabs
   $$('#cadtabs .cdtab').forEach(b => b.classList.toggle('active', b.dataset.t === cadTab));
@@ -2661,7 +2685,20 @@ function openCadForm(tab, id){
         <div class="cdform-field"><label>Turno</label><select id="f_turno">
           ${[['','—'],['manha','☀ Manhã'],['tarde','🌇 Tarde'],['noite','🌙 Noite']].map(([v,l]) => `<option value="${v}"${item?.turno===v?' selected':''}>${l}</option>`).join('')}
         </select></div>
-        <div class="cdform-field"><label>Base</label><input id="f_base" type="text" placeholder="Ex: Vila Maria" value="${esc(item?.base || '')}"></div>
+        <div class="cdform-field"><label>Base</label>${(() => {
+          const opts = Object.values(bases).filter(b => b.ativo !== false).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+          if(!opts.length){
+            return `<select id="f_base" disabled style="opacity:0.6"><option>— Cadastre uma base primeiro (aba 🏠 Bases) —</option></select>`;
+          }
+          const cur = (item?.base || '').trim();
+          const curLower = cur.toLowerCase();
+          const matched = opts.find(b => (b.nome||'').trim().toLowerCase() === curLower);
+          return `<select id="f_base">
+            <option value="">— selecione —</option>
+            ${opts.map(b => `<option value="${esc(b.nome)}"${matched && matched.id===b.id ? ' selected' : ''}>${esc(b.nome)}</option>`).join('')}
+            ${cur && !matched ? `<option value="${esc(cur)}" selected>${esc(cur)} (não cadastrada)</option>` : ''}
+          </select>`;
+        })()}</div>
       </div>
     `;
   } else if(isBase){
@@ -3453,6 +3490,7 @@ function setupStoreListeners(){
       bases = data || {};
       if($('#cadmodal').style.display === 'flex') renderCad();
       renderBaseMarkers();
+      normalizeColabBases();
     },
     onTurnosSnapshot: (data) => {
       turnos = data || {};
