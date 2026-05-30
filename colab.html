@@ -87,6 +87,11 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #topbar .stbtn.busy{background:var(--busy)}
 #topbar .stbtn.off{background:var(--off);color:var(--txt)}
 #topbar .out{padding:6px 8px;border-radius:6px;background:transparent;color:var(--txt2);font-size:18px}
+#topbar .slotsbtn{padding:6px 10px;border-radius:14px;font-size:11px;font-weight:800;background:rgba(0,180,229,0.12);color:var(--acc);border:1px solid var(--acc);cursor:pointer;display:none;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace}
+#topbar .slotsbtn.show{display:flex}
+#topbar .slotsbtn.full{background:rgba(220,38,38,0.15);color:#fca5a5;border-color:#dc2626;animation:pulseFull 1.5s infinite}
+#topbar .slotsbtn.descarregando{background:rgba(220,38,38,0.2);color:#fff;border-color:#dc2626}
+@keyframes pulseFull{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,0.4)}50%{box-shadow:0 0 0 6px rgba(220,38,38,0)}}
 
 #map{flex:1;position:relative;background:#0a1428;min-height:0}
 #mapcanvas{width:100%;height:100%}
@@ -299,6 +304,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
       <div class="nm" id="tbnome">—</div>
       <div class="pl"><span id="syncdot"></span><span id="tbplaca">—</span><span id="wakedot"></span></div>
     </div>
+    <button class="slotsbtn" id="slotsbtn" title="Ver / descarregar motos em uma base">🏍 <span id="slotsbtnTxt">0/0</span></button>
     <button class="stbtn" id="ststatus">ONLINE</button>
     <button class="out" id="btlogout" title="Sair">⏻</button>
   </div>
@@ -353,14 +359,30 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   </div>
 </div>
 
-<!-- Modal: full → ir pra base -->
+<!-- Modal: selecionar base pra descarregar (auto ou voluntário) -->
 <div id="baseModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;padding:24px;z-index:200">
   <div style="background:var(--surf);border-radius:14px;padding:22px;width:100%;max-width:380px">
-    <div style="font-size:36px;text-align:center">🏍🏍🏍</div>
-    <div style="font-size:18px;font-weight:800;text-align:center;margin:6px 0">Slots cheios!</div>
-    <div style="text-align:center;color:var(--txt2);font-size:12px;margin-bottom:16px">Selecione uma base Vammo pra descarregar. A rota vai ficar <strong style="color:#dc2626">vermelha</strong> e você não recebe novos chamados.</div>
+    <div id="baseModalIcon" style="font-size:36px;text-align:center">🏠</div>
+    <div id="baseModalTit" style="font-size:18px;font-weight:800;text-align:center;margin:6px 0">Selecione uma base</div>
+    <div id="baseModalSub" style="text-align:center;color:var(--txt2);font-size:12px;margin-bottom:16px">A rota vai ficar <strong style="color:#dc2626">vermelha</strong> e você não recebe novos chamados até chegar.</div>
     <div id="baseList" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
-    <button id="baseCancelar" style="width:100%;padding:10px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:10px">Decidir depois</button>
+    <button id="baseCancelar" style="width:100%;padding:10px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:10px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: descarregar — selecionar quais motos deixar na base -->
+<div id="descModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;padding:24px;z-index:200">
+  <div style="background:var(--surf);border-radius:14px;padding:22px;width:100%;max-width:400px">
+    <div style="font-size:32px;text-align:center">🏠</div>
+    <div id="descTit" style="font-size:17px;font-weight:800;text-align:center;margin:4px 0">Chegou na base</div>
+    <div style="text-align:center;color:var(--txt2);font-size:11px;margin-bottom:14px">Marque as motos que vai deixar aqui. As <strong style="color:var(--acc)">desmarcadas</strong> seguem com você (ex: moto reserva).</div>
+    <div id="descList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;max-height:280px;overflow-y:auto"></div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;font-size:11px">
+      <button id="descAll" style="flex:1;padding:7px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt2);border-radius:6px">marcar todas</button>
+      <button id="descNone" style="flex:1;padding:7px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt2);border-radius:6px">desmarcar todas</button>
+    </div>
+    <button id="descConfirmar" style="width:100%;padding:13px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px">✓ Confirmar descarga</button>
+    <button id="descCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:4px">Cancelar</button>
   </div>
 </div>
 
@@ -1211,8 +1233,20 @@ function showApp(){
 function renderTopBar(){
   if(!me) return;
   document.getElementById('tbnome').textContent = me.nome;
-  const slotsTxt = turnoAtivo ? ` · ${turnoAtivo.slotsOcupados?.length || 0}/${turnoAtivo.slotsTotal || 0} 🏍` : '';
-  document.getElementById('tbplaca').textContent = (me.placa || me.veiculoPlaca || 'sem veículo') + slotsTxt;
+  document.getElementById('tbplaca').textContent = me.placa || me.veiculoPlaca || 'sem veículo';
+  // Botão de slots
+  const btn = document.getElementById('slotsbtn');
+  if(turnoAtivo && slotsTotalCount() > 0){
+    const oc = slotsCount();
+    btn.classList.add('show');
+    btn.classList.toggle('full', isFull());
+    btn.classList.toggle('descarregando', turnoAtivo.modo === 'descarregando');
+    document.getElementById('slotsbtnTxt').textContent = `${oc}/${slotsTotalCount()}`;
+    btn.disabled = oc === 0;
+    btn.style.opacity = oc === 0 ? 0.5 : 1;
+  } else {
+    btn.classList.remove('show');
+  }
   document.getElementById('tbav').textContent = me.nome.charAt(0).toUpperCase();
   document.getElementById('tbav').style.background = me.color;
   document.getElementById('tbav').style.color = '#fff';
@@ -1427,13 +1461,24 @@ function atualizaCargaUI(){
 }
 
 // ============== MODAL: ir pra base ==============
-function abrirModalBase(){
+function abrirModalBase(autoFull){
+  // autoFull = true → texto de full; false → voluntário
+  const oc = slotsCount();
+  const tot = slotsTotalCount();
+  document.getElementById('baseModalIcon').textContent = autoFull ? '🏍🏍🏍' : '🏠';
+  document.getElementById('baseModalTit').textContent = autoFull
+    ? 'Slots cheios!'
+    : `Descarregar em base · ${oc}/${tot} motos`;
+  document.getElementById('baseModalSub').innerHTML = autoFull
+    ? `Selecione uma base Vammo pra descarregar. A rota vai ficar <strong style="color:#dc2626">vermelha</strong> e você não recebe novos chamados até chegar.`
+    : `Escolha a base mais conveniente. Você decide na chegada quais motos descarregar.`;
+  document.getElementById('baseCancelar').textContent = autoFull ? 'Decidir depois' : 'Cancelar';
+
   const list = document.getElementById('baseList');
   const ativas = Object.values(bases).filter(b => b.ativo !== false && b.lat != null);
   if(ativas.length === 0){
     list.innerHTML = `<div style="text-align:center;color:var(--txt2);padding:20px;font-size:12px">Nenhuma base cadastrada ainda.<br>Fale com a torre.</div>`;
   } else {
-    // Calcula distância pra cada base e ordena
     const comDist = ativas.map(b => ({
       ...b,
       dist: myPos ? haversine(myPos, {lat:b.lat,lng:b.lng}) : 0
@@ -1457,6 +1502,84 @@ function abrirModalBase(){
 }
 function fecharModalBase(){
   document.getElementById('baseModal').style.display = 'none';
+}
+
+// ============== MODAL: descarregar (seleção por moto) ==============
+let _descBase = null;          // base onde tá descarregando
+let _descSelecionadas = {};    // {slotId: true}
+
+function abrirModalDescarga(base){
+  _descBase = base;
+  // Default: todas selecionadas (comportamento "descarregar tudo" se confirmar direto)
+  _descSelecionadas = {};
+  (turnoAtivo?.slotsOcupados || []).forEach(s => { _descSelecionadas[s.id] = true; });
+  document.getElementById('descTit').textContent = `Chegou em ${base.nome}`;
+  renderDescList();
+  document.getElementById('descModal').style.display = 'flex';
+}
+function fecharModalDescarga(){
+  document.getElementById('descModal').style.display = 'none';
+  _descBase = null;
+  _descSelecionadas = {};
+}
+function renderDescList(){
+  const slots = turnoAtivo?.slotsOcupados || [];
+  const html = slots.map((s, i) => {
+    const idade = Math.floor((Date.now() - s.ocupadoEm) / 60000);
+    const idadeTxt = idade < 60 ? idade+'min' : Math.floor(idade/60)+'h'+(idade%60)+'min';
+    const origem = s.source === 'saida' ? '🚪 Saída da base'
+      : s.source === 'cliente' ? `👤 Cliente${s.clienteName ? ' · '+esc(s.clienteName) : ''}`
+      : '🏍 Moto';
+    const marcada = _descSelecionadas[s.id];
+    return `<label data-slotid="${s.id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${marcada ? 'rgba(22,163,74,0.12)' : 'var(--surf2)'};border:1px solid ${marcada ? '#16a34a' : 'var(--bdr)'};border-radius:8px;cursor:pointer">
+      <input type="checkbox" ${marcada?'checked':''} style="width:18px;height:18px;accent-color:#16a34a;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px">🏍 Moto ${i+1}${s.placa ? ' · '+esc(s.placa) : ''}</div>
+        <div style="color:var(--txt2);font-size:10px;margin-top:1px">${origem} · há ${idadeTxt}</div>
+      </div>
+      <div style="font-size:11px;color:${marcada?'#16a34a':'var(--txt3)'};font-weight:700">${marcada ? '✓ deixar' : '↩ manter'}</div>
+    </label>`;
+  }).join('');
+  document.getElementById('descList').innerHTML = html;
+  // Wire checkboxes
+  document.querySelectorAll('#descList label').forEach(lb => {
+    const cb = lb.querySelector('input[type=checkbox]');
+    lb.onclick = (e) => {
+      if(e.target === cb) return;
+      cb.checked = !cb.checked;
+      _descSelecionadas[lb.dataset.slotid] = cb.checked;
+      renderDescList();
+    };
+    cb.onchange = () => {
+      _descSelecionadas[lb.dataset.slotid] = cb.checked;
+      renderDescList();
+    };
+  });
+  // Contagem no botão
+  const totalSel = Object.values(_descSelecionadas).filter(v => v).length;
+  document.getElementById('descConfirmar').textContent = totalSel === 0
+    ? '↩ Manter todas e sair'
+    : `✓ Descarregar ${totalSel} moto${totalSel>1?'s':''}${turnoAtivo.slotsOcupados.length - totalSel > 0 ? ` · manter ${turnoAtivo.slotsOcupados.length - totalSel}` : ''}`;
+}
+
+function confirmarDescarga(){
+  if(!turnoAtivo) return;
+  const slotsOriginal = turnoAtivo.slotsOcupados || [];
+  const aSair = slotsOriginal.filter(s => _descSelecionadas[s.id]);
+  const aSair_ids = new Set(aSair.map(s => s.id));
+  turnoAtivo.slotsOcupados = slotsOriginal.filter(s => !aSair_ids.has(s.id));
+  saveTurno();
+  syncTurnoToTorre();
+  renderTopBar();
+  const n = aSair.length;
+  if(n > 0){
+    showToast(`✓ ${n} moto${n>1?'s descarregadas':' descarregada'} em ${_descBase.nome}`);
+  } else {
+    showToast(`↩ Saindo de ${_descBase.nome} sem descarregar`);
+  }
+  // Sai do modo descarga (mesmo se ainda tem motos — colab decide manter)
+  sairModoDescarga();
+  fecharModalDescarga();
 }
 
 function afterFilaChange(msg){
@@ -1645,16 +1768,37 @@ function bootApp(){
   document.getElementById('cargaDeixouMinus').onclick = () => { if(_cargaDeixou > 0){ _cargaDeixou--; atualizaCargaUI(); } };
   document.getElementById('cargaCancelar').onclick = fecharModalCarga;
   document.getElementById('cargaConfirmar').onclick = () => {
-    // Aplica check-in (pegou) e check-out (deixou)
     if(_cargaDeixou > 0) checkOutMotos(_cargaDeixou);
     for(let i = 0; i < _cargaPegou; i++){
-      checkInMoto({ source: 'cliente', chamadoId: _cargaChamado?.id });
+      checkInMoto({
+        source: 'cliente',
+        chamadoId: _cargaChamado?.id,
+        clienteName: _cargaChamado?.cliente || ''
+      });
     }
     const cb = _cargaCallback;
     fecharModalCarga();
     if(cb) cb();
   };
   document.getElementById('baseCancelar').onclick = fecharModalBase;
+
+  // Botão slots no topbar — abre modal de bases (voluntário)
+  document.getElementById('slotsbtn').onclick = () => {
+    if(slotsCount() === 0) return;
+    abrirModalBase(false); // false = voluntário (texto suave)
+  };
+
+  // Modal de descarga (seleção por moto)
+  document.getElementById('descCancelar').onclick = fecharModalDescarga;
+  document.getElementById('descAll').onclick = () => {
+    (turnoAtivo?.slotsOcupados || []).forEach(s => { _descSelecionadas[s.id] = true; });
+    renderDescList();
+  };
+  document.getElementById('descNone').onclick = () => {
+    Object.keys(_descSelecionadas).forEach(k => { _descSelecionadas[k] = false; });
+    renderDescList();
+  };
+  document.getElementById('descConfirmar').onclick = confirmarDescarga;
 
   // Mantém tela ativa durante turno (Wake Lock)
   requestWakeLock();
@@ -1917,6 +2061,7 @@ function checkInMoto(opts){
     ocupadoEm: Date.now(),
     source: opts.source || 'cliente',
     chamadoId: opts.chamadoId || null,
+    clienteName: opts.clienteName || null,
     placa: opts.placa || null
   });
   saveTurno();
@@ -2039,19 +2184,12 @@ function checkArrivedAtBase(){
 function onArrivedAtBase(base){
   vibrate([100, 50, 100, 50, 300]);
   playBeep(); setTimeout(playBeep, 250);
-  const qtd = slotsCount();
-  if(qtd === 0){
-    if(confirm(`🏠 Chegou em ${base.nome}.\n\nSair do modo descarga?`)){
-      sairModoDescarga();
-      showToast('✓ Modo normal');
-    }
+  if(slotsCount() === 0){
+    sairModoDescarga();
+    showToast(`🏠 Chegou em ${base.nome} · sem motos`);
     return;
   }
-  if(confirm(`🏠 Chegou em ${base.nome}!\n\nDescarregar ${qtd} moto${qtd>1?'s':''} aqui?`)){
-    checkOutMotos(qtd);
-    sairModoDescarga();
-    showToast(`✓ ${qtd} moto${qtd>1?'s descarregadas':' descarregada'} em ${base.nome}`);
-  }
+  abrirModalDescarga(base);
 }
 
 async function encerrarTurno(){
