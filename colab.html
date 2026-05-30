@@ -53,25 +53,81 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #login button:active{transform:scale(0.98)}
 #login .hint{margin-top:22px;font-size:11px;color:var(--txt3);text-align:center;line-height:1.6;position:relative;z-index:1;max-width:320px}
 
-/* ===== INÍCIO DE TURNO ===== */
-#turno{position:fixed;inset:0;background:linear-gradient(135deg,#0a1428 0%,#1e3050 100%);display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px;padding-top:max(40px,env(safe-area-inset-top));z-index:90;overflow-y:auto}
+/* ===== WIZARD DE CHECK-IN / CHECK-OUT ===== */
+#turno{position:fixed;inset:0;background:linear-gradient(135deg,#0a1428 0%,#1e3050 100%);display:none;flex-direction:column;z-index:90}
 #turno.show{display:flex}
-#turno .hd{text-align:center;margin-bottom:24px;width:100%;max-width:420px}
-#turno .hd .ic{font-size:42px;margin-bottom:8px}
-#turno .hd h1{font-size:18px;letter-spacing:0.5px}
-#turno .hd p{font-size:12px;color:var(--txt2);margin-top:4px}
-#turno .step{width:100%;max-width:420px;margin-bottom:14px;background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:14px}
-#turno .step .lbl{font-size:11px;color:var(--txt2);font-weight:700;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
-#turno .step .lbl .num{background:var(--acc);color:#001823;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
-#turno select, #turno input{width:100%;font-size:15px;padding:14px;border:1px solid var(--bdr);background:var(--surf2);color:var(--txt);border-radius:10px;font-family:inherit}
-#turno select:focus, #turno input:focus{outline:2px solid var(--acc);border-color:transparent}
-#turno .vh-card{padding:10px;background:var(--surf2);border-radius:8px;margin-top:8px;font-size:11px;color:var(--txt2);display:none}
-#turno .vh-card.show{display:block}
-#turno .vh-card .nm{color:var(--txt);font-weight:700;font-size:13px;margin-bottom:4px}
-#turno .footer-actions{width:100%;max-width:420px;display:flex;flex-direction:column;gap:10px;margin-top:10px;padding-bottom:24px}
-#turno .start-btn{padding:18px;background:linear-gradient(135deg,var(--acc) 0%,#0099c4 100%);color:#001823;font-size:16px;font-weight:800;border:none;border-radius:12px;cursor:pointer;letter-spacing:0.5px;box-shadow:0 8px 24px rgba(0,180,229,0.3);text-transform:uppercase}
-#turno .start-btn:disabled{opacity:0.5;cursor:not-allowed;box-shadow:none}
-#turno .cancel-btn{padding:12px;background:transparent;color:var(--txt3);font-size:12px;border:none;cursor:pointer}
+#wiz-header{flex:0 0 auto;padding:16px 20px;padding-top:max(16px,env(safe-area-inset-top));background:rgba(10,20,40,0.95);border-bottom:1px solid var(--bdr);position:sticky;top:0;z-index:5}
+#wiz-header .titrow{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+#wiz-header .ic{font-size:24px}
+#wiz-header h1{font-size:15px;flex:1;letter-spacing:0.3px}
+#wiz-header .step-counter{font-size:11px;color:var(--txt2);font-weight:700}
+#wiz-prog{display:flex;gap:4px;height:4px}
+#wiz-prog .seg{flex:1;background:var(--surf2);border-radius:2px;transition:background 0.3s}
+#wiz-prog .seg.done{background:#16a34a}
+#wiz-prog .seg.curr{background:var(--acc)}
+#wiz-body{flex:1;overflow-y:auto;padding:20px;-webkit-overflow-scrolling:touch}
+#wiz-body .step-tit{font-size:18px;font-weight:800;margin-bottom:4px}
+#wiz-body .step-sub{font-size:12px;color:var(--txt2);margin-bottom:18px;line-height:1.4}
+#wiz-footer{flex:0 0 auto;padding:14px 18px;padding-bottom:max(14px,env(safe-area-inset-bottom));background:rgba(10,20,40,0.95);border-top:1px solid var(--bdr);display:flex;gap:10px;position:sticky;bottom:0}
+#wiz-footer button{padding:14px;border-radius:10px;font-size:14px;font-weight:800;border:none;cursor:pointer;letter-spacing:0.3px}
+#wiz-footer .voltar{background:var(--surf2);color:var(--txt2);flex:0 0 100px}
+#wiz-footer .next{flex:1;background:linear-gradient(135deg,var(--acc) 0%,#0099c4 100%);color:#001823;box-shadow:0 4px 14px rgba(0,180,229,0.3);text-transform:uppercase}
+#wiz-footer .next:disabled{opacity:0.5;cursor:not-allowed;box-shadow:none;background:var(--surf2);color:var(--txt3)}
+#wiz-footer .sair{background:transparent;color:var(--txt3);flex:0 0 70px;font-weight:500}
+
+/* Kit */
+.kit-section{margin-bottom:18px}
+.kit-section h3{font-size:12px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;color:var(--acc);margin-bottom:10px}
+.kit-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf);border:1px solid var(--bdr);border-radius:8px;margin-bottom:6px}
+.kit-item .lbl{flex:1;font-size:13px}
+.kit-item input[type=number]{width:60px;padding:6px 8px;text-align:center;font-size:14px;font-weight:700;border:1px solid var(--bdr);background:var(--surf2);color:var(--txt);border-radius:6px}
+.kit-check{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;margin-bottom:4px;cursor:pointer;user-select:none}
+.kit-check input{width:20px;height:20px;accent-color:var(--acc);cursor:pointer;flex:0 0 20px}
+.kit-check .lbl{flex:1;font-size:12px}
+.kit-check.checked{background:rgba(22,163,74,0.1);border-color:#16a34a}
+.ciencia-box{padding:14px;background:rgba(0,180,229,0.08);border:1px solid var(--acc);border-radius:10px;margin-top:14px}
+.ciencia-box label{display:flex;align-items:flex-start;gap:10px;cursor:pointer}
+.ciencia-box input{margin-top:2px;width:22px;height:22px;accent-color:var(--acc);flex:0 0 22px}
+.ciencia-box .txt{font-size:12px;line-height:1.4;color:var(--txt)}
+
+/* Veiculo */
+.vlist{display:flex;flex-direction:column;gap:8px}
+.vitem{padding:14px;background:var(--surf);border:2px solid var(--bdr);border-radius:10px;cursor:pointer;transition:all 0.15s}
+.vitem.disabled{background:var(--bg);opacity:0.55;cursor:not-allowed;filter:grayscale(0.7)}
+.vitem.disabled .lock{display:inline-block;background:#dc2626;color:#fff;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:800;margin-left:6px;letter-spacing:0.3px}
+.vitem.selected{border-color:var(--acc);background:rgba(0,180,229,0.08);box-shadow:0 4px 12px rgba(0,180,229,0.2)}
+.vitem .placa{font-family:'IBM Plex Mono',monospace;font-weight:800;font-size:15px;letter-spacing:0.5px}
+.vitem .modelo{font-size:12px;color:var(--txt2);margin-top:2px}
+.vitem .meta{font-size:10px;color:var(--txt3);margin-top:4px;font-family:'IBM Plex Mono',monospace}
+
+.km-box{margin-top:14px;padding:12px;background:var(--surf);border:1px solid var(--bdr);border-radius:10px}
+.km-box label{font-size:11px;color:var(--txt2);font-weight:700;display:block;margin-bottom:6px}
+.km-box input{width:100%;padding:14px;font-size:18px;font-weight:800;font-family:'IBM Plex Mono',monospace;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;text-align:center}
+
+/* Fotos */
+.fotos-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.foto-slot{aspect-ratio:1/1;background:var(--surf);border:2px dashed var(--bdr);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;cursor:pointer;overflow:hidden}
+.foto-slot.has{border-style:solid;border-color:#16a34a;background:#000}
+.foto-slot.uploading{border-color:var(--acc)}
+.foto-slot .lbl{position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;z-index:2}
+.foto-slot .ic{font-size:32px;opacity:0.4}
+.foto-slot .hint{font-size:10px;color:var(--txt3);margin-top:6px}
+.foto-slot img{width:100%;height:100%;object-fit:cover}
+.foto-slot .status{position:absolute;bottom:6px;left:6px;right:6px;background:rgba(0,0,0,0.85);color:#fff;font-size:10px;padding:3px 6px;border-radius:4px;text-align:center}
+.foto-slot input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;z-index:3}
+
+/* Assinatura */
+.sig-box{background:#fff;border:2px solid var(--bdr);border-radius:10px;position:relative;height:200px;overflow:hidden}
+.sig-box canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.sig-box .clear{position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:#fff;border:none;padding:4px 10px;font-size:11px;border-radius:6px;cursor:pointer}
+.sig-box .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px;pointer-events:none}
+.sig-box.has .ph{display:none}
+
+/* Resumo */
+.res-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--bdr);font-size:12px}
+.res-row:last-child{border-bottom:none}
+.res-row .k{color:var(--txt2);font-weight:600}
+.res-row .v{color:var(--txt);font-weight:700;text-align:right}
 
 /* ===== APP ===== */
 #app{display:none;flex-direction:column;height:100vh;height:100dvh}
@@ -256,43 +312,21 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   </div>
 </div>
 
-<!-- INÍCIO DE TURNO -->
+<!-- WIZARD DE TURNO (check-in e check-out) -->
 <div id="turno">
-  <div class="hd">
-    <div class="ic">🛻</div>
-    <h1 id="turnoTit">Iniciar turno</h1>
-    <p id="turnoSub">Selecione o veículo, confirme o KM e me diga se já está saindo com motos.</p>
+  <div id="wiz-header">
+    <div class="titrow">
+      <div class="ic" id="wiz-ic">🛻</div>
+      <h1 id="wiz-tit">Check-in do turno</h1>
+      <div class="step-counter" id="wiz-counter">1 / 4</div>
+    </div>
+    <div id="wiz-prog"></div>
   </div>
-
-  <div class="step">
-    <div class="lbl"><span class="num">1</span>Veículo principal</div>
-    <select id="t_veh"></select>
-    <div class="vh-card" id="t_vh_card"></div>
-  </div>
-
-  <div class="step" id="t_carreta_step" style="display:none">
-    <div class="lbl"><span class="num">2</span>Carreta (opcional)</div>
-    <select id="t_carreta">
-      <option value="">— sem carreta —</option>
-    </select>
-    <div class="vh-card" id="t_carreta_card"></div>
-  </div>
-
-  <div class="step" id="t_km_step" style="display:none">
-    <div class="lbl"><span class="num">3</span>KM atual do veículo</div>
-    <input type="number" id="t_km" min="0" placeholder="000000" inputmode="numeric">
-    <div style="font-size:10px;color:var(--txt3);margin-top:4px" id="t_km_hint">Último registrado: —</div>
-  </div>
-
-  <div class="step" id="t_motos_step" style="display:none">
-    <div class="lbl"><span class="num">4</span>Quantas motos você está levando?</div>
-    <input type="number" id="t_motos" min="0" value="0" inputmode="numeric">
-    <div style="font-size:10px;color:var(--txt3);margin-top:4px" id="t_motos_hint">Slots disponíveis: —</div>
-  </div>
-
-  <div class="footer-actions">
-    <button class="start-btn" id="t_iniciar" disabled>▶ Iniciar turno</button>
-    <button class="cancel-btn" id="t_sair">⏻ Sair</button>
+  <div id="wiz-body"></div>
+  <div id="wiz-footer">
+    <button class="sair" id="wiz-sair">⏻</button>
+    <button class="voltar" id="wiz-voltar">← Voltar</button>
+    <button class="next" id="wiz-next" disabled>Próximo →</button>
   </div>
 </div>
 
@@ -1746,13 +1780,8 @@ function bootApp(){
     setStatus(next);
   };
   document.getElementById('btlogout').onclick = async () => {
-    if(!confirm('Encerrar turno e sair?\n\nO veículo voltará a ficar disponível pra outros colaboradores.')) return;
-    sync.send('motorista:logout', { id: me.id });
-    if(watchId) navigator.geolocation.clearWatch(watchId);
-    if(wakeLock && !wakeLock.released) wakeLock.release().catch(()=>{});
-    await encerrarTurno();
-    clearMe();
-    location.reload();
+    // Inicia wizard de check-out (faz o logout no final)
+    await startCheckOut();
   };
   document.getElementById('recenter').onclick = () => {
     if(myPos) map.setView([myPos.lat, myPos.lng], 15);
@@ -1815,22 +1844,51 @@ function bootApp(){
   renderChamadoCard();
 }
 
-// ============== TURNO (selecionar veículo + KM + motos iniciais) ==============
-let _turnoVeiculos = {}; // veículos carregados pra seleção
-let turnoAtivo = null;   // turno atualmente ativo do colab
+// ============== WIZARD DE TURNO (check-in / check-out) ==============
+let _turnoVeiculos = {};
+let turnoAtivo = null;
+let wizMode = 'in';        // 'in' (check-in) | 'out' (check-out)
+let wizStep = 0;
+let wizSteps = [];         // array de funções pra renderizar cada step
+let wizData = {};          // dados acumulados no wizard
 
-function showTurno(){
-  document.getElementById('login').classList.add('hide');
-  document.getElementById('app').classList.remove('show');
-  document.getElementById('turno').classList.add('show');
-}
-function hideTurno(){ document.getElementById('turno').classList.remove('show'); }
+// === CONFIG DO KIT ===
+const KIT_CONSUMIVEIS = [
+  { key: 'roda_traseira',  label: 'Roda traseira' },
+  { key: 'roda_dianteira', label: 'Roda dianteira' },
+  { key: 'bateria_cpx',    label: 'Bateria CPX' },
+  { key: 'bateria_confort',label: 'Bateria Confort' },
+  { key: 'ecu',            label: 'ECU' },
+  { key: 'central_alarme', label: 'Central de alarme' },
+  { key: 'manete_freio',   label: 'Manete de freio' }
+];
+const KIT_BOLSA = [
+  { key: 'bolsa',           label: 'Bolsa / mala' },
+  { key: 'luva',            label: 'Luva' },
+  { key: 'alicate',         label: 'Alicate universal' },
+  { key: 'chave_l8',        label: 'Chave L8' },
+  { key: 'chave_l10',       label: 'Chave L10' },
+  { key: 'chave_l12',       label: 'Chave L12' },
+  { key: 'chave_l14',       label: 'Chave L14' },
+  { key: 'chave_l17',       label: 'Chave L17' },
+  { key: 'chave_fenda',     label: 'Chave de fenda' },
+  { key: 'chave_philips',   label: 'Chave Philips' },
+  { key: 'soquete_17',      label: 'Soquete 17' },
+  { key: 'extensao_soquete',label: 'Extensão para soquete' },
+  { key: 'calibrador',      label: 'Calibrador de pneu' },
+  { key: 'torquimetro',     label: 'Torquímetro' },
+  { key: 'limpa_contato',   label: 'Limpa-contato' },
+  { key: 'compressor',      label: 'Compressor de ar' },
+  { key: 'saca_valvulas',   label: 'Saca-válvulas' },
+  { key: 'profundimetro',   label: 'Profundímetro' },
+  { key: 'agulhas_reparo',  label: '2 agulhas de reparo de pneu' },
+  { key: 'macarrao_pneus',  label: 'Macarrão para reparo de pneus' }
+];
 
 async function loadVeiculosDisponiveis(){
   await ensureFb();
   const snap = await firebase.database().ref('vammo/veiculos').once('value');
   _turnoVeiculos = snap.val() || {};
-  // Também pré-carrega bases (pra modal de descarga)
   const baseSnap = await firebase.database().ref('vammo/bases').once('value');
   bases = baseSnap.val() || {};
   return _turnoVeiculos;
@@ -1840,200 +1898,612 @@ async function loadTurnoExistente(colabId){
   const snap = await firebase.database().ref('vammo/turnos/' + colabId).once('value');
   return snap.val();
 }
-
 function disponivelParaMim(v, meId){
   if(v.ativo === false) return false;
-  // Sem atribuição OU já é meu
   return !v.atribuidoA || v.atribuidoA === meId;
 }
 
-function renderTurnoUI(){
-  const veh = $('#t_veh');
-  const veiculos = Object.values(_turnoVeiculos);
-  // Veículos principais: carro, caminhão, moto (não carreta — carreta é atrelada)
-  const principais = veiculos
-    .filter(v => v.tipo !== 'carreta' && disponivelParaMim(v, me.id))
-    .sort((a,b) => (a.placa||'').localeCompare(b.placa||''));
-  if(principais.length === 0){
-    veh.innerHTML = '<option value="">⚠ Nenhum veículo disponível — fale com a torre</option>';
+// === ENTRADA: inicia wizard de check-in ===
+async function startCheckIn(){
+  wizMode = 'in';
+  wizStep = 0;
+  wizData = {
+    kit: { consumiveis: {}, checklist: {}, ciente: false },
+    veiculoId: null, carretaId: null, km: null,
+    fotosVeiculo: { frente:null, lateral_d:null, traseira:null, lateral_e:null, painel:null },
+    fotoCarreta: null,
+    assinaturaData: null
+  };
+  wizSteps = [renderStepKit, renderStepVeiculo, renderStepCarreta, renderStepResumo];
+  setupValidators();
+  document.getElementById('wiz-ic').textContent = '🛻';
+  document.getElementById('wiz-tit').textContent = 'Check-in do turno';
+  await loadVeiculosDisponiveis();
+  document.getElementById('login').classList.add('hide');
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('turno').classList.add('show');
+  setupWizFooter();
+  renderWizStep();
+}
+
+// === ENTRADA: inicia wizard de check-out ===
+async function startCheckOut(){
+  if(slotsCount() > 0){
+    if(!confirm(`⚠ Você tem ${slotsCount()} moto(s) ainda em slots.\n\nNão é possível encerrar o turno com motos. Vou abrir o modal pra você ir a uma base descarregar.`)) return;
+    abrirModalBase(false);
     return;
   }
-  veh.innerHTML = '<option value="">— escolha um veículo —</option>' + principais.map(v => {
-    const tip = { carro:'🚗', moto:'🏍', caminhao:'🚛' }[v.tipo] || '🚗';
-    return `<option value="${v.id}">${tip} ${esc(v.placa||'?')} · ${esc((v.marca||'')+' '+(v.modelo||'')).trim()}</option>`;
-  }).join('');
+  wizMode = 'out';
+  wizStep = 0;
+  wizData = {
+    kit: { consumiveis: {}, checklist: {}, ciente: false },
+    kmFinal: null,
+    fotosVeiculo: { frente:null, lateral_d:null, traseira:null, lateral_e:null, painel:null },
+    fotoCarreta: null,
+    assinaturaData: null
+  };
+  await loadVeiculosDisponiveis();
+  wizSteps = [renderStepKit, renderStepVeiculoOut, renderStepResumo];
+  setupValidators();
+  document.getElementById('wiz-ic').textContent = '🏁';
+  document.getElementById('wiz-tit').textContent = 'Check-out do turno';
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('turno').classList.add('show');
+  setupWizFooter();
+  renderWizStep();
+}
 
-  $('#t_veh').onchange = () => onTurnoVehChange();
-  $('#t_carreta').onchange = () => onTurnoCarretaChange();
-  $('#t_km').oninput = checkTurnoCompleto;
-  $('#t_motos').oninput = onTurnoMotosChange;
-  $('#t_iniciar').onclick = iniciarTurno;
-  $('#t_sair').onclick = () => {
-    if(!confirm('Sair sem iniciar turno?')) return;
-    if(watchId) navigator.geolocation.clearWatch(watchId);
-    clearMe();
-    location.reload();
+function setupWizFooter(){
+  document.getElementById('wiz-sair').onclick = () => {
+    if(!confirm(wizMode === 'in' ? 'Sair sem iniciar turno?' : 'Cancelar check-out?')) return;
+    if(wizMode === 'in'){
+      if(watchId) navigator.geolocation.clearWatch(watchId);
+      clearMe(); location.reload();
+    } else {
+      document.getElementById('turno').classList.remove('show');
+      document.getElementById('app').classList.add('show');
+    }
+  };
+  document.getElementById('wiz-voltar').onclick = () => {
+    if(wizStep > 0){ wizStep--; renderWizStep(); }
+  };
+  document.getElementById('wiz-next').onclick = () => {
+    if(wizStep < wizSteps.length - 1){ wizStep++; renderWizStep(); }
+    else { finalizarWizard(); }
   };
 }
 
-function onTurnoVehChange(){
-  const id = $('#t_veh').value;
-  const v = id ? _turnoVeiculos[id] : null;
-  const card = $('#t_vh_card');
-  if(!v){ card.classList.remove('show'); hideEtapasPos(1); return; }
-  card.classList.add('show');
-  card.innerHTML = `
-    <div class="nm">${esc((v.marca||'')+' '+(v.modelo||''))}</div>
-    <div>${v.ano||'—'} · ${esc(v.placa)} · ${v.slots ?? 0} slot${v.slots===1?'':'s'} de motos</div>
-    <div style="margin-top:3px">Último km: ${v.ultimoKm != null ? v.ultimoKm.toLocaleString('pt-BR') + ' km' : '—'}</div>
-  `;
-  // Se for carro, mostra step de carreta
-  if(v.tipo === 'carro'){
-    $('#t_carreta_step').style.display = 'block';
-    populateCarretas();
-  } else {
-    $('#t_carreta_step').style.display = 'none';
-  }
-  // Mostra steps KM + motos
-  $('#t_km_step').style.display = 'block';
-  $('#t_km').value = v.ultimoKm ?? '';
-  $('#t_km_hint').textContent = `Último registrado: ${v.ultimoKm != null ? v.ultimoKm.toLocaleString('pt-BR') + ' km' : '—'}`;
-  $('#t_motos_step').style.display = 'block';
-  updateMotosHint();
-  checkTurnoCompleto();
-}
-
-function populateCarretas(){
-  const sel = $('#t_carreta');
-  const carretas = Object.values(_turnoVeiculos)
-    .filter(v => v.tipo === 'carreta' && disponivelParaMim(v, me.id))
-    .sort((a,b) => (a.placa||'').localeCompare(b.placa||''));
-  sel.innerHTML = '<option value="">— sem carreta —</option>' + carretas.map(c => {
-    return `<option value="${c.id}">${esc(c.placa)} · ${esc((c.marca||'')+' '+(c.modelo||''))} · ${c.slots ?? 0} slots</option>`;
+function renderWizStep(){
+  // Counter + progress
+  const total = wizSteps.length;
+  document.getElementById('wiz-counter').textContent = `${wizStep+1} / ${total}`;
+  const prog = document.getElementById('wiz-prog');
+  prog.innerHTML = wizSteps.map((_, i) => {
+    const cls = i < wizStep ? 'seg done' : i === wizStep ? 'seg curr' : 'seg';
+    return `<div class="${cls}"></div>`;
   }).join('');
-  $('#t_carreta_card').classList.remove('show');
+  // Voltar disabled no primeiro
+  document.getElementById('wiz-voltar').style.visibility = wizStep === 0 ? 'hidden' : 'visible';
+  // Botão de avançar
+  const nextBtn = document.getElementById('wiz-next');
+  nextBtn.textContent = wizStep === wizSteps.length - 1 ? (wizMode === 'in' ? '✓ Iniciar turno' : '✓ Encerrar turno') : 'Próximo →';
+  // Render step atual
+  wizSteps[wizStep]();
+  validateStep();
 }
 
-function onTurnoCarretaChange(){
-  const id = $('#t_carreta').value;
-  const c = id ? _turnoVeiculos[id] : null;
-  const card = $('#t_carreta_card');
-  if(!c){ card.classList.remove('show'); }
-  else {
-    card.classList.add('show');
-    card.innerHTML = `<div class="nm">${esc((c.marca||'')+' '+(c.modelo||''))}</div><div>${esc(c.placa)} · ${c.slots ?? 0} slots de motos</div>`;
-  }
-  updateMotosHint();
-  checkTurnoCompleto();
+function validateStep(){
+  // Cada step define se permite avançar baseado no estado
+  const fn = wizValidators[wizStep] || (() => true);
+  document.getElementById('wiz-next').disabled = !fn();
 }
+let wizValidators = [];
 
-function totalSlotsTurno(){
-  const v = _turnoVeiculos[$('#t_veh').value];
-  const c = _turnoVeiculos[$('#t_carreta').value];
-  return (v?.slots || 0) + (c?.slots || 0);
-}
+// =========== STEP 1: KIT =============
+function renderStepKit(){
+  const body = document.getElementById('wiz-body');
+  body.innerHTML = `
+    <div class="step-tit">📦 Kit de atendimento</div>
+    <div class="step-sub">Confira a quantidade de cada peça e a bolsa padrão antes de sair.</div>
 
-function updateMotosHint(){
-  const slots = totalSlotsTurno();
-  $('#t_motos').max = slots;
-  $('#t_motos_hint').textContent = slots > 0
-    ? `Slots disponíveis: ${slots} · marque 0 se está saindo vazio`
-    : '⚠ Este veículo não tem slots de motos';
-}
+    <div class="kit-section">
+      <h3>Peças (consumíveis)</h3>
+      ${KIT_CONSUMIVEIS.map(it => `
+        <div class="kit-item">
+          <div class="lbl">${esc(it.label)}</div>
+          <input type="number" min="0" max="99" id="k_${it.key}" value="${wizData.kit.consumiveis[it.key] ?? 0}" inputmode="numeric">
+        </div>
+      `).join('')}
+    </div>
 
-function onTurnoMotosChange(){
-  const slots = totalSlotsTurno();
-  let v = +$('#t_motos').value || 0;
-  if(v > slots){ v = slots; $('#t_motos').value = v; }
-  if(v < 0){ v = 0; $('#t_motos').value = 0; }
-  checkTurnoCompleto();
-}
+    <div class="kit-section">
+      <h3>Checklist da bolsa padrão</h3>
+      ${KIT_BOLSA.map(it => `
+        <label class="kit-check ${wizData.kit.checklist[it.key]?'checked':''}" data-key="${it.key}">
+          <input type="checkbox" ${wizData.kit.checklist[it.key]?'checked':''}>
+          <div class="lbl">${esc(it.label)}</div>
+        </label>
+      `).join('')}
+    </div>
 
-function hideEtapasPos(num){
-  if(num <= 1){ $('#t_carreta_step').style.display = 'none'; }
-  if(num <= 2){ $('#t_km_step').style.display = 'none'; $('#t_motos_step').style.display = 'none'; }
-  $('#t_iniciar').disabled = true;
-}
-
-function checkTurnoCompleto(){
-  const veh = $('#t_veh').value;
-  const km = +$('#t_km').value;
-  $('#t_iniciar').disabled = !(veh && km > 0);
-}
-
-async function iniciarTurno(){
-  const veh = $('#t_veh').value;
-  const carreta = $('#t_carreta').value || null;
-  const km = +$('#t_km').value;
-  const motosIniciais = Math.max(0, +$('#t_motos').value || 0);
-  if(!veh || !km){ return; }
-  const slotsTotal = totalSlotsTurno();
-  if(motosIniciais > slotsTotal){ showToast('⚠ Mais motos do que slots disponíveis', true); return; }
-
-  const btn = $('#t_iniciar');
-  btn.disabled = true; btn.textContent = '⏳ Iniciando…';
-  try {
-    const vObj = _turnoVeiculos[veh];
-    const cObj = carreta ? _turnoVeiculos[carreta] : null;
-    // Atrela veículos: marca atribuidoA
-    await ensureFb();
-    const db = firebase.database();
-    await db.ref('vammo/veiculos/' + veh).update({
-      atribuidoA: me.id,
-      atribuidoEm: Date.now(),
-      ultimoKm: km,
-      ultimoKmTs: Date.now()
-    });
-    if(carreta){
-      await db.ref('vammo/veiculos/' + carreta).update({
-        atribuidoA: me.id,
-        atribuidoEm: Date.now()
-      });
-    }
-    // Cria slots iniciais (sem placa específica por ora — só ocupados)
-    const slots = [];
-    for(let i = 0; i < motosIniciais; i++){
-      slots.push({
-        id: 'slot_' + Date.now() + '_' + i,
-        ocupadoEm: Date.now(),
-        source: 'saida',
-        placa: null  // sem placa específica nessa fase; check-in detalhado é fase 2
-      });
-    }
-    // Cria turno
-    const turno = {
-      colabId: me.id,
-      colabNome: me.nome,
-      veiculoId: veh,
-      veiculoPlaca: vObj.placa,
-      veiculoTipo: vObj.tipo,
-      carretaId: carreta || null,
-      carretaPlaca: cObj?.placa || null,
-      slotsTotal,
-      slotsOcupados: slots,
-      kmInicial: km,
-      iniciadoEm: Date.now(),
-      modo: 'normal',     // 'normal' | 'descarregando' | 'na_base'
-      ativo: true
+    <div class="ciencia-box">
+      <label>
+        <input type="checkbox" id="k_ciente" ${wizData.kit.ciente?'checked':''}>
+        <div class="txt">Confirmo que estou <strong>ciente do kit</strong> que está saindo comigo. Em caso de divergência ao final do turno, sou responsável pelos itens faltantes.</div>
+      </label>
+    </div>
+  `;
+  // Bind: consumíveis
+  KIT_CONSUMIVEIS.forEach(it => {
+    const el = document.getElementById('k_' + it.key);
+    el.oninput = () => {
+      wizData.kit.consumiveis[it.key] = Math.max(0, +el.value || 0);
+      validateStep();
     };
-    await db.ref('vammo/turnos/' + me.id).set(cleanForFb(turno));
-    turnoAtivo = turno;
-    // Atualiza me com info do veículo
-    me.veiculoId = veh;
-    me.veiculoPlaca = vObj.placa;
-    me.placa = vObj.placa;
-    me.vehicle = vObj.tipo === 'carro' ? (carreta ? 'pickup_carreta' : 'pickup') : vObj.tipo;
-    saveMe(me);
-    showToast('▶ Turno iniciado em ' + esc(vObj.placa));
-    hideTurno();
-    document.getElementById('app').classList.add('show');
-    if(!sync){ sync = createSync(); bootApp(); }
-    else { /* já bootado */ }
+  });
+  // Bind: checklist
+  body.querySelectorAll('.kit-check').forEach(lb => {
+    const cb = lb.querySelector('input[type=checkbox]');
+    cb.onchange = () => {
+      wizData.kit.checklist[lb.dataset.key] = cb.checked;
+      lb.classList.toggle('checked', cb.checked);
+      validateStep();
+    };
+  });
+  // Ciência
+  document.getElementById('k_ciente').onchange = (e) => {
+    wizData.kit.ciente = e.target.checked;
+    validateStep();
+  };
+}
+wizValidators[0] = () => wizData.kit.ciente; // step 0 só exige ciência
+
+// =========== STEP 2: VEÍCULO + FOTOS =============
+function renderStepVeiculo(){
+  const body = document.getElementById('wiz-body');
+  const principais = Object.values(_turnoVeiculos)
+    .filter(v => v.tipo !== 'carreta')
+    .sort((a,b) => (a.placa||'').localeCompare(b.placa||''));
+  const sel = wizData.veiculoId;
+  body.innerHTML = `
+    <div class="step-tit">🚗 Selecione o veículo</div>
+    <div class="step-sub">Disponíveis em destaque. Os <strong>em uso</strong> ficam cinza.</div>
+    <div class="vlist" id="vlist"></div>
+    ${sel ? `
+      <div class="km-box">
+        <label>KM atual do veículo</label>
+        <input type="number" id="vw_km" min="0" placeholder="000000" inputmode="numeric" value="${wizData.km ?? (_turnoVeiculos[sel]?.ultimoKm ?? '')}">
+        <div style="font-size:10px;color:var(--txt3);margin-top:6px">Último registrado: ${_turnoVeiculos[sel]?.ultimoKm != null ? _turnoVeiculos[sel].ultimoKm.toLocaleString('pt-BR')+' km' : '—'}</div>
+      </div>
+      <div style="margin-top:18px">
+        <div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">📸 Fotos obrigatórias (4 lados + painel ligado)</div>
+        <div class="fotos-grid" id="vw_fotos"></div>
+      </div>
+    ` : ''}
+  `;
+  const vlist = document.getElementById('vlist');
+  vlist.innerHTML = principais.map(v => {
+    const isMine = v.atribuidoA === me.id;
+    const isOther = v.atribuidoA && v.atribuidoA !== me.id;
+    const isSel = v.id === sel;
+    const cls = isOther ? 'vitem disabled' : isSel ? 'vitem selected' : 'vitem';
+    const tip = { carro:'🚗', moto:'🏍', caminhao:'🚛' }[v.tipo] || '🚗';
+    return `<div class="${cls}" data-vid="${v.id}">
+      <div class="placa">${tip} ${esc(v.placa||'?')}${isOther?'<span class="lock">EM USO</span>':''}</div>
+      <div class="modelo">${esc((v.marca||'')+' '+(v.modelo||'')).trim() || '—'}${v.ano?' · '+v.ano:''}</div>
+      <div class="meta">${v.slots ?? 0} slot${v.slots===1?'':'s'} · último km: ${v.ultimoKm != null ? v.ultimoKm.toLocaleString('pt-BR') : '—'}</div>
+    </div>`;
+  }).join('');
+  vlist.querySelectorAll('.vitem:not(.disabled)').forEach(it => {
+    it.onclick = () => {
+      wizData.veiculoId = it.dataset.vid;
+      wizData.km = _turnoVeiculos[it.dataset.vid]?.ultimoKm ?? null;
+      renderStepVeiculo();
+      validateStep();
+    };
+  });
+  if(sel){
+    document.getElementById('vw_km').oninput = (e) => {
+      wizData.km = +e.target.value || 0;
+      validateStep();
+    };
+    renderFotosGrid('vw_fotos', wizData.fotosVeiculo, [
+      ['frente','Frente'],['lateral_d','Lateral D'],['traseira','Traseira'],['lateral_e','Lateral E'],['painel','Painel ligado']
+    ]);
+  }
+}
+wizValidators[1] = () => {
+  const f = wizData.fotosVeiculo;
+  return !!wizData.veiculoId && !!wizData.km && f.frente && f.lateral_d && f.traseira && f.lateral_e && f.painel;
+};
+
+// =========== STEP 3: CARRETA (opcional se carro) =============
+function renderStepCarreta(){
+  const body = document.getElementById('wiz-body');
+  const vSel = wizData.veiculoId ? _turnoVeiculos[wizData.veiculoId] : null;
+  if(!vSel || vSel.tipo !== 'carro'){
+    // Não precisa de carreta — pula
+    body.innerHTML = `<div class="step-tit">🚛 Carreta</div>
+    <div class="step-sub">Veículo selecionado é ${vSel?.tipo || '—'} — não precisa de carreta.</div>
+    <div style="padding:20px;text-align:center;color:var(--txt3)">Pode avançar.</div>`;
+    return;
+  }
+  const carretas = Object.values(_turnoVeiculos)
+    .filter(v => v.tipo === 'carreta')
+    .sort((a,b) => (a.placa||'').localeCompare(b.placa||''));
+  const sel = wizData.carretaId;
+  body.innerHTML = `
+    <div class="step-tit">🚛 Carreta (opcional)</div>
+    <div class="step-sub">Selecione se vai levar carreta. Foto da placa obrigatória se sim.</div>
+    <div class="vlist" id="clist">
+      <div class="vitem ${!sel?'selected':''}" data-vid="">
+        <div class="placa">↩ Sem carreta</div>
+        <div class="modelo">Vai sair só com o veículo principal</div>
+      </div>
+    </div>
+    <div class="vlist" id="clist2" style="margin-top:8px"></div>
+    ${sel ? `
+      <div style="margin-top:18px">
+        <div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">📸 Foto da placa</div>
+        <div class="fotos-grid" id="ct_fotos"></div>
+      </div>
+    ` : ''}
+  `;
+  document.getElementById('clist').querySelector('.vitem').onclick = () => {
+    wizData.carretaId = null;
+    wizData.fotoCarreta = null;
+    renderStepCarreta(); validateStep();
+  };
+  document.getElementById('clist2').innerHTML = carretas.map(v => {
+    const isMine = v.atribuidoA === me.id;
+    const isOther = v.atribuidoA && v.atribuidoA !== me.id;
+    const isSel = v.id === sel;
+    const cls = isOther ? 'vitem disabled' : isSel ? 'vitem selected' : 'vitem';
+    return `<div class="${cls}" data-vid="${v.id}">
+      <div class="placa">🚛 ${esc(v.placa||'?')}${isOther?'<span class="lock">EM USO</span>':''}</div>
+      <div class="modelo">${esc((v.marca||'')+' '+(v.modelo||'')).trim() || '—'}</div>
+      <div class="meta">${v.slots ?? 0} slots</div>
+    </div>`;
+  }).join('');
+  document.getElementById('clist2').querySelectorAll('.vitem:not(.disabled)').forEach(it => {
+    it.onclick = () => {
+      wizData.carretaId = it.dataset.vid;
+      renderStepCarreta(); validateStep();
+    };
+  });
+  if(sel){
+    renderFotosGrid('ct_fotos', { placa: wizData.fotoCarreta }, [['placa','Placa da carreta']], (k, val) => {
+      wizData.fotoCarreta = val;
+      validateStep();
+    });
+  }
+}
+wizValidators[2] = () => {
+  const vSel = wizData.veiculoId ? _turnoVeiculos[wizData.veiculoId] : null;
+  if(!vSel || vSel.tipo !== 'carro') return true; // não exige carreta
+  // Se selecionou carreta, precisa de foto da placa; se não, OK
+  return !wizData.carretaId || !!wizData.fotoCarreta;
+};
+
+// =========== STEP 2 do CHECK-OUT: veículo do turno + fotos + KM final =============
+function renderStepVeiculoOut(){
+  const body = document.getElementById('wiz-body');
+  const v = _turnoVeiculos[turnoAtivo?.veiculoId];
+  const c = turnoAtivo?.carretaId ? _turnoVeiculos[turnoAtivo.carretaId] : null;
+  body.innerHTML = `
+    <div class="step-tit">🚗 Devolução do veículo</div>
+    <div class="step-sub">Confirme o KM final e tire as fotos de devolução.</div>
+    <div class="vitem selected">
+      <div class="placa">${({carro:'🚗',moto:'🏍',caminhao:'🚛'}[v?.tipo]||'🚗')} ${esc(v?.placa||'?')}</div>
+      <div class="modelo">${esc((v?.marca||'')+' '+(v?.modelo||'')).trim()}</div>
+      <div class="meta">KM inicial: ${turnoAtivo?.kmInicial?.toLocaleString('pt-BR') || '—'}</div>
+    </div>
+    <div class="km-box">
+      <label>KM final do veículo</label>
+      <input type="number" id="vw_km" min="${turnoAtivo?.kmInicial || 0}" placeholder="000000" inputmode="numeric" value="${wizData.kmFinal ?? ''}">
+      <div style="font-size:10px;color:var(--txt3);margin-top:6px">Deve ser ≥ ${turnoAtivo?.kmInicial?.toLocaleString('pt-BR') || 0} km</div>
+    </div>
+    <div style="margin-top:18px">
+      <div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">📸 Fotos de devolução (4 lados + painel)</div>
+      <div class="fotos-grid" id="vw_fotos"></div>
+    </div>
+    ${c ? `<div style="margin-top:18px">
+      <div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">🚛 Foto da carreta (placa)</div>
+      <div class="fotos-grid" id="ct_fotos"></div>
+    </div>` : ''}
+  `;
+  document.getElementById('vw_km').oninput = (e) => {
+    wizData.kmFinal = +e.target.value || 0;
+    validateStep();
+  };
+  renderFotosGrid('vw_fotos', wizData.fotosVeiculo, [
+    ['frente','Frente'],['lateral_d','Lateral D'],['traseira','Traseira'],['lateral_e','Lateral E'],['painel','Painel']
+  ]);
+  if(c){
+    renderFotosGrid('ct_fotos', { placa: wizData.fotoCarreta }, [['placa','Placa']], (k, val) => {
+      wizData.fotoCarreta = val;
+      validateStep();
+    });
+  }
+}
+// Validador depende do modo
+function validateStepOut1(){
+  const f = wizData.fotosVeiculo;
+  const baseOk = wizData.kmFinal >= (turnoAtivo?.kmInicial || 0) && f.frente && f.lateral_d && f.traseira && f.lateral_e && f.painel;
+  if(!turnoAtivo?.carretaId) return baseOk;
+  return baseOk && wizData.fotoCarreta;
+}
+
+// =========== STEP RESUMO + ASSINATURA =============
+function renderStepResumo(){
+  const body = document.getElementById('wiz-body');
+  const isIn = wizMode === 'in';
+  const v = isIn ? _turnoVeiculos[wizData.veiculoId] : _turnoVeiculos[turnoAtivo?.veiculoId];
+  const c = isIn
+    ? (wizData.carretaId ? _turnoVeiculos[wizData.carretaId] : null)
+    : (turnoAtivo?.carretaId ? _turnoVeiculos[turnoAtivo.carretaId] : null);
+  const totalConsum = Object.values(wizData.kit.consumiveis).reduce((s,n) => s + (+n||0), 0);
+  const totalChecks = Object.values(wizData.kit.checklist).filter(v => v).length;
+  body.innerHTML = `
+    <div class="step-tit">📋 Resumo e assinatura</div>
+    <div class="step-sub">Confira tudo e assine pra ${isIn?'iniciar':'encerrar'} o turno.</div>
+
+    <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">Resumo</div>
+      <div class="res-row"><span class="k">Colaborador</span><span class="v">${esc(me.nome)}</span></div>
+      <div class="res-row"><span class="k">Veículo</span><span class="v">${esc(v?.placa||'?')} · ${esc((v?.marca||'')+' '+(v?.modelo||''))}</span></div>
+      ${c ? `<div class="res-row"><span class="k">Carreta</span><span class="v">${esc(c.placa)}</span></div>` : ''}
+      <div class="res-row"><span class="k">KM ${isIn?'inicial':'final'}</span><span class="v">${(isIn?wizData.km:wizData.kmFinal)?.toLocaleString('pt-BR') || '—'} km</span></div>
+      ${!isIn && turnoAtivo ? `<div class="res-row"><span class="k">KM rodados</span><span class="v">${((wizData.kmFinal||0) - (turnoAtivo.kmInicial||0)).toLocaleString('pt-BR')} km</span></div>` : ''}
+      <div class="res-row"><span class="k">Peças consumíveis</span><span class="v">${totalConsum} item(ns)</span></div>
+      <div class="res-row"><span class="k">Itens da bolsa</span><span class="v">${totalChecks} / ${KIT_BOLSA.length}</span></div>
+      <div class="res-row"><span class="k">Fotos</span><span class="v">${Object.values(wizData.fotosVeiculo).filter(v=>v).length}/5${wizData.fotoCarreta?' + carreta':''}</span></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">✍ Assinatura</div>
+    <div class="sig-box" id="sig">
+      <canvas id="sig-canvas" width="600" height="200"></canvas>
+      <button class="clear" id="sig-clear">Limpar</button>
+      <div class="ph">Assine aqui com o dedo</div>
+    </div>
+    <div style="font-size:10px;color:var(--txt3);margin-top:8px;text-align:center">Ao assinar, você ${isIn?'confirma a saída':'confirma a devolução'} com o kit e veículo declarados.</div>
+  `;
+  initSigCanvas();
+}
+function validateStepResumo(){
+  return !!wizData.assinaturaData;
+}
+
+// Validador correto por step depende do modo:
+function setupValidators(){
+  if(wizMode === 'in'){
+    wizValidators = [
+      () => wizData.kit.ciente,
+      () => !!wizData.veiculoId && !!wizData.km && Object.values(wizData.fotosVeiculo).every(v => v),
+      () => {
+        const vSel = wizData.veiculoId ? _turnoVeiculos[wizData.veiculoId] : null;
+        if(!vSel || vSel.tipo !== 'carro') return true;
+        return !wizData.carretaId || !!wizData.fotoCarreta;
+      },
+      () => !!wizData.assinaturaData
+    ];
+  } else {
+    wizValidators = [
+      () => wizData.kit.ciente,
+      validateStepOut1,
+      () => !!wizData.assinaturaData
+    ];
+  }
+}
+
+// === Fotos ===
+function renderFotosGrid(containerId, target, items, onChange){
+  const cont = document.getElementById(containerId);
+  cont.innerHTML = items.map(([key, label]) => {
+    const val = target[key];
+    return `<div class="foto-slot ${val?'has':''}" data-key="${key}">
+      <div class="lbl">${esc(label)}</div>
+      ${val
+        ? `<img src="${val}" alt="${esc(label)}">`
+        : `<div class="ic">📷</div><div class="hint">Tocar pra tirar foto</div>`
+      }
+      <input type="file" accept="image/*" capture="environment" data-key="${key}">
+    </div>`;
+  }).join('');
+  cont.querySelectorAll('.foto-slot').forEach(slot => {
+    const input = slot.querySelector('input[type=file]');
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      const key = slot.dataset.key;
+      slot.classList.add('uploading');
+      slot.querySelector('.hint')?.remove();
+      const status = document.createElement('div');
+      status.className = 'status';
+      status.textContent = '⏳ comprimindo…';
+      slot.appendChild(status);
+      try {
+        const dataUrl = await compressToDataUrl(file, 1024, 0.7);
+        // Se uploadUrl configurada na torre (vamos buscar do firebase config? não — fica no localStorage do torre)
+        // Pra simplificar: salva como dataURL inline (jpg 1024px ~150KB cada)
+        if(onChange) onChange(key, dataUrl);
+        else target[key] = dataUrl;
+        slot.classList.remove('uploading');
+        slot.classList.add('has');
+        slot.innerHTML = `<div class="lbl">${esc(items.find(it=>it[0]===key)[1])}</div>
+          <img src="${dataUrl}" alt="">
+          <input type="file" accept="image/*" capture="environment" data-key="${key}">`;
+        // Re-bind o novo input
+        const newInput = slot.querySelector('input[type=file]');
+        newInput.onchange = input.onchange;
+        validateStep();
+      } catch(err){
+        console.error(err);
+        showToast('❌ Erro na foto: ' + err.message, true);
+        slot.classList.remove('uploading');
+      }
+    };
+  });
+}
+
+async function compressToDataUrl(file, maxSize, quality){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if(w > maxSize || h > maxSize){
+        if(w > h){ h = Math.round(h * (maxSize/w)); w = maxSize; }
+        else { w = Math.round(w * (maxSize/h)); h = maxSize; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      res(canvas.toDataURL('image/jpeg', quality || 0.7));
+    };
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// === Assinatura canvas ===
+function initSigCanvas(){
+  const canvas = document.getElementById('sig-canvas');
+  const box = document.getElementById('sig');
+  if(!canvas) return;
+  // Resize pra match container
+  const rect = box.getBoundingClientRect();
+  canvas.width = rect.width * window.devicePixelRatio;
+  canvas.height = rect.height * window.devicePixelRatio;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#001823';
+  let drawing = false; let touched = false;
+  function getPos(e){
+    const r = canvas.getBoundingClientRect();
+    const p = e.touches ? e.touches[0] : e;
+    return { x: p.clientX - r.left, y: p.clientY - r.top };
+  }
+  function start(e){ e.preventDefault(); drawing = true; touched = true; box.classList.add('has'); const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+  function move(e){ if(!drawing) return; e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }
+  function end(e){ if(!drawing) return; e.preventDefault(); drawing = false;
+    wizData.assinaturaData = canvas.toDataURL('image/png');
+    validateStep();
+  }
+  canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move); canvas.addEventListener('mouseup', end); canvas.addEventListener('mouseleave', end);
+  canvas.addEventListener('touchstart', start, {passive:false}); canvas.addEventListener('touchmove', move, {passive:false}); canvas.addEventListener('touchend', end, {passive:false});
+  document.getElementById('sig-clear').onclick = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    box.classList.remove('has');
+    wizData.assinaturaData = null;
+    validateStep();
+  };
+  if(wizData.assinaturaData){
+    const img = new Image();
+    img.onload = () => { ctx.drawImage(img, 0, 0, rect.width, rect.height); box.classList.add('has'); };
+    img.src = wizData.assinaturaData;
+  }
+}
+
+// === Finalização ===
+async function finalizarWizard(){
+  const nextBtn = document.getElementById('wiz-next');
+  nextBtn.disabled = true; nextBtn.textContent = '⏳ Salvando…';
+  try {
+    if(wizMode === 'in') await finalizarCheckIn();
+    else await finalizarCheckOut();
   } catch(err){
     console.error(err);
-    showToast('❌ Erro ao iniciar turno: ' + err.message, true);
-    btn.disabled = false; btn.textContent = '▶ Iniciar turno';
+    showToast('❌ Erro: ' + err.message, true);
+    nextBtn.disabled = false;
+    nextBtn.textContent = wizMode === 'in' ? '✓ Iniciar turno' : '✓ Encerrar turno';
   }
+}
+
+async function finalizarCheckIn(){
+  const vId = wizData.veiculoId;
+  const cId = wizData.carretaId;
+  const v = _turnoVeiculos[vId];
+  const c = cId ? _turnoVeiculos[cId] : null;
+  await ensureFb();
+  const db = firebase.database();
+  // Atrela veículos
+  await db.ref('vammo/veiculos/' + vId).update({
+    atribuidoA: me.id, atribuidoEm: Date.now(),
+    ultimoKm: wizData.km, ultimoKmTs: Date.now()
+  });
+  if(cId){
+    await db.ref('vammo/veiculos/' + cId).update({ atribuidoA: me.id, atribuidoEm: Date.now() });
+  }
+  const slotsTotal = (v.slots || 0) + (c?.slots || 0);
+  const turno = {
+    colabId: me.id,
+    colabNome: me.nome,
+    veiculoId: vId, veiculoPlaca: v.placa, veiculoTipo: v.tipo,
+    carretaId: cId || null, carretaPlaca: c?.placa || null,
+    slotsTotal,
+    slotsOcupados: [],
+    kmInicial: wizData.km,
+    iniciadoEm: Date.now(),
+    modo: 'normal',
+    ativo: true,
+    checkIn: {
+      kit: wizData.kit,
+      fotosVeiculo: wizData.fotosVeiculo,
+      fotoCarreta: wizData.fotoCarreta,
+      assinatura: wizData.assinaturaData,
+      ts: Date.now()
+    }
+  };
+  await db.ref('vammo/turnos/' + me.id).set(cleanForFb(turno));
+  turnoAtivo = turno;
+  me.veiculoId = vId; me.veiculoPlaca = v.placa; me.placa = v.placa;
+  me.vehicle = v.tipo === 'carro' ? (cId ? 'pickup_carreta' : 'pickup') : v.tipo;
+  saveMe(me);
+  showToast('✓ Turno iniciado em ' + esc(v.placa));
+  document.getElementById('turno').classList.remove('show');
+  document.getElementById('app').classList.add('show');
+  if(!sync){ sync = createSync(); bootApp(); }
+}
+
+async function finalizarCheckOut(){
+  if(slotsCount() > 0){
+    showToast('⚠ Slots ocupados — descarregue primeiro', true);
+    return;
+  }
+  await ensureFb();
+  const db = firebase.database();
+  // Libera veículos
+  if(turnoAtivo?.veiculoId){
+    await db.ref('vammo/veiculos/' + turnoAtivo.veiculoId).update({
+      atribuidoA: null, atribuidoEm: null,
+      ultimoKm: wizData.kmFinal, ultimoKmTs: Date.now()
+    });
+  }
+  if(turnoAtivo?.carretaId){
+    await db.ref('vammo/veiculos/' + turnoAtivo.carretaId).update({ atribuidoA: null, atribuidoEm: null });
+  }
+  // Marca turno encerrado
+  await db.ref('vammo/turnos/' + me.id).update({
+    ativo: false, encerradoEm: Date.now(),
+    kmFinal: wizData.kmFinal,
+    checkOut: {
+      kit: wizData.kit,
+      fotosVeiculo: wizData.fotosVeiculo,
+      fotoCarreta: wizData.fotoCarreta,
+      assinatura: wizData.assinaturaData,
+      ts: Date.now()
+    }
+  });
+  // Logout + reload
+  if(sync) sync.send('motorista:logout', { id: me.id });
+  if(watchId) navigator.geolocation.clearWatch(watchId);
+  if(wakeLock && !wakeLock.released){ try{ await wakeLock.release(); }catch(_){} }
+  clearMe();
+  showToast('✓ Turno encerrado');
+  setTimeout(() => location.reload(), 800);
 }
 
 // ============== SLOTS DE MOTOS (check-in / check-out) ==============
@@ -2334,7 +2804,6 @@ document.getElementById('loginform').addEventListener('submit', async (e) => {
 });
 
 async function goToTurnoOuApp(){
-  // Verifica se já tem turno ativo
   const t = await loadTurnoExistente(me.id);
   if(t && t.ativo){
     turnoAtivo = t;
@@ -2349,10 +2818,9 @@ async function goToTurnoOuApp(){
     if(!sync){ sync = createSync(); }
     bootApp();
   } else {
-    // Pré-carrega veículos disponíveis
-    await loadVeiculosDisponiveis();
-    renderTurnoUI();
-    showTurno();
+    await startCheckIn();
+    setupValidators();
+    renderWizStep();
   }
 }
 
