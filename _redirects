@@ -1,0 +1,5 @@
+# Força Cloudflare Pages a NÃO fazer redirect 308 .html → sem .html
+# Sem isso, /colab.html dispara 308 → /colab que quebra service worker e PWA
+/colab.html /colab.html 200!
+/torre.html /torre.html 200!
+/track.html /track.html 200!
