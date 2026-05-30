@@ -296,6 +296,26 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #config textarea{font-family:var(--mono);font-size:11px;min-height:120px;resize:vertical}
 #config .actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
 
+/* Cadastros modal */
+.cdtab{padding:7px 14px;font-size:11px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt2);cursor:pointer;border-radius:7px;font-weight:600}
+.cdtab:hover{background:var(--surf2);color:var(--txt)}
+.cdtab.active{background:var(--acc);color:#001823;border-color:var(--acc);font-weight:800}
+.cdrow{display:grid;gap:12px;align-items:center;padding:10px 20px;border-bottom:1px solid var(--bdr);font-size:12px;cursor:pointer;transition:background 0.1s}
+.cdrow:hover{background:var(--surf2)}
+.cdrow.hdr{background:var(--bg);font-size:9px;letter-spacing:0.4px;text-transform:uppercase;color:var(--txt2);font-weight:700;padding:8px 20px;cursor:default}
+.cdrow.hdr:hover{background:var(--bg)}
+.cdrow .cd-nm{font-weight:700;color:var(--txt)}
+.cdrow .cd-sub{font-size:10px;color:var(--txt2);margin-top:1px}
+.cdrow .cd-pill{display:inline-block;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;letter-spacing:0.3px}
+.cdrow .cd-doc{font-size:14px}
+.cdform-field{margin-bottom:10px}
+.cdform-field label{display:block;font-size:11px;color:var(--txt2);font-weight:600;margin-bottom:4px}
+.cdform-field input, .cdform-field select{width:100%;font-size:12px}
+.cdform-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cdform-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.cd-empty{padding:60px 20px;text-align:center;color:var(--txt2)}
+.cd-empty .ic{font-size:48px;opacity:0.4;margin-bottom:12px}
+
 /* Ranking modal */
 .rkp, .rko{padding:6px 12px;font-size:11px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt2);cursor:pointer;border-radius:6px;font-weight:600}
 .rkp:hover, .rko:hover{background:var(--surf2);color:var(--txt)}
@@ -347,6 +367,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <div class="pills" id="pills"></div>
     <div class="spacer"></div>
     <div id="syncind" title="Status da sincronização"><span class="d" id="syncdot"></span><span id="synctxt">conectando…</span></div>
+    <button class="iconbtn" id="cadbtn" title="Cadastros de colaboradores e veículos">📋 Cadastros</button>
     <button class="iconbtn" id="rankbtn" title="Ver ranking e estatísticas dos colaboradores">📊 Ranking</button>
     <button class="iconbtn" id="demobtn" title="Modo demo: crie chamados manualmente sem Slack">🧪 Demo</button>
     <button class="iconbtn" id="configbtn" title="Configurações">⚙</button>
@@ -389,6 +410,41 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         <button id="addsample">+ Adicionar 5 chamados aleatórios</button>
         <button id="clearall">🗑 Limpar todos chamados</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CADASTROS -->
+<div id="cadmodal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;flex-direction:column;z-index:10001;padding:30px">
+  <div style="max-width:1200px;width:100%;margin:0 auto;background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 60px);overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:14px">
+      <h2 style="font-size:18px;flex:1">📋 Cadastros</h2>
+      <div style="display:flex;gap:4px" id="cadtabs">
+        <button class="cdtab active" data-t="colab">👤 Colaboradores</button>
+        <button class="cdtab" data-t="carro">🚗 Carros</button>
+        <button class="cdtab" data-t="carreta">🚛 Carretas</button>
+        <button class="cdtab" data-t="moto">🏍 Motos</button>
+      </div>
+      <button onclick="closeCad()" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button>
+    </div>
+    <div style="padding:12px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:10px">
+      <input type="text" id="cadbusca" placeholder="🔍 buscar…" style="flex:1;max-width:340px;font-size:12px">
+      <span id="cadcount" style="font-size:11px;color:var(--txt2)">—</span>
+      <button class="primary" id="cadnovo">+ Adicionar</button>
+    </div>
+    <div style="flex:1;overflow:auto" id="cadlist"></div>
+  </div>
+</div>
+
+<!-- FORM DE CADASTRO -->
+<div id="cadform" style="position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;align-items:center;justify-content:center;z-index:10002;padding:24px">
+  <div style="background:var(--surf);border:1px solid var(--bdr2);padding:22px;border-radius:12px;width:560px;max-width:95vw;max-height:90vh;overflow:auto">
+    <h2 id="cadFormTit" style="font-size:17px;margin-bottom:14px">—</h2>
+    <div id="cadFormBody"></div>
+    <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
+      <button id="cadDelBtn" style="background:rgba(220,38,38,0.15);border:1px solid var(--novo);color:#fca5a5;display:none;margin-right:auto">🗑 Excluir</button>
+      <button onclick="closeCadForm()">Cancelar</button>
+      <button class="primary" id="cadSaveBtn">💾 Salvar</button>
     </div>
   </div>
 </div>
@@ -699,6 +755,8 @@ let trailLines = {};          // {motoristaId: L.polyline}
 let routeLines = {};          // {motoristaId: L.polyline}  rota OSRM multi-stop
 let routePending = {};        // {motoristaId: bool}  evita request duplicado
 let corridas = {};            // {chamadoId: ride} histórico de corridas finalizadas
+let colaboradores = {};       // {id: colab}
+let veiculos = {};            // {id: veiculo}
 let motExpanded = new Set();  // ids de motoristas com fila expandida
 let sync = null;
 let lastSync = null;
@@ -783,6 +841,15 @@ const STORE = (() => {
         const v = s.val();
         if(v && handlers.onCorridaAdded) handlers.onCorridaAdded(s.key, v);
       });
+      // Cadastros (colaboradores + veículos)
+      fb.child('colaboradores').on('value', s => {
+        const data = s.val() || {};
+        if(handlers.onColaboradoresSnapshot) handlers.onColaboradoresSnapshot(data);
+      });
+      fb.child('veiculos').on('value', s => {
+        const data = s.val() || {};
+        if(handlers.onVeiculosSnapshot) handlers.onVeiculosSnapshot(data);
+      });
       return true;
     } catch(e){ console.warn('STORE init err:', e); return false; }
   }
@@ -815,7 +882,19 @@ const STORE = (() => {
       if(arr && arr.length) fb.child('queues').child(motId).set(arr).catch(e => console.warn('fb setQueue:', e));
       else fb.child('queues').child(motId).remove().catch(e => console.warn('fb rmQueue:', e));
     },
-    setAllQueues(qs){ if(fb) fb.child('queues').set(qs).catch(e => console.warn('fb setAllQueues:', e)); }
+    setAllQueues(qs){ if(fb) fb.child('queues').set(qs).catch(e => console.warn('fb setAllQueues:', e)); },
+    saveColaborador(c){
+      if(!fb || !c.id) return;
+      try { fb.child('colaboradores').child(c.id).set(cleanForFb(c)).catch(e => console.warn('fb saveColab:', e)); }
+      catch(e){ console.warn('saveColab throw:', e); }
+    },
+    deleteColaborador(id){ if(fb) fb.child('colaboradores').child(id).remove().catch(e => console.warn(e)); },
+    saveVeiculo(v){
+      if(!fb || !v.id) return;
+      try { fb.child('veiculos').child(v.id).set(cleanForFb(v)).catch(e => console.warn('fb saveVeic:', e)); }
+      catch(e){ console.warn('saveVeic throw:', e); }
+    },
+    deleteVeiculo(id){ if(fb) fb.child('veiculos').child(id).remove().catch(e => console.warn(e)); }
   };
 })();
 
@@ -2199,6 +2278,214 @@ function addSampleChamados(){
   showToast('✓ 5 chamados aleatórios adicionados');
 }
 
+// ============== CADASTROS (colabs + veículos) ==============
+let cadTab = 'colab';       // 'colab' | 'carro' | 'carreta' | 'moto'
+let cadBusca = '';
+
+function openCad(){
+  $('#cadmodal').style.display = 'flex';
+  renderCad();
+}
+function closeCad(){ $('#cadmodal').style.display = 'none'; }
+window.closeCad = closeCad;
+function closeCadForm(){ $('#cadform').style.display = 'none'; }
+window.closeCadForm = closeCadForm;
+
+function cadGenId(prefix){ return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2,6); }
+
+function veiculoTipoIcon(t){ return { carro:'🚗', carreta:'🚛', moto:'🏍' }[t] || '🚗'; }
+function veiculoTipoLabel(t){ return { carro:'Carro', carreta:'Carreta', moto:'Moto' }[t] || t; }
+
+function renderCad(){
+  // Atualiza tabs
+  $$('#cadtabs .cdtab').forEach(b => b.classList.toggle('active', b.dataset.t === cadTab));
+
+  let items = [];
+  if(cadTab === 'colab'){
+    items = Object.values(colaboradores);
+  } else {
+    items = Object.values(veiculos).filter(v => v.tipo === cadTab);
+  }
+
+  // Busca
+  const q = cadBusca.toLowerCase().trim();
+  if(q){
+    items = items.filter(it => {
+      const blob = JSON.stringify(it).toLowerCase();
+      return blob.includes(q);
+    });
+  }
+  items.sort((a,b) => (a.nome || a.placa || '').localeCompare(b.nome || b.placa || ''));
+
+  $('#cadcount').textContent = `${items.length} ${cadTab === 'colab' ? 'colaborador' : 'veículo'}${items.length === 1 ? '' : 's'}`;
+
+  if(items.length === 0){
+    $('#cadlist').innerHTML = `<div class="cd-empty">
+      <div class="ic">${cadTab === 'colab' ? '👤' : veiculoTipoIcon(cadTab)}</div>
+      <div style="font-weight:700;color:var(--txt)">Nenhum ${cadTab === 'colab' ? 'colaborador' : veiculoTipoLabel(cadTab).toLowerCase()} cadastrado</div>
+      <div style="font-size:11px;margin-top:6px">Clique em <strong>+ Adicionar</strong> pra criar o primeiro.</div>
+    </div>`;
+    return;
+  }
+
+  if(cadTab === 'colab'){
+    $('#cadlist').innerHTML = `
+      <div class="cdrow hdr" style="grid-template-columns:1fr 120px 120px 100px 80px 60px">
+        <div>Nome / CPF</div><div>Habilitação</div><div>Base</div><div>Turno</div><div style="text-align:center">CNH</div><div></div>
+      </div>
+      ${items.map(c => {
+        const t = { manha:'☀ Manhã', tarde:'🌇 Tarde', noite:'🌙 Noite' }[c.turno] || c.turno || '—';
+        return `<div class="cdrow" data-cid="${c.id}" style="grid-template-columns:1fr 120px 120px 100px 80px 60px">
+          <div><div class="cd-nm">${esc(c.nome || '?')}</div><div class="cd-sub">${esc(c.cpf || 'sem CPF')}</div></div>
+          <div>${esc(c.cnhNumero || '—')}${c.cnhCat ? ` <span class="cd-pill" style="background:var(--surf2);color:var(--txt2)">${esc(c.cnhCat)}</span>` : ''}</div>
+          <div>${esc(c.base || '—')}</div>
+          <div>${t}</div>
+          <div style="text-align:center">${c.cnhDocUrl ? `<a href="${esc(c.cnhDocUrl)}" target="_blank" rel="noopener" class="cd-doc" title="Abrir CNH" onclick="event.stopPropagation()">📄</a>` : '<span style="color:var(--txt3)">—</span>'}</div>
+          <div style="text-align:right"><button data-edit="${c.id}" style="padding:4px 8px;font-size:10px">✏</button></div>
+        </div>`;
+      }).join('')}
+    `;
+  } else {
+    $('#cadlist').innerHTML = `
+      <div class="cdrow hdr" style="grid-template-columns:100px 1fr 60px 90px 90px 70px 60px">
+        <div>Placa</div><div>Marca / Modelo</div><div>Ano</div><div>Último km</div><div>Última atualiz.</div><div style="text-align:center">CRLV</div><div></div>
+      </div>
+      ${items.map(v => {
+        const fmtTs = (ts) => ts ? new Date(ts).toLocaleDateString('pt-BR') : '—';
+        return `<div class="cdrow" data-vid="${v.id}" style="grid-template-columns:100px 1fr 60px 90px 90px 70px 60px">
+          <div style="font-family:var(--mono);font-weight:700">${esc(v.placa || '—')}</div>
+          <div><div class="cd-nm">${esc((v.marca || '') + ' ' + (v.modelo || '')).trim() || '—'}</div></div>
+          <div>${v.ano || '—'}</div>
+          <div style="font-family:var(--mono)">${v.ultimoKm != null ? v.ultimoKm.toLocaleString('pt-BR') + ' km' : '—'}</div>
+          <div style="font-size:10px;color:var(--txt2)">${fmtTs(v.ultimoKmTs)}</div>
+          <div style="text-align:center">${v.docUrl ? `<a href="${esc(v.docUrl)}" target="_blank" rel="noopener" class="cd-doc" title="Abrir CRLV" onclick="event.stopPropagation()">📄</a>` : '<span style="color:var(--txt3)">—</span>'}</div>
+          <div style="text-align:right"><button data-edit="${v.id}" style="padding:4px 8px;font-size:10px">✏</button></div>
+        </div>`;
+      }).join('')}
+    `;
+  }
+
+  // Click handlers (abre form de edição)
+  $$('#cadlist .cdrow:not(.hdr)').forEach(row => {
+    row.onclick = (e) => {
+      if(e.target.tagName === 'A') return;
+      const id = row.dataset.cid || row.dataset.vid;
+      if(id) openCadForm(cadTab, id);
+    };
+  });
+}
+
+function openCadForm(tab, id){
+  cadTab = tab;
+  const isEdit = !!id;
+  const isColab = tab === 'colab';
+  const item = isEdit
+    ? (isColab ? colaboradores[id] : veiculos[id])
+    : null;
+
+  $('#cadFormTit').textContent = isEdit
+    ? `Editar ${isColab ? 'colaborador' : veiculoTipoLabel(tab).toLowerCase()}`
+    : `Novo ${isColab ? 'colaborador' : veiculoTipoLabel(tab).toLowerCase()}`;
+
+  if(isColab){
+    $('#cadFormBody').innerHTML = `
+      <div class="cdform-field"><label>Nome completo *</label><input id="f_nome" type="text" placeholder="Ex: João Silva" value="${esc(item?.nome || '')}"></div>
+      <div class="cdform-grid2">
+        <div class="cdform-field"><label>CPF</label><input id="f_cpf" type="text" placeholder="000.000.000-00" value="${esc(item?.cpf || '')}"></div>
+        <div class="cdform-field"><label>Telefone</label><input id="f_tel" type="text" placeholder="(11) 99999-9999" value="${esc(item?.telefone || '')}"></div>
+      </div>
+      <div class="cdform-grid3">
+        <div class="cdform-field"><label>CNH nº</label><input id="f_cnh" type="text" placeholder="00000000000" value="${esc(item?.cnhNumero || '')}"></div>
+        <div class="cdform-field"><label>Categoria</label><select id="f_cnhcat">
+          ${['','A','B','AB','C','D','E'].map(c => `<option value="${c}"${item?.cnhCat===c?' selected':''}>${c || '—'}</option>`).join('')}
+        </select></div>
+        <div class="cdform-field"><label>Validade CNH</label><input id="f_cnhval" type="date" value="${esc(item?.cnhValidade || '')}"></div>
+      </div>
+      <div class="cdform-field"><label>Link do documento (CNH em PDF/foto) <small style="color:var(--txt3)">Google Drive, OneDrive, etc</small></label><input id="f_cnhdoc" type="url" placeholder="https://drive.google.com/..." value="${esc(item?.cnhDocUrl || '')}"></div>
+      <div class="cdform-grid2">
+        <div class="cdform-field"><label>Turno</label><select id="f_turno">
+          ${[['','—'],['manha','☀ Manhã'],['tarde','🌇 Tarde'],['noite','🌙 Noite']].map(([v,l]) => `<option value="${v}"${item?.turno===v?' selected':''}>${l}</option>`).join('')}
+        </select></div>
+        <div class="cdform-field"><label>Base</label><input id="f_base" type="text" placeholder="Ex: Vila Maria" value="${esc(item?.base || '')}"></div>
+      </div>
+    `;
+  } else {
+    $('#cadFormBody').innerHTML = `
+      <div class="cdform-grid2">
+        <div class="cdform-field"><label>Placa *</label><input id="f_placa" type="text" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase;font-family:var(--mono)" value="${esc(item?.placa || '')}"></div>
+        <div class="cdform-field"><label>Ano</label><input id="f_ano" type="number" min="1990" max="2030" placeholder="2024" value="${item?.ano || ''}"></div>
+      </div>
+      <div class="cdform-grid2">
+        <div class="cdform-field"><label>Marca</label><input id="f_marca" type="text" placeholder="${tab==='moto'?'Honda':tab==='carreta'?'Randon':'Fiat'}" value="${esc(item?.marca || '')}"></div>
+        <div class="cdform-field"><label>Modelo</label><input id="f_modelo" type="text" placeholder="${tab==='moto'?'CG 160':tab==='carreta'?'Plataforma':'Strada'}" value="${esc(item?.modelo || '')}"></div>
+      </div>
+      <div class="cdform-field"><label>Último km registrado</label><input id="f_km" type="number" min="0" placeholder="123456" value="${item?.ultimoKm ?? ''}"></div>
+      <div class="cdform-field"><label>Link do CRLV (PDF/foto) <small style="color:var(--txt3)">Google Drive, OneDrive, etc</small></label><input id="f_doc" type="url" placeholder="https://drive.google.com/..." value="${esc(item?.docUrl || '')}"></div>
+      <div class="cdform-field"><label>Observações</label><input id="f_obs" type="text" placeholder="Opcional" value="${esc(item?.obs || '')}"></div>
+    `;
+  }
+
+  $('#cadDelBtn').style.display = isEdit ? 'inline-block' : 'none';
+  $('#cadDelBtn').onclick = () => {
+    if(!confirm(`Excluir ${isColab ? 'colaborador' : 'veículo'} "${isColab ? item.nome : item.placa}"?`)) return;
+    if(isColab) STORE.deleteColaborador(id); else STORE.deleteVeiculo(id);
+    closeCadForm();
+    showToast('✓ Excluído');
+  };
+
+  $('#cadSaveBtn').onclick = () => {
+    if(isColab){
+      const nome = $('#f_nome').value.trim();
+      if(!nome){ showToast('⚠ Nome é obrigatório', true); return; }
+      const data = {
+        id: id || cadGenId('col'),
+        tipo: 'colab',
+        nome,
+        cpf: $('#f_cpf').value.trim(),
+        telefone: $('#f_tel').value.trim(),
+        cnhNumero: $('#f_cnh').value.trim(),
+        cnhCat: $('#f_cnhcat').value,
+        cnhValidade: $('#f_cnhval').value,
+        cnhDocUrl: $('#f_cnhdoc').value.trim(),
+        turno: $('#f_turno').value,
+        base: $('#f_base').value.trim(),
+        ativo: true,
+        criadoEm: item?.criadoEm || Date.now(),
+        atualizadoEm: Date.now()
+      };
+      STORE.saveColaborador(data);
+    } else {
+      const placa = $('#f_placa').value.trim().toUpperCase();
+      if(!placa){ showToast('⚠ Placa é obrigatória', true); return; }
+      const km = +$('#f_km').value || 0;
+      const data = {
+        id: id || cadGenId('veh'),
+        tipo: tab,
+        placa,
+        ano: +$('#f_ano').value || null,
+        marca: $('#f_marca').value.trim(),
+        modelo: $('#f_modelo').value.trim(),
+        ultimoKm: km || null,
+        ultimoKmTs: (item?.ultimoKm !== km) ? Date.now() : (item?.ultimoKmTs || Date.now()),
+        docUrl: $('#f_doc').value.trim(),
+        obs: $('#f_obs').value.trim(),
+        ativo: true,
+        criadoEm: item?.criadoEm || Date.now(),
+        atualizadoEm: Date.now()
+      };
+      STORE.saveVeiculo(data);
+    }
+    closeCadForm();
+    showToast('✓ Salvo');
+  };
+
+  $('#cadform').style.display = 'flex';
+  setTimeout(() => {
+    const first = isColab ? '#f_nome' : '#f_placa';
+    const el = $(first); if(el) el.focus();
+  }, 80);
+}
+
 // ============== RANKING / ESTATÍSTICAS ==============
 let rankPeriodo = 'tudo';
 let rankOrdem = 'nota';
@@ -2737,6 +3024,14 @@ function setupStoreListeners(){
       scheduleUpdateRoutes();
       scheduleRender();
     },
+    onColaboradoresSnapshot: (data) => {
+      colaboradores = data || {};
+      if($('#cadmodal').style.display === 'flex') renderCad();
+    },
+    onVeiculosSnapshot: (data) => {
+      veiculos = data || {};
+      if($('#cadmodal').style.display === 'flex') renderCad();
+    },
     onCorridaAdded: (rideId, ride) => {
       if(!ride.chamadoId) return;
       corridas[ride.chamadoId] = ride;
@@ -2870,6 +3165,15 @@ function init(){
   $('#clearall').onclick = clearAllChamados;
   $('#addbyaddr').onclick = openAddCh;
   $('#rankbtn').onclick = openRank;
+  $('#cadbtn').onclick = openCad;
+  $$('#cadtabs .cdtab').forEach(b => b.onclick = () => {
+    cadTab = b.dataset.t;
+    cadBusca = '';
+    $('#cadbusca').value = '';
+    renderCad();
+  });
+  $('#cadnovo').onclick = () => openCadForm(cadTab, null);
+  $('#cadbusca').oninput = (e) => { cadBusca = e.target.value; renderCad(); };
   $$('#rkperiodo .rkp').forEach(b => b.onclick = () => {
     $$('#rkperiodo .rkp').forEach(x => x.classList.remove('active'));
     b.classList.add('active');
