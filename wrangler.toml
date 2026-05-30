@@ -1,6 +1,8 @@
 name = "torrevammo"
 compatibility_date = "2024-12-01"
+main = "worker.js"
 
 [assets]
-directory = "."
-not_found_handling = "404-page"
+directory = "./"
+binding = "ASSETS"
+not_found_handling = "none"
