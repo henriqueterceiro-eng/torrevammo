@@ -53,6 +53,26 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #login button:active{transform:scale(0.98)}
 #login .hint{margin-top:22px;font-size:11px;color:var(--txt3);text-align:center;line-height:1.6;position:relative;z-index:1;max-width:320px}
 
+/* ===== INÍCIO DE TURNO ===== */
+#turno{position:fixed;inset:0;background:linear-gradient(135deg,#0a1428 0%,#1e3050 100%);display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px;padding-top:max(40px,env(safe-area-inset-top));z-index:90;overflow-y:auto}
+#turno.show{display:flex}
+#turno .hd{text-align:center;margin-bottom:24px;width:100%;max-width:420px}
+#turno .hd .ic{font-size:42px;margin-bottom:8px}
+#turno .hd h1{font-size:18px;letter-spacing:0.5px}
+#turno .hd p{font-size:12px;color:var(--txt2);margin-top:4px}
+#turno .step{width:100%;max-width:420px;margin-bottom:14px;background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:14px}
+#turno .step .lbl{font-size:11px;color:var(--txt2);font-weight:700;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+#turno .step .lbl .num{background:var(--acc);color:#001823;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
+#turno select, #turno input{width:100%;font-size:15px;padding:14px;border:1px solid var(--bdr);background:var(--surf2);color:var(--txt);border-radius:10px;font-family:inherit}
+#turno select:focus, #turno input:focus{outline:2px solid var(--acc);border-color:transparent}
+#turno .vh-card{padding:10px;background:var(--surf2);border-radius:8px;margin-top:8px;font-size:11px;color:var(--txt2);display:none}
+#turno .vh-card.show{display:block}
+#turno .vh-card .nm{color:var(--txt);font-weight:700;font-size:13px;margin-bottom:4px}
+#turno .footer-actions{width:100%;max-width:420px;display:flex;flex-direction:column;gap:10px;margin-top:10px;padding-bottom:24px}
+#turno .start-btn{padding:18px;background:linear-gradient(135deg,var(--acc) 0%,#0099c4 100%);color:#001823;font-size:16px;font-weight:800;border:none;border-radius:12px;cursor:pointer;letter-spacing:0.5px;box-shadow:0 8px 24px rgba(0,180,229,0.3);text-transform:uppercase}
+#turno .start-btn:disabled{opacity:0.5;cursor:not-allowed;box-shadow:none}
+#turno .cancel-btn{padding:12px;background:transparent;color:var(--txt3);font-size:12px;border:none;cursor:pointer}
+
 /* ===== APP ===== */
 #app{display:none;flex-direction:column;height:100vh;height:100dvh}
 #app.show{display:flex}
@@ -220,6 +240,46 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 
   <div class="hint" id="loginhint">
     Ao entrar, vamos compartilhar sua localização<br>com a torre de controle em tempo real.
+  </div>
+</div>
+
+<!-- INÍCIO DE TURNO -->
+<div id="turno">
+  <div class="hd">
+    <div class="ic">🛻</div>
+    <h1 id="turnoTit">Iniciar turno</h1>
+    <p id="turnoSub">Selecione o veículo, confirme o KM e me diga se já está saindo com motos.</p>
+  </div>
+
+  <div class="step">
+    <div class="lbl"><span class="num">1</span>Veículo principal</div>
+    <select id="t_veh"></select>
+    <div class="vh-card" id="t_vh_card"></div>
+  </div>
+
+  <div class="step" id="t_carreta_step" style="display:none">
+    <div class="lbl"><span class="num">2</span>Carreta (opcional)</div>
+    <select id="t_carreta">
+      <option value="">— sem carreta —</option>
+    </select>
+    <div class="vh-card" id="t_carreta_card"></div>
+  </div>
+
+  <div class="step" id="t_km_step" style="display:none">
+    <div class="lbl"><span class="num">3</span>KM atual do veículo</div>
+    <input type="number" id="t_km" min="0" placeholder="000000" inputmode="numeric">
+    <div style="font-size:10px;color:var(--txt3);margin-top:4px" id="t_km_hint">Último registrado: —</div>
+  </div>
+
+  <div class="step" id="t_motos_step" style="display:none">
+    <div class="lbl"><span class="num">4</span>Quantas motos você está levando?</div>
+    <input type="number" id="t_motos" min="0" value="0" inputmode="numeric">
+    <div style="font-size:10px;color:var(--txt3);margin-top:4px" id="t_motos_hint">Slots disponíveis: —</div>
+  </div>
+
+  <div class="footer-actions">
+    <button class="start-btn" id="t_iniciar" disabled>▶ Iniciar turno</button>
+    <button class="cancel-btn" id="t_sair">⏻ Sair</button>
   </div>
 </div>
 
@@ -1063,7 +1123,8 @@ function showApp(){
 function renderTopBar(){
   if(!me) return;
   document.getElementById('tbnome').textContent = me.nome;
-  document.getElementById('tbplaca').textContent = me.placa || 'sem placa';
+  const slotsTxt = turnoAtivo ? ` · ${turnoAtivo.slotsOcupados?.length || 0}/${turnoAtivo.slotsTotal || 0} 🏍` : '';
+  document.getElementById('tbplaca').textContent = (me.placa || me.veiculoPlaca || 'sem veículo') + slotsTxt;
   document.getElementById('tbav').textContent = me.nome.charAt(0).toUpperCase();
   document.getElementById('tbav').style.background = me.color;
   document.getElementById('tbav').style.color = '#fff';
@@ -1384,11 +1445,12 @@ function bootApp(){
     const next = STATUS_ORDER[(STATUS_ORDER.indexOf(cur) + 1) % STATUS_ORDER.length];
     setStatus(next);
   };
-  document.getElementById('btlogout').onclick = () => {
-    if(!confirm('Encerrar turno e sair?')) return;
+  document.getElementById('btlogout').onclick = async () => {
+    if(!confirm('Encerrar turno e sair?\n\nO veículo voltará a ficar disponível pra outros colaboradores.')) return;
     sync.send('motorista:logout', { id: me.id });
     if(watchId) navigator.geolocation.clearWatch(watchId);
     if(wakeLock && !wakeLock.released) wakeLock.release().catch(()=>{});
+    await encerrarTurno();
     clearMe();
     location.reload();
   };
@@ -1412,6 +1474,251 @@ function bootApp(){
   }
 
   renderChamadoCard();
+}
+
+// ============== TURNO (selecionar veículo + KM + motos iniciais) ==============
+let _turnoVeiculos = {}; // veículos carregados pra seleção
+let turnoAtivo = null;   // turno atualmente ativo do colab
+
+function showTurno(){
+  document.getElementById('login').classList.add('hide');
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('turno').classList.add('show');
+}
+function hideTurno(){ document.getElementById('turno').classList.remove('show'); }
+
+async function loadVeiculosDisponiveis(){
+  await ensureFb();
+  const snap = await firebase.database().ref('vammo/veiculos').once('value');
+  _turnoVeiculos = snap.val() || {};
+  return _turnoVeiculos;
+}
+async function loadTurnoExistente(colabId){
+  await ensureFb();
+  const snap = await firebase.database().ref('vammo/turnos/' + colabId).once('value');
+  return snap.val();
+}
+
+function disponivelParaMim(v, meId){
+  if(v.ativo === false) return false;
+  // Sem atribuição OU já é meu
+  return !v.atribuidoA || v.atribuidoA === meId;
+}
+
+function renderTurnoUI(){
+  const veh = $('#t_veh');
+  const veiculos = Object.values(_turnoVeiculos);
+  // Veículos principais: carro, caminhão, moto (não carreta — carreta é atrelada)
+  const principais = veiculos
+    .filter(v => v.tipo !== 'carreta' && disponivelParaMim(v, me.id))
+    .sort((a,b) => (a.placa||'').localeCompare(b.placa||''));
+  if(principais.length === 0){
+    veh.innerHTML = '<option value="">⚠ Nenhum veículo disponível — fale com a torre</option>';
+    return;
+  }
+  veh.innerHTML = '<option value="">— escolha um veículo —</option>' + principais.map(v => {
+    const tip = { carro:'🚗', moto:'🏍', caminhao:'🚛' }[v.tipo] || '🚗';
+    return `<option value="${v.id}">${tip} ${esc(v.placa||'?')} · ${esc((v.marca||'')+' '+(v.modelo||'')).trim()}</option>`;
+  }).join('');
+
+  $('#t_veh').onchange = () => onTurnoVehChange();
+  $('#t_carreta').onchange = () => onTurnoCarretaChange();
+  $('#t_km').oninput = checkTurnoCompleto;
+  $('#t_motos').oninput = onTurnoMotosChange;
+  $('#t_iniciar').onclick = iniciarTurno;
+  $('#t_sair').onclick = () => {
+    if(!confirm('Sair sem iniciar turno?')) return;
+    if(watchId) navigator.geolocation.clearWatch(watchId);
+    clearMe();
+    location.reload();
+  };
+}
+
+function onTurnoVehChange(){
+  const id = $('#t_veh').value;
+  const v = id ? _turnoVeiculos[id] : null;
+  const card = $('#t_vh_card');
+  if(!v){ card.classList.remove('show'); hideEtapasPos(1); return; }
+  card.classList.add('show');
+  card.innerHTML = `
+    <div class="nm">${esc((v.marca||'')+' '+(v.modelo||''))}</div>
+    <div>${v.ano||'—'} · ${esc(v.placa)} · ${v.slots ?? 0} slot${v.slots===1?'':'s'} de motos</div>
+    <div style="margin-top:3px">Último km: ${v.ultimoKm != null ? v.ultimoKm.toLocaleString('pt-BR') + ' km' : '—'}</div>
+  `;
+  // Se for carro, mostra step de carreta
+  if(v.tipo === 'carro'){
+    $('#t_carreta_step').style.display = 'block';
+    populateCarretas();
+  } else {
+    $('#t_carreta_step').style.display = 'none';
+  }
+  // Mostra steps KM + motos
+  $('#t_km_step').style.display = 'block';
+  $('#t_km').value = v.ultimoKm ?? '';
+  $('#t_km_hint').textContent = `Último registrado: ${v.ultimoKm != null ? v.ultimoKm.toLocaleString('pt-BR') + ' km' : '—'}`;
+  $('#t_motos_step').style.display = 'block';
+  updateMotosHint();
+  checkTurnoCompleto();
+}
+
+function populateCarretas(){
+  const sel = $('#t_carreta');
+  const carretas = Object.values(_turnoVeiculos)
+    .filter(v => v.tipo === 'carreta' && disponivelParaMim(v, me.id))
+    .sort((a,b) => (a.placa||'').localeCompare(b.placa||''));
+  sel.innerHTML = '<option value="">— sem carreta —</option>' + carretas.map(c => {
+    return `<option value="${c.id}">${esc(c.placa)} · ${esc((c.marca||'')+' '+(c.modelo||''))} · ${c.slots ?? 0} slots</option>`;
+  }).join('');
+  $('#t_carreta_card').classList.remove('show');
+}
+
+function onTurnoCarretaChange(){
+  const id = $('#t_carreta').value;
+  const c = id ? _turnoVeiculos[id] : null;
+  const card = $('#t_carreta_card');
+  if(!c){ card.classList.remove('show'); }
+  else {
+    card.classList.add('show');
+    card.innerHTML = `<div class="nm">${esc((c.marca||'')+' '+(c.modelo||''))}</div><div>${esc(c.placa)} · ${c.slots ?? 0} slots de motos</div>`;
+  }
+  updateMotosHint();
+  checkTurnoCompleto();
+}
+
+function totalSlotsTurno(){
+  const v = _turnoVeiculos[$('#t_veh').value];
+  const c = _turnoVeiculos[$('#t_carreta').value];
+  return (v?.slots || 0) + (c?.slots || 0);
+}
+
+function updateMotosHint(){
+  const slots = totalSlotsTurno();
+  $('#t_motos').max = slots;
+  $('#t_motos_hint').textContent = slots > 0
+    ? `Slots disponíveis: ${slots} · marque 0 se está saindo vazio`
+    : '⚠ Este veículo não tem slots de motos';
+}
+
+function onTurnoMotosChange(){
+  const slots = totalSlotsTurno();
+  let v = +$('#t_motos').value || 0;
+  if(v > slots){ v = slots; $('#t_motos').value = v; }
+  if(v < 0){ v = 0; $('#t_motos').value = 0; }
+  checkTurnoCompleto();
+}
+
+function hideEtapasPos(num){
+  if(num <= 1){ $('#t_carreta_step').style.display = 'none'; }
+  if(num <= 2){ $('#t_km_step').style.display = 'none'; $('#t_motos_step').style.display = 'none'; }
+  $('#t_iniciar').disabled = true;
+}
+
+function checkTurnoCompleto(){
+  const veh = $('#t_veh').value;
+  const km = +$('#t_km').value;
+  $('#t_iniciar').disabled = !(veh && km > 0);
+}
+
+async function iniciarTurno(){
+  const veh = $('#t_veh').value;
+  const carreta = $('#t_carreta').value || null;
+  const km = +$('#t_km').value;
+  const motosIniciais = Math.max(0, +$('#t_motos').value || 0);
+  if(!veh || !km){ return; }
+  const slotsTotal = totalSlotsTurno();
+  if(motosIniciais > slotsTotal){ showToast('⚠ Mais motos do que slots disponíveis', true); return; }
+
+  const btn = $('#t_iniciar');
+  btn.disabled = true; btn.textContent = '⏳ Iniciando…';
+  try {
+    const vObj = _turnoVeiculos[veh];
+    const cObj = carreta ? _turnoVeiculos[carreta] : null;
+    // Atrela veículos: marca atribuidoA
+    await ensureFb();
+    const db = firebase.database();
+    await db.ref('vammo/veiculos/' + veh).update({
+      atribuidoA: me.id,
+      atribuidoEm: Date.now(),
+      ultimoKm: km,
+      ultimoKmTs: Date.now()
+    });
+    if(carreta){
+      await db.ref('vammo/veiculos/' + carreta).update({
+        atribuidoA: me.id,
+        atribuidoEm: Date.now()
+      });
+    }
+    // Cria slots iniciais (sem placa específica por ora — só ocupados)
+    const slots = [];
+    for(let i = 0; i < motosIniciais; i++){
+      slots.push({
+        id: 'slot_' + Date.now() + '_' + i,
+        ocupadoEm: Date.now(),
+        source: 'saida',
+        placa: null  // sem placa específica nessa fase; check-in detalhado é fase 2
+      });
+    }
+    // Cria turno
+    const turno = {
+      colabId: me.id,
+      colabNome: me.nome,
+      veiculoId: veh,
+      veiculoPlaca: vObj.placa,
+      veiculoTipo: vObj.tipo,
+      carretaId: carreta || null,
+      carretaPlaca: cObj?.placa || null,
+      slotsTotal,
+      slotsOcupados: slots,
+      kmInicial: km,
+      iniciadoEm: Date.now(),
+      modo: 'normal',     // 'normal' | 'descarregando' | 'na_base'
+      ativo: true
+    };
+    await db.ref('vammo/turnos/' + me.id).set(cleanForFb(turno));
+    turnoAtivo = turno;
+    // Atualiza me com info do veículo
+    me.veiculoId = veh;
+    me.veiculoPlaca = vObj.placa;
+    me.placa = vObj.placa;
+    me.vehicle = vObj.tipo === 'carro' ? (carreta ? 'pickup_carreta' : 'pickup') : vObj.tipo;
+    saveMe(me);
+    showToast('▶ Turno iniciado em ' + esc(vObj.placa));
+    hideTurno();
+    document.getElementById('app').classList.add('show');
+    if(!sync){ sync = createSync(); bootApp(); }
+    else { /* já bootado */ }
+  } catch(err){
+    console.error(err);
+    showToast('❌ Erro ao iniciar turno: ' + err.message, true);
+    btn.disabled = false; btn.textContent = '▶ Iniciar turno';
+  }
+}
+
+async function encerrarTurno(){
+  if(!me?.id) return;
+  try {
+    await ensureFb();
+    const db = firebase.database();
+    // Carrega turno
+    const snap = await db.ref('vammo/turnos/' + me.id).once('value');
+    const t = snap.val();
+    if(t){
+      // Libera veículos
+      if(t.veiculoId){
+        await db.ref('vammo/veiculos/' + t.veiculoId).update({ atribuidoA: null, atribuidoEm: null });
+      }
+      if(t.carretaId){
+        await db.ref('vammo/veiculos/' + t.carretaId).update({ atribuidoA: null, atribuidoEm: null });
+      }
+      // Marca turno como encerrado (mantém histórico)
+      await db.ref('vammo/turnos/' + me.id).update({
+        ativo: false,
+        encerradoEm: Date.now()
+      });
+      // Move pra histórico?
+      // Por ora deixa em vammo/turnos com ativo:false
+    }
+  } catch(err){ console.warn('encerrarTurno fail:', err); }
 }
 
 // ============== AUTH (login com email + senha do cadastro) ==============
@@ -1519,8 +1826,7 @@ document.getElementById('loginform').addEventListener('submit', async (e) => {
     }
     me = meFromColab(colab);
     saveMe(me);
-    sync = createSync();
-    bootApp();
+    await goToTurnoOuApp();
   } catch(err){
     console.error(err);
     showToast('❌ Erro: ' + (err.message || 'tentar novamente'), true);
@@ -1528,6 +1834,29 @@ document.getElementById('loginform').addEventListener('submit', async (e) => {
     btn.disabled = false; btn.textContent = origText;
   }
 });
+
+async function goToTurnoOuApp(){
+  // Verifica se já tem turno ativo
+  const t = await loadTurnoExistente(me.id);
+  if(t && t.ativo){
+    turnoAtivo = t;
+    me.veiculoId = t.veiculoId;
+    me.veiculoPlaca = t.veiculoPlaca;
+    me.placa = t.veiculoPlaca;
+    me.vehicle = t.veiculoTipo === 'carro' ? (t.carretaId ? 'pickup_carreta' : 'pickup') : t.veiculoTipo;
+    saveMe(me);
+    document.getElementById('login').classList.add('hide');
+    document.getElementById('turno').classList.remove('show');
+    document.getElementById('app').classList.add('show');
+    if(!sync){ sync = createSync(); }
+    bootApp();
+  } else {
+    // Pré-carrega veículos disponíveis
+    await loadVeiculosDisponiveis();
+    renderTurnoUI();
+    showTurno();
+  }
+}
 
 document.getElementById('senhaform').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1543,8 +1872,7 @@ document.getElementById('senhaform').addEventListener('submit', async (e) => {
     showToast('✓ Senha definida!');
     me = meFromColab(colab);
     saveMe(me);
-    sync = createSync();
-    bootApp();
+    await goToTurnoOuApp();
   } catch(err){
     console.error(err);
     showToast('❌ Erro: ' + err.message, true);
@@ -1559,7 +1887,7 @@ document.getElementById('logEsqueci').addEventListener('click', (e) => {
   alert('Esqueceu a senha?\n\n1) Avise a torre por WhatsApp\n2) O gestor abre 📋 Cadastros e clica no botão 🔄 ao lado do seu nome\n3) Volta aqui, digita seu email + qualquer senha pra continuar\n4) Você vai cair na tela de criar nova senha');
 });
 
-// Auto-login se já tem sessão — revalida no Firebase (cadastro pode ter sido desativado/resetado)
+// Auto-login se já tem sessão — revalida no Firebase
 window.addEventListener('DOMContentLoaded', async () => {
   const saved = loadMe();
   if(saved && saved.email){
@@ -1569,8 +1897,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         me = meFromColab(colab);
         me.status = 'online';
         saveMe(me);
-        sync = createSync();
-        bootApp();
+        await goToTurnoOuApp();
         return;
       }
       if(colab && colab.precisaResetSenha){
@@ -1579,7 +1906,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         return;
       }
     } catch(_){ /* sem rede — fallback abaixo */ }
-    // Cadastro sumiu ou inativo → limpa e volta pro login
     clearMe();
   }
   showLogin();
