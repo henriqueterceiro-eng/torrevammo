@@ -3368,9 +3368,18 @@ if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js').then(reg => {
       console.log('[PWA] service worker registrado:', reg.scope);
+      // Force update se houver versão nova
+      reg.update().catch(()=>{});
     }).catch(err => console.warn('[PWA] SW fail:', err));
   });
 }
+// Captura erros não-tratados pra ajudar diagnóstico
+window.addEventListener('error', (e) => {
+  console.error('[colab] erro global:', e.message, 'em', e.filename + ':' + e.lineno);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[colab] promise rejeitada:', e.reason);
+});
 
 // Wake Lock: mantém a tela ligada enquanto o motorista trabalha
 let wakeLock = null;
