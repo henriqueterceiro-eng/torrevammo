@@ -527,6 +527,10 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <input type="text" id="cfgTtKey" placeholder="Cole sua chave TomTom aqui">
     <div style="font-size:10px;color:var(--txt3);margin-top:3px">Obtenha em <a href="https://developer.tomtom.com" target="_blank" style="color:var(--acc)">developer.tomtom.com</a> · grátis 2.500 req/dia</div>
 
+    <label>📎 URL de upload (Apps Script) <small style="color:var(--txt3)">documentos vão pro Drive</small></label>
+    <input type="text" id="cfgUploadUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    <div style="font-size:10px;color:var(--txt3);margin-top:3px">Veja como configurar em <code style="color:var(--acc)">APPS-SCRIPT-UPLOAD.md</code> no repo</div>
+
     <label>🧭 Modo de roteamento <small style="color:var(--txt3)">(prioridade no cálculo da rota)</small></label>
     <select id="cfgRouteType">
       <option value="fastest">🚀 Mais rápido — prioriza menor tempo (default)</option>
@@ -598,6 +602,7 @@ cfg.showHeatmap = cfg.showHeatmap === true; // default OFF
 cfg.routeType = cfg.routeType || 'fastest';     // fastest | shortest | eco
 cfg.travelMode = cfg.travelMode || 'car';        // car | truck
 cfg.routeAvoid = cfg.routeAvoid || [];           // ['tollRoads','motorways','ferries','unpavedRoads']
+cfg.uploadUrl = cfg.uploadUrl || '';             // Apps Script Web App pra upload de docs
 
 // ============== TOMTOM API LAYER ==============
 const TT = (() => {
@@ -2293,6 +2298,100 @@ window.closeCadForm = closeCadForm;
 
 function cadGenId(prefix){ return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2,6); }
 
+// Lê arquivo em base64 (data URL → base64 puro)
+function fileToBase64(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const result = r.result;
+      const idx = result.indexOf('base64,');
+      res(idx >= 0 ? result.substring(idx + 7) : result);
+    };
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+// Sobe arquivo pra Apps Script Web App → retorna URL pública do Drive
+async function uploadFile(file, onProgress){
+  if(!cfg.uploadUrl){
+    throw new Error('Upload não configurado. Vá em ⚙ Config → URL de upload');
+  }
+  if(file.size > 20 * 1024 * 1024){
+    throw new Error('Arquivo muito grande (máx 20 MB)');
+  }
+  if(onProgress) onProgress('lendo arquivo…');
+  const base64 = await fileToBase64(file);
+  if(onProgress) onProgress('enviando ' + (file.size/1024).toFixed(0) + 'KB…');
+  const r = await fetch(cfg.uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // simple request — evita preflight CORS
+    body: JSON.stringify({ name: file.name, mimeType: file.type, base64 })
+  });
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+  const data = await r.json();
+  if(data.error) throw new Error(data.error);
+  return data; // { id, url, previewUrl, name, size }
+}
+
+// Helper pro form: campo de upload OU URL manual
+function docUploadField(inputId, currentUrl, label){
+  const hasUrl = !!currentUrl;
+  return `
+    <label>${label}</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="${inputId}" type="url" placeholder="${cfg.uploadUrl ? 'Cole URL ou suba arquivo →' : 'Cole URL (Drive, OneDrive...)'}" value="${esc(currentUrl || '')}" style="flex:1;min-width:200px">
+      ${cfg.uploadUrl ? `<label style="padding:8px 12px;background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap" title="Subir arquivo (PDF/JPG/PNG até 20MB)">
+        📎 Subir arquivo
+        <input type="file" data-up="${inputId}" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
+      </label>` : ''}
+      ${hasUrl ? `<a href="${esc(currentUrl)}" target="_blank" rel="noopener" style="padding:8px 10px;font-size:14px;color:var(--acc);text-decoration:none;border:1px solid var(--bdr);border-radius:6px" title="Abrir documento atual">📄</a>` : ''}
+    </div>
+    <div id="${inputId}_status" style="font-size:10px;color:var(--txt3);margin-top:4px;min-height:14px"></div>
+  `;
+}
+
+// Conecta os inputs de upload em todos os file inputs do form
+function bindUploadInputs(){
+  $$('#cadFormBody input[type=file][data-up]').forEach(input => {
+    input.onchange = async () => {
+      const file = input.files[0];
+      if(!file) return;
+      const targetId = input.dataset.up;
+      const urlInput = document.getElementById(targetId);
+      const status = document.getElementById(targetId + '_status');
+      try {
+        if(status){ status.style.color = 'var(--acc)'; status.textContent = '⏳ enviando…'; }
+        const data = await uploadFile(file, (msg) => { if(status) status.textContent = '⏳ ' + msg; });
+        urlInput.value = data.url;
+        if(status){
+          status.style.color = '#16a34a';
+          status.textContent = '✓ ' + data.name + ' (' + (data.size/1024).toFixed(0) + 'KB) — link salvo';
+        }
+        // Atualiza visualização do link
+        renderCadForm_refreshLink(targetId, data.url);
+      } catch(err){
+        console.error(err);
+        if(status){ status.style.color = '#dc2626'; status.textContent = '❌ ' + err.message; }
+      }
+      input.value = ''; // permite re-upload do mesmo arquivo
+    };
+  });
+}
+
+function renderCadForm_refreshLink(targetId, url){
+  // Não tem necessidade de re-renderizar o form todo — apenas adiciona o link se ainda não tem
+  const wrap = document.getElementById(targetId)?.parentElement;
+  if(!wrap) return;
+  if(wrap.querySelector('a[href]')) return; // já tem link
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  a.textContent = '📄';
+  a.title = 'Abrir documento';
+  a.style.cssText = 'padding:8px 10px;font-size:14px;color:var(--acc);text-decoration:none;border:1px solid var(--bdr);border-radius:6px';
+  wrap.appendChild(a);
+}
+
 function veiculoTipoIcon(t){ return { carro:'🚗', carreta:'🚛', moto:'🏍' }[t] || '🚗'; }
 function veiculoTipoLabel(t){ return { carro:'Carro', carreta:'Carreta', moto:'Moto' }[t] || t; }
 
@@ -2421,7 +2520,7 @@ function openCadForm(tab, id){
         </select></div>
         <div class="cdform-field"><label>Validade CNH</label><input id="f_cnhval" type="date" value="${esc(item?.cnhValidade || '')}"></div>
       </div>
-      <div class="cdform-field"><label>Link do documento (CNH em PDF/foto) <small style="color:var(--txt3)">Google Drive, OneDrive, etc</small></label><input id="f_cnhdoc" type="url" placeholder="https://drive.google.com/..." value="${esc(item?.cnhDocUrl || '')}"></div>
+      <div class="cdform-field">${docUploadField('f_cnhdoc', item?.cnhDocUrl, 'Documento CNH (PDF / foto)')}</div>
       <div class="cdform-grid2">
         <div class="cdform-field"><label>Turno</label><select id="f_turno">
           ${[['','—'],['manha','☀ Manhã'],['tarde','🌇 Tarde'],['noite','🌙 Noite']].map(([v,l]) => `<option value="${v}"${item?.turno===v?' selected':''}>${l}</option>`).join('')}
@@ -2440,7 +2539,7 @@ function openCadForm(tab, id){
         <div class="cdform-field"><label>Modelo</label><input id="f_modelo" type="text" placeholder="${tab==='moto'?'CG 160':tab==='carreta'?'Plataforma':'Strada'}" value="${esc(item?.modelo || '')}"></div>
       </div>
       <div class="cdform-field"><label>Último km registrado</label><input id="f_km" type="number" min="0" placeholder="123456" value="${item?.ultimoKm ?? ''}"></div>
-      <div class="cdform-field"><label>Link do CRLV (PDF/foto) <small style="color:var(--txt3)">Google Drive, OneDrive, etc</small></label><input id="f_doc" type="url" placeholder="https://drive.google.com/..." value="${esc(item?.docUrl || '')}"></div>
+      <div class="cdform-field">${docUploadField('f_doc', item?.docUrl, 'Documento CRLV (PDF / foto)')}</div>
       <div class="cdform-field"><label>Observações</label><input id="f_obs" type="text" placeholder="Opcional" value="${esc(item?.obs || '')}"></div>
     `;
   }
@@ -2511,6 +2610,7 @@ function openCadForm(tab, id){
   };
 
   $('#cadform').style.display = 'flex';
+  bindUploadInputs();
   setTimeout(() => {
     const first = isColab ? '#f_nome' : '#f_placa';
     const el = $(first); if(el) el.focus();
@@ -2784,6 +2884,7 @@ function showToast(msg, isErr){
 function openConfig(){
   $('#cfgSla').value = cfg.sla;
   $('#cfgTtKey').value = cfg.tomtomKey;
+  $('#cfgUploadUrl').value = cfg.uploadUrl || '';
   $('#cfgRouteType').value = cfg.routeType;
   $('#cfgTravelMode').value = cfg.travelMode;
   $('#cfgAvoidTolls').checked = cfg.routeAvoid.includes('tollRoads');
@@ -2799,6 +2900,7 @@ function closeConfig(){ $('#config').classList.remove('show'); }
 function saveConfig(){
   cfg.sla = +$('#cfgSla').value || 30;
   cfg.tomtomKey = $('#cfgTtKey').value.trim();
+  cfg.uploadUrl = $('#cfgUploadUrl').value.trim();
   cfg.routeType = $('#cfgRouteType').value;
   cfg.travelMode = $('#cfgTravelMode').value;
   cfg.routeAvoid = [];
