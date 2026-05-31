@@ -601,7 +601,8 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
       <!-- preenchido dinamicamente -->
     </div>
     <div id="motDetBody" style="flex:1;overflow-y:auto;padding:14px 18px"></div>
-    <div style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;justify-content:flex-end">
+    <div style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button id="motDetReload" style="background:rgba(245,158,11,0.15);border:1px solid #fbbf24;color:#fbbf24;padding:7px 14px;font-size:12px;font-weight:700;border-radius:6px" title="Manda comando pro app do colab limpar cache e recarregar — use quando ele estiver em versão antiga">🔄 Forçar atualização do app</button>
       <button id="motDetLocate" style="background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);padding:7px 14px;font-size:12px;font-weight:700;border-radius:6px">📍 Ver no mapa</button>
       <button onclick="closeMotDetail()" style="padding:7px 14px;font-size:12px;background:transparent;border:1px solid var(--bdr);color:var(--txt2)">Fechar</button>
     </div>
@@ -3266,6 +3267,24 @@ function openMotDetail(motId){
   $('#motDetLocate').onclick = () => {
     const m = motoristas[_motDetailId];
     if(m && m.lat && m.lng){ map.setView([m.lat, m.lng], 16); closeMotDetail(); }
+  };
+  $('#motDetReload').onclick = async () => {
+    const m = motoristas[_motDetailId];
+    if(!m) return;
+    if(!confirm(`Forçar reload do app de ${m.nome}?\n\nO app dele vai limpar caches e recarregar a página automaticamente em ~2 segundos.\n\nUse quando o colab está em versão antiga e não consegue parar pra atualizar manualmente.\n\n⚠ Se o app dele já NÃO tem essa funcionalidade (versão MUITO antiga), o comando vai ficar guardado no Firebase e disparar na próxima vez que ele abrir/atualizar — pode ignorar nesses casos.`)) return;
+    const btn = $('#motDetReload');
+    btn.disabled = true;
+    btn.textContent = '⏳ enviando…';
+    try {
+      if(typeof firebase === 'undefined' || !firebase.apps?.length) throw new Error('Firebase desconectado');
+      await firebase.database().ref('vammo/cmds/' + _motDetailId + '/reload').set({ ts: Date.now(), by: 'gestor' });
+      showToast(`✓ Comando de reload enviado pro ${m.nome.split(' ')[0]}`);
+    } catch(e){
+      alert('Falhou: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔄 Forçar atualização do app';
+    }
   };
 }
 function closeMotDetail(){

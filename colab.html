@@ -755,6 +755,35 @@ function setupChamadosListener(){
       }
     });
   }
+  // COMANDO REMOTO: gestor força reload do app via torre
+  // Listener: quando o gestor dispara, app fecha caches e recarrega
+  if(me){
+    firebase.database().ref('vammo/cmds/' + me.id + '/reload').on('value', snap => {
+      const cmd = snap.val();
+      if(!cmd || !cmd.ts) return;
+      // Só reage a comandos enviados nos últimos 2 min (evita reload em loop ao carregar histórico)
+      if(Date.now() - cmd.ts > 120000) return;
+      console.log('[colab] Comando remoto de reload recebido');
+      showToast('🔄 Atualização forçada pela torre — recarregando…');
+      vibrate([200, 100, 200]);
+      // Limpa caches do Service Worker e recarrega
+      setTimeout(async () => {
+        try {
+          if('serviceWorker' in navigator){
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for(const r of regs) await r.unregister();
+          }
+          if('caches' in window){
+            const keys = await caches.keys();
+            for(const k of keys) await caches.delete(k);
+          }
+        } catch(_){}
+        // Limpa o comando pra não reagir de novo na próxima sessão
+        try { firebase.database().ref('vammo/cmds/' + me.id + '/reload').remove(); } catch(_){}
+        location.reload();
+      }, 1500);
+    });
+  }
   // Configurações globais (range pra iniciar, etc.) — gestor altera na torre, propaga em real-time
   firebase.database().ref('vammo/settings').on('value', snap => {
     const s = snap.val() || {};
