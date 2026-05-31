@@ -684,7 +684,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
-const MOTORISTA_TTL_MS = 60 * 1000;        // 60s sem update = visualmente "offline"
+const MOTORISTA_TTL_MS = 120 * 1000;       // 120s sem update = visualmente "offline" (toleramos hiccups de rede e tela bloqueada)
 const MOTORISTA_REMOVE_MS = 5 * 60 * 1000; // 5min sem update = remove do mapa automaticamente
 
 let cfg = loadCfg();
@@ -1543,7 +1543,7 @@ function renderMotoristaMarkers(){
     seen.add(id);
     const ageS = Math.round((now - (m.lastSeen || 0))/1000);
     const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
-    const isStale = !isOff && ageS > 30; // > 30s sem update mas ainda dentro do TTL
+    const isStale = !isOff && ageS > 60; // > 30s sem update mas ainda dentro do TTL
     let ringColor = m.status === 'busy' ? '#d97706' : isOff ? '#6b7280' : isStale ? '#fbbf24' : '#10b981';
     if(m.modo === 'descarregando') ringColor = '#dc2626';
     else if(m.isFull) ringColor = '#dc2626';
@@ -1896,7 +1896,7 @@ function renderMot(){
     const ac = fila.length;
     const ageS = Math.round((Date.now() - (m.lastSeen||0))/1000);
     const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
-    const isStale = !isOff && ageS > 30;
+    const isStale = !isOff && ageS > 60;
     const stCls = isOff ? 'off' : m.status === 'busy' ? 'busy' : 'online';
     const stLbl = isOff ? 'offline' : m.modo === 'descarregando' ? '🔴 descarregando' : m.status === 'busy' ? 'em rota' : 'online';
     const ageLbl = isStale ? ` · <span style="color:#fbbf24;font-weight:700">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
@@ -4006,11 +4006,14 @@ function setupSyncListeners(){
     if(selId) renderDetail();
   });
 
-  // Heartbeat
+  // Heartbeat — re-render pra tirar marca de "stale/offline" se voltou
   sync.on('motorista:heartbeat', (data) => {
     if(motoristas[data.id]){
+      const wasOff = (Date.now() - (motoristas[data.id].lastSeen||0)) > MOTORISTA_TTL_MS;
       motoristas[data.id].lastSeen = Date.now();
       motoristas[data.id].status = data.status || motoristas[data.id].status;
+      // Se estava offline e voltou, re-renderiza pra tirar a marca cinza
+      if(wasOff){ renderMot(); renderMotoristaMarkers(); }
     }
   });
 

@@ -551,8 +551,9 @@ const FIREBASE_CONFIG = {
 const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 
 const SYNC_CHANNEL = 'vammo-fase1';
-const GPS_MIN_INTERVAL = 3000;     // ms entre updates
-const GPS_MIN_DELTA_M  = 5;         // metros
+const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
+const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
+const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
 const MARKER_TTL_MS = 30 * 1000;    // 30s sem update = fora do ar (para a torre)
 
 // ====================== STATE ======================
@@ -1389,7 +1390,9 @@ function onGPSUpdate(pos){
   const now = Date.now();
   const movedEnough = !lastSentPos || haversine(lastSentPos, pos) >= GPS_MIN_DELTA_M;
   const timeEnough = (now - lastSentAt) >= GPS_MIN_INTERVAL;
-  if(movedEnough && timeEnough){ sendPos(pos); }
+  const heartbeatDue = (now - lastSentAt) >= GPS_HEARTBEAT_MS;
+  // Envia se: (1) moveu E passou o cooldown, OU (2) tá há 20s sem mandar nada (mesmo parado)
+  if((movedEnough && timeEnough) || heartbeatDue){ sendPos(pos); }
   checkOffRoute();
   checkArrived();
   checkArrivedAtBase();
