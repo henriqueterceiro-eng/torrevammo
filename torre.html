@@ -4505,13 +4505,22 @@ function setupSyncListeners(){
     }
     m._prevPos = { lat: data.lat, lng: data.lng, ts: Date.now() };
     if(data.heading != null) m.heading = data.heading;
-    // CRÍTICO: slots vêm dentro do motorista:posicao (slotsSnapshot do colab).
-    // Antes só atualizava via colab:turno que pode chegar fora de ordem ou se perder.
-    // Agora cada heartbeat (20s) e cada movimento (3s) sincroniza os slots na torre.
+    // Slots vêm dentro do motorista:posicao (slotsSnapshot do colab).
+    // PROTEÇÃO: se o turno no Firebase tem mais slots que o payload (caso do
+    // gestor ter adicionado moto via +moto e o colab ainda não saber), prefere
+    // o do turno. Evita sobrescrever pra menos.
     if(data.slotsTotal != null) m.slotsTotal = data.slotsTotal;
-    if(data.slotsCount != null) m.slotsCount = data.slotsCount;
-    if(data.slotsDetalhe != null) m.slotsDetalhe = data.slotsDetalhe;
-    if(data.isFull != null) m.isFull = data.isFull;
+    const turnoSlots = turnos[data.id]?.slotsOcupados || null;
+    if(turnoSlots && turnoSlots.length > (data.slotsCount || 0)){
+      // Turno tem mais motos que o payload — colab desatualizado, usa turno como fonte
+      m.slotsCount = turnoSlots.length;
+      m.slotsDetalhe = turnoSlots;
+      m.isFull = m.slotsTotal > 0 && m.slotsCount >= m.slotsTotal;
+    } else {
+      if(data.slotsCount != null) m.slotsCount = data.slotsCount;
+      if(data.slotsDetalhe != null) m.slotsDetalhe = data.slotsDetalhe;
+      if(data.isFull != null) m.isFull = data.isFull;
+    }
     if(data.modo != null) m.modo = data.modo;
     // Reverse geocode — só 1x por 45s por motorista
     if(TT.has()){

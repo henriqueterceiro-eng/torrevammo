@@ -659,6 +659,33 @@ function setupChamadosListener(){
     bases = snap.val() || {};
     renderBaseMarkers();
   });
+  // ESCUTA o próprio turno: quando a torre adiciona/remove moto manualmente,
+  // o colab precisa sincronizar pra refletir no slotsbtn + payload dos próximos heartbeats
+  if(me){
+    firebase.database().ref('vammo/turnos/' + me.id).on('value', snap => {
+      const remote = snap.val();
+      if(!remote || !turnoAtivo) return;
+      // Detecta mudança no slotsOcupados (gestor adicionou/removeu via torre)
+      const localCount = (turnoAtivo.slotsOcupados || []).length;
+      const remoteCount = (remote.slotsOcupados || []).length;
+      const localIds = new Set((turnoAtivo.slotsOcupados || []).map(s => s.id));
+      const remoteIds = new Set((remote.slotsOcupados || []).map(s => s.id));
+      const diff = remoteCount !== localCount ||
+                   ![...remoteIds].every(id => localIds.has(id)) ||
+                   ![...localIds].every(id => remoteIds.has(id));
+      if(diff){
+        console.log('[colab] turno sincronizado: slotsOcupados', localCount, '→', remoteCount);
+        turnoAtivo.slotsOcupados = remote.slotsOcupados || [];
+        renderTopBar();
+        // Manda heartbeat imediato pra torre saber que o colab já tá ciente
+        if(myPos) sendPos(myPos);
+        if(remoteCount > localCount){
+          vibrate(80);
+          showToast('🏍 Moto registrada pela torre');
+        }
+      }
+    });
+  }
   // Configurações globais (range pra iniciar, etc.) — gestor altera na torre, propaga em real-time
   firebase.database().ref('vammo/settings').on('value', snap => {
     const s = snap.val() || {};
