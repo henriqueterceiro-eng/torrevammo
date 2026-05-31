@@ -3267,16 +3267,24 @@ function renderMotDetail(){
   if(!m){ closeMotDetail(); return; }
   const colab = colaboradores[id] || {};
   const turno = turnos[id] || null;
-  // Coleta TODOS os veículos atribuídos a esse colab (carro + carreta + qq outro)
+  // Coleta veículos: primeiro pelos atribuídos no cadastro (atribuidoA),
+  // depois COMPLEMENTA com os do turno (que é a fonte autoritativa do checkin)
+  // mesmo se atribuidoA aponta pra outro colab (custódia bagunçada).
   const veiculosColab = [];
+  const seenIds = new Set();
   for(const vid in veiculos){
     const v = veiculos[vid];
-    if(v.atribuidoA === id) veiculosColab.push(v);
+    if(v.atribuidoA === id){ veiculosColab.push(v); seenIds.add(v.id); }
   }
-  // Se nenhum veículo está marcado em veiculos[], usa info do turno (autoritativo do check-in)
-  if(veiculosColab.length === 0 && turno){
-    if(turno.veiculoId && veiculos[turno.veiculoId]) veiculosColab.push(veiculos[turno.veiculoId]);
-    if(turno.carretaId && veiculos[turno.carretaId]) veiculosColab.push(veiculos[turno.carretaId]);
+  if(turno){
+    if(turno.veiculoId && veiculos[turno.veiculoId] && !seenIds.has(turno.veiculoId)){
+      veiculosColab.push({ ...veiculos[turno.veiculoId], _fromTurno: true });
+      seenIds.add(turno.veiculoId);
+    }
+    if(turno.carretaId && veiculos[turno.carretaId] && !seenIds.has(turno.carretaId)){
+      veiculosColab.push({ ...veiculos[turno.carretaId], _fromTurno: true });
+      seenIds.add(turno.carretaId);
+    }
   }
   // Ordena: carro primeiro, carreta depois, moto por último
   const ordemTipo = { carro: 0, carreta: 1, moto: 2 };
@@ -3324,8 +3332,9 @@ function renderMotDetail(){
     return comNota.reduce((s, r) => s + r.nota.final, 0) / comNota.length;
   })();
 
-  // Slots
-  const slotsTotal = m.slotsTotal || 0;
+  // Slots — prioridade: m.slotsTotal (live do colab) → turno.slotsTotal (checkin) → soma dos veículos
+  const slotsTotalCalc = veiculosColab.reduce((s, v) => s + (v.slots || 0), 0);
+  const slotsTotal = m.slotsTotal || turno?.slotsTotal || slotsTotalCalc || 0;
   const slotsOcup = m.slotsCount || 0;
   const slotsLivre = Math.max(0, slotsTotal - slotsOcup);
   const slotsDetalhe = m.slotsDetalhe || [];
@@ -3373,13 +3382,18 @@ function renderMotDetail(){
             const lbl = `${v.marca || ''} ${v.modelo || ''}`.trim() + (v.ano ? ' ('+v.ano+')' : '');
             const slotsLbl = v.slots != null && v.slots > 0 ? `${v.slots} slot${v.slots===1?'':'s'} 🏍` : 'sem slots';
             const kmLbl = v.ultimoKm ? v.ultimoKm.toLocaleString('pt-BR') + ' km' : '';
-            return `<div style="background:var(--surf2);padding:10px;border-radius:8px;display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            const donoErrado = v._fromTurno && v.atribuidoA && v.atribuidoA !== id;
+            const donoErradoNome = donoErrado ? (colaboradores[v.atribuidoA]?.nome?.split(' ')[0] || 'outro colab') : '';
+            const borderCol = donoErrado ? '#fbbf24' : 'transparent';
+            return `<div style="background:var(--surf2);padding:10px;border-radius:8px;display:flex;align-items:center;gap:10px;margin-bottom:6px;border:1px solid ${borderCol}">
               <div style="font-size:24px">${ic}</div>
               <div style="flex:1;min-width:0">
                 <div style="font-family:var(--mono);font-weight:700;font-size:14px">${esc(v.placa || '—')}</div>
                 <div style="font-size:11px;color:var(--txt2);margin-top:2px">${esc(lbl)}</div>
                 <div style="font-size:10px;color:var(--txt3);margin-top:2px">${slotsLbl}${kmLbl ? ' · ' + kmLbl : ''}</div>
+                ${donoErrado ? `<div style="font-size:10px;color:#fbbf24;margin-top:4px">⚠ Cadastro aponta pra ${esc(donoErradoNome)} (custódia bagunçada — turno do colab atual usa este veículo)</div>` : ''}
               </div>
+              ${donoErrado ? `<button data-reivindicar="${v.id}" data-para="${id}" style="background:rgba(245,158,11,0.2);border:1px solid #fbbf24;color:#fbbf24;padding:6px 10px;font-size:10px;font-weight:700;border-radius:6px;cursor:pointer">🔧 Atribuir a ${esc((colab.nome||'').split(' ')[0])}</button>` : ''}
             </div>`;
           }).join('')
       }
@@ -3449,6 +3463,24 @@ function renderMotDetail(){
       </div>
     </div>` : ''}
   `;
+  // Wire dos botões de reivindicar veículo (sobrescreve atribuidoA pro colab atual)
+  $$('#motDetBody [data-reivindicar]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const vid = btn.dataset.reivindicar;
+      const colabId = btn.dataset.para;
+      const v = veiculos[vid];
+      const cAlvo = colaboradores[colabId];
+      if(!v || !cAlvo) return;
+      const cAtual = v.atribuidoA ? colaboradores[v.atribuidoA] : null;
+      if(!confirm(`Atribuir a ${v.placa} (${v.marca||''} ${v.modelo||''}) para ${cAlvo.nome}?\n\n${cAtual ? `Atualmente está com: ${cAtual.nome}` : 'Atualmente sem dono.'}\n\nIsso atualiza o cadastro do veículo. O turno de ${cAtual?.nome||'ninguém'} NÃO é encerrado automaticamente — encerre manualmente se necessário.`)) return;
+      const fixed = { ...v, atribuidoA: colabId, atribuidoEm: Date.now() };
+      veiculos[vid] = fixed;
+      STORE.saveVeiculo(fixed);
+      showToast(`✓ ${v.placa} agora atribuída a ${cAlvo.nome.split(' ')[0]}`);
+      renderMotDetail();
+    };
+  });
 }
 
 // Copia o link do colab pra clipboard (usado no header da aba Colaboradores)
