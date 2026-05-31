@@ -3555,12 +3555,11 @@ function renderMotDetail(){
   // Botão "+ moto": adiciona moto manualmente nos slots do colab (quando colab esqueceu)
   const btnAddMoto = $('#motDetAddMoto');
   if(btnAddMoto){
-    btnAddMoto.onclick = (ev) => {
+    btnAddMoto.onclick = async (ev) => {
       ev.stopPropagation();
-      const placa = prompt(`Adicionar moto ao Sergio?\n\nPlaca (deixe vazio se não tiver):`);
-      if(placa === null) return; // cancelou
+      const placa = prompt(`Adicionar moto ao ${m.nome.split(' ')[0]}?\n\nPlaca (deixe vazio se não tiver):`);
+      if(placa === null) return;
       const placaUp = (placa || '').trim().toUpperCase();
-      // Pega último chamado concluído do colab pra associar (origem do checkin)
       const ultConcluido = corridasHoje
         .filter(r => r.endStatus === 'concluido')
         .sort((a,b) => b.completedTs - a.completedTs)[0];
@@ -3573,49 +3572,60 @@ function renderMotDetail(){
         ocupadoEm: Date.now(),
         _addedByGestor: true
       };
-      // Atualiza turno no Firebase
-      if(!turnos[id]){ alert('Colab sem turno ativo. Não dá pra adicionar.'); return; }
+      if(!turnos[id]){ alert('Colab sem turno ativo. Ele precisa fazer check-in primeiro.'); return; }
       const turnoUpd = { ...turnos[id] };
       turnoUpd.slotsOcupados = [...(turnoUpd.slotsOcupados || []), novoSlot];
-      turnos[id] = turnoUpd;
+      // Aguarda confirmação real do Firebase ANTES de atualizar UI — pra não dar falso positivo
+      btnAddMoto.disabled = true;
+      btnAddMoto.textContent = '⏳ salvando…';
       try {
-        if(typeof firebase !== 'undefined' && firebase.apps?.length){
-          firebase.database().ref('vammo/turnos/' + id).set(cleanForFb(turnoUpd));
+        if(typeof firebase === 'undefined' || !firebase.apps?.length){
+          throw new Error('Firebase não conectado — recarregue a torre');
         }
-      } catch(e){ console.warn('saveTurno fix:', e); }
-      // Atualiza o m local pra renderizar imediatamente (até o colab mandar update)
-      m.slotsCount = (m.slotsCount || 0) + 1;
-      m.slotsDetalhe = [...(m.slotsDetalhe || []), novoSlot];
-      m.isFull = m.slotsCount >= (m.slotsTotal || 0);
-      showToast(`✓ Moto ${placaUp || '(sem placa)'} adicionada ao Sergio`);
-      renderMotDetail();
-      renderMotoristaMarkers();
-      renderMot();
+        await firebase.database().ref('vammo/turnos/' + id).set(cleanForFb(turnoUpd));
+        // Só atualiza local DEPOIS de confirmar gravação
+        turnos[id] = turnoUpd;
+        m.slotsCount = (m.slotsCount || 0) + 1;
+        m.slotsDetalhe = [...(m.slotsDetalhe || []), novoSlot];
+        m.isFull = m.slotsCount >= (m.slotsTotal || 0);
+        showToast(`✓ Moto ${placaUp || '(sem placa)'} salva no Firebase · ${m.nome.split(' ')[0]} agora tem ${m.slotsCount}/${m.slotsTotal}`);
+        renderMotDetail();
+        renderMotoristaMarkers();
+        renderMot();
+      } catch(err){
+        console.error('Erro ao salvar moto:', err);
+        alert('❌ Falha ao salvar a moto no Firebase: ' + err.message + '\n\nA moto NÃO foi adicionada. Tente novamente ou recarregue a página.');
+      } finally {
+        btnAddMoto.disabled = false;
+        btnAddMoto.textContent = '+ moto';
+      }
     };
   }
   // Botão "✕" em cada moto: remove dos slots
   $$('#motDetBody [data-rmmoto]').forEach(btn => {
-    btn.onclick = (ev) => {
+    btn.onclick = async (ev) => {
       ev.stopPropagation();
       const slotId = btn.dataset.rmmoto;
       const t = turnos[id];
       if(!t || !t.slotsOcupados) return;
       const slot = t.slotsOcupados.find(s => (s.id || '') === slotId);
-      if(!confirm(`Remover ${slot?.placa || 'moto'} dos slots do colab?\n\n(Use só pra corrigir lançamento errado — o registro de carga/descarga oficial é feito pelo próprio colab no fluxo.)`)) return;
+      if(!confirm(`Remover ${slot?.placa || 'moto'} dos slots do colab?\n\n(Use só pra corrigir lançamento errado.)`)) return;
       const turnoUpd = { ...t, slotsOcupados: t.slotsOcupados.filter(s => (s.id || '') !== slotId) };
-      turnos[id] = turnoUpd;
+      btn.disabled = true;
       try {
-        if(typeof firebase !== 'undefined' && firebase.apps?.length){
-          firebase.database().ref('vammo/turnos/' + id).set(cleanForFb(turnoUpd));
-        }
-      } catch(e){ console.warn('saveTurno fix:', e); }
-      m.slotsCount = Math.max(0, (m.slotsCount || 0) - 1);
-      m.slotsDetalhe = (m.slotsDetalhe || []).filter(s => (s.id || '') !== slotId);
-      m.isFull = false;
-      showToast(`✓ ${slot?.placa || 'Moto'} removida`);
-      renderMotDetail();
-      renderMotoristaMarkers();
-      renderMot();
+        if(typeof firebase === 'undefined' || !firebase.apps?.length) throw new Error('Firebase não conectado');
+        await firebase.database().ref('vammo/turnos/' + id).set(cleanForFb(turnoUpd));
+        turnos[id] = turnoUpd;
+        m.slotsCount = Math.max(0, (m.slotsCount || 0) - 1);
+        m.slotsDetalhe = (m.slotsDetalhe || []).filter(s => (s.id || '') !== slotId);
+        m.isFull = false;
+        showToast(`✓ ${slot?.placa || 'Moto'} removida`);
+        renderMotDetail();
+        renderMotoristaMarkers();
+        renderMot();
+      } catch(err){
+        alert('❌ Falha ao remover: ' + err.message);
+      } finally { btn.disabled = false; }
     };
   });
   // Wire dos botões de reivindicar veículo (sobrescreve atribuidoA pro colab atual)
