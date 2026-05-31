@@ -1851,21 +1851,25 @@ function renderList(){
 function renderMot(){
   const ids = Object.keys(motoristas);
   $('#tab2n').textContent = '(' + ids.length + ')';
+  const url = location.origin + '/colab';
+  // Header sempre visível com o link do app — pra gestor compartilhar com colab
+  const linkHeader = `<div id="motlink" style="padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;color:var(--txt2);font-weight:600">📱 Link do app:</span>
+    <a href="${esc(url)}" target="_blank" style="flex:1;font-family:var(--mono);font-size:10px;color:var(--acc);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(url)}">${esc(url)}</a>
+    <button onclick="copyColabUrl()" style="padding:4px 8px;font-size:10px;background:var(--surf2);border:1px solid var(--bdr);border-radius:4px;cursor:pointer" title="Copiar link">📋</button>
+  </div>`;
   if(!ids.length){
-    const url = location.origin + '/colab';
-    $('#motwrap').innerHTML = `<div id="motempty">
+    $('#motwrap').innerHTML = linkHeader + `<div id="motempty">
       <div class="ic">📱</div>
       <div><strong>Nenhum colaborador conectado</strong></div>
-      <div style="font-size:11px;margin-top:6px">Abra o app do colaborador em outro device ou aba para começar:</div>
-      <a class="url" href="${esc(url)}" target="_blank">${esc(url)}</a>
-      <div style="font-size:10px;color:var(--txt3);margin-top:8px">No celular do motorista: abra esse link, faça login e a posição aparece aqui em tempo real.</div>
+      <div style="font-size:11px;margin-top:6px">Compartilha o link acima com o motorista pra ele logar no celular dele.</div>
     </div>`;
     return;
   }
   const q = loadQueues();
   const expanded = motExpanded; // Set de ids expandidos
 
-  $('#motwrap').innerHTML = ids.map(id => {
+  $('#motwrap').innerHTML = linkHeader + ids.map(id => {
     const m = motoristas[id];
     const fila = q[id] || [];
     const ac = fila.length;
@@ -3137,6 +3141,17 @@ function closeRank(){
   document.getElementById('rankmodal').style.display = 'none';
 }
 window.closeRank = closeRank;
+
+// Copia o link do colab pra clipboard (usado no header da aba Colaboradores)
+function copyColabUrl(){
+  const url = location.origin + '/colab';
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(url).then(() => showToast('📋 Link copiado: ' + url));
+  } else {
+    prompt('Copie o link do colab:', url);
+  }
+}
+window.copyColabUrl = copyColabUrl;
 
 function periodoCutoff(){
   const now = Date.now();

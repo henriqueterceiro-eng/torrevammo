@@ -16,3 +16,7 @@ node_modules/
 
 # Secrets (caso algum dia separe)
 secrets.json
+
+# Apps Script local com chaves embutidas — copia/cola no editor do Apps Script, NUNCA commit
+apps-script-code.gs
+*.local.gs
