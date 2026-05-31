@@ -555,7 +555,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-05-31.7';
+const APP_VERSION = '2026-05-31.8';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1622,12 +1622,14 @@ function initMap(){
   }).setView([-23.5505, -46.6333], 12);
   L.control.zoom({ position: 'topright' }).addTo(map);
   const tileOpts = { maxZoom: 19, minZoom: 6, errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' };
-  if(TOMTOM_KEY){
-    L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/night/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, attribution: '© TomTom' }).addTo(map);
-    L.tileLayer(`https://api.tomtom.com/traffic/map/4/tile/flow/relative-delay/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, opacity: 0.7, attribution: '' }).addTo(map);
-  } else {
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { ...tileOpts, subdomains: 'abcd', attribution: '© OSM · CARTO' }).addTo(map);
-  }
+  // Tiles CARTO (gratuito) — TomTom desligado por causa de cota.
+  // Pra reativar TomTom: descomente bloco abaixo (precisa de creditos).
+  // if(TOMTOM_KEY){
+  //   L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/night/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, attribution: '© TomTom' }).addTo(map);
+  //   L.tileLayer(`https://api.tomtom.com/traffic/map/4/tile/flow/relative-delay/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, opacity: 0.7, attribution: '' }).addTo(map);
+  // } else {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { ...tileOpts, subdomains: 'abcd', attribution: '© OSM · CARTO' }).addTo(map);
+  // }
   setTimeout(() => map.invalidateSize(), 100);
   window.addEventListener('resize', () => map.invalidateSize());
 }
@@ -1720,11 +1722,12 @@ async function fetchTomtomRoute(from, stops){
 }
 
 async function fetchOsrmRoute(from, stops){
-  // Fallback: OSRM gratuito (sem trânsito)
-  if(TOMTOM_KEY){
-    try { return await fetchTomtomRoute(from, stops); }
-    catch(e){ console.warn('TT falhou, fallback OSRM:', e.message); }
-  }
+  // OSRM primário (gratuito) — TomTom desligado por causa de cota.
+  // Pra religar: descomente o bloco abaixo (precisa creditos na chave TomTom).
+  // if(TOMTOM_KEY){
+  //   try { return await fetchTomtomRoute(from, stops); }
+  //   catch(e){ console.warn('TT falhou, fallback OSRM:', e.message); }
+  // }
   const all = [from, ...stops];
   const coordStr = all.map(p => `${p.lng},${p.lat}`).join(';');
   const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson&steps=false`;

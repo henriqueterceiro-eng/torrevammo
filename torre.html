@@ -719,7 +719,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 120 * 1000;       // 120s sem update = visualmente "offline" (toleramos hiccups de rede e tela bloqueada)
-const LATEST_COLAB_VERSION = '2026-05-31.7'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const LATEST_COLAB_VERSION = '2026-05-31.8'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
 const MOTORISTA_REMOVE_MS = 5 * 60 * 1000; // 5min sem update = remove do mapa automaticamente
 
 let cfg = loadCfg();
@@ -1213,19 +1213,15 @@ function ttTileUrl(style){
   return `https://api.tomtom.com/map/1/tile/${style}/{z}/{x}/{y}.png?key=${cfg.tomtomKey || ''}`;
 }
 function getTileLayers(){
-  // TomTom basic é estilo Google Maps. Pra satélite, ESRI funciona em qualquer zoom
-  // (TomTom hybrid só serve a partir do z=12).
-  if(TT.has()){
-    return {
-      dark: { url: ttTileUrl('basic/night'), sub: '', attr: '© TomTom', label: 'Dark' },
-      voyager: { url: ttTileUrl('basic/main'), sub: '', attr: '© TomTom', label: 'Streets' },
-      satellite: {
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        sub: '', attr: '© Esri', label: 'Satellite',
-        overlayLabels: ttTileUrl('labels/main') // labels TomTom em cima (consistente)
-      }
-    };
-  }
+  // TomTom tiles consomem cota — usando CARTO (gratuito, sem limite) em todos
+  // os casos. Pra reativar TomTom (visual melhor): descomente o bloco abaixo.
+  // if(TT.has()){
+  //   return {
+  //     dark: { url: ttTileUrl('basic/night'), sub: '', attr: '© TomTom', label: 'Dark' },
+  //     voyager: { url: ttTileUrl('basic/main'), sub: '', attr: '© TomTom', label: 'Streets' },
+  //     satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', sub: '', attr: '© Esri', label: 'Satellite', overlayLabels: ttTileUrl('labels/main') }
+  //   };
+  // }
   return {
     dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', sub:'abcd', attr:'© OSM · CARTO', label:'Dark' },
     voyager: { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', sub:'abcd', attr:'© OSM · CARTO', label:'Streets' },
@@ -1692,11 +1688,12 @@ function haversine(a, b){
 }
 
 async function fetchMultiRoute(from, stops){
-  // Tenta TomTom primeiro (considera trânsito), OSRM como fallback
-  if(TT.has()){
-    try { return await TT.route(from, stops); }
-    catch(e){ console.warn('TT route falhou, fallback OSRM:', e.message); }
-  }
+  // OSRM primário (gratuito) — TomTom desligado por causa de cota.
+  // Pra religar (trânsito ao vivo): descomente o bloco abaixo (precisa creditos).
+  // if(TT.has()){
+  //   try { return await TT.route(from, stops); }
+  //   catch(e){ console.warn('TT route falhou, fallback OSRM:', e.message); }
+  // }
   const all = [from, ...stops];
   const coordStr = all.map(p => `${p.lng},${p.lat}`).join(';');
   const url = `${OSRM_URL}/${coordStr}?overview=full&geometries=geojson&steps=false`;
@@ -4630,19 +4627,20 @@ function setupSyncListeners(){
     }
     if(data.modo != null) m.modo = data.modo;
     if(data.appVersion != null) m.appVersion = data.appVersion;
-    // Reverse geocode — só 1x por 45s por motorista
-    if(TT.has()){
-      if(!m._lastReverse || Date.now() - m._lastReverse > 45000){
-        m._lastReverse = Date.now();
-        TT.reverse(data.lat, data.lng).then(addr => {
-          if(addr){
-            m.currentStreet = addr.streetName || addr.municipalitySubdivision || '';
-            m.currentArea = addr.municipalitySubdivision || addr.localName || '';
-            renderMot();
-          }
-        }).catch(() => {});
-      }
-    }
+    // Reverse geocode DESLIGADO por causa de cota TomTom estourada.
+    // Esse era o maior consumidor (45s por colab) — descomente quando recarregar.
+    // if(TT.has()){
+    //   if(!m._lastReverse || Date.now() - m._lastReverse > 45000){
+    //     m._lastReverse = Date.now();
+    //     TT.reverse(data.lat, data.lng).then(addr => {
+    //       if(addr){
+    //         m.currentStreet = addr.streetName || addr.municipalitySubdivision || '';
+    //         m.currentArea = addr.municipalitySubdivision || addr.localName || '';
+    //         renderMot();
+    //       }
+    //     }).catch(() => {});
+    //   }
+    // }
     // Trail GPS real
     pushTrail(data.id, data.lat, data.lng);
     renderTrail(data.id);

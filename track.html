@@ -219,11 +219,8 @@ function initMap(){
   }).setView([-23.5505, -46.6333], 13);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   const tileOpts = { maxZoom: 19, minZoom: 6, errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' };
-  if(TOMTOM_KEY){
-    L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, attribution: '© TomTom' }).addTo(map);
-  } else {
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { ...tileOpts, subdomains: 'abcd' }).addTo(map);
-  }
+  // Tiles CARTO sempre (gratuito). TomTom desligado por causa de cota.
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { ...tileOpts, subdomains: 'abcd' }).addTo(map);
   setTimeout(() => map.invalidateSize(), 100);
   window.addEventListener('resize', () => map.invalidateSize());
 }
