@@ -650,6 +650,19 @@ function setupChamadosListener(){
     bases = snap.val() || {};
     renderBaseMarkers();
   });
+  // Configurações globais (range pra iniciar, etc.) — gestor altera na torre, propaga em real-time
+  firebase.database().ref('vammo/settings').on('value', snap => {
+    const s = snap.val() || {};
+    if(s.rangeInicioM && s.rangeInicioM !== RANGE_INICIO_M){
+      console.log('[colab] range de inicio atualizado:', RANGE_INICIO_M, '→', s.rangeInicioM);
+      RANGE_INICIO_M = s.rangeInicioM;
+      // Se modal de iniciar atendimento estiver aberto, refresh
+      if(document.getElementById('iniModal').style.display === 'flex'){
+        const ativo = fila[0];
+        if(ativo && typeof atualizarDistInfo === 'function') atualizarDistInfo(ativo);
+      }
+    }
+  });
 }
 
 // ============== BASES VAMMO no mapa ==============
@@ -1011,7 +1024,10 @@ function getRotina(motivo){
 }
 
 // ============== MODAL "INICIAR ATENDIMENTO" + SLIDE ==============
-const RANGE_INICIO_M = 80; // margem maior que ARRIVED (60m)
+// Range pra iniciar atendimento (m). Default 200m; gestor pode mudar
+// na torre (⚙ Config → "Raio para iniciar atendimento") e propaga em
+// real-time via vammo/settings no Firebase.
+let RANGE_INICIO_M = 200;
 let _iniChamadoId = null;
 let _iniDistTimer = null;
 let _aguardandoAutorizacao = null; // {chamadoId, motivo, ts}

@@ -630,6 +630,9 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 
     <label>📎 URL de upload (Apps Script) <small style="color:var(--txt3)">documentos vão pro Drive</small></label>
     <input type="text" id="cfgUploadUrl" placeholder="https://script.google.com/macros/s/.../exec">
+
+    <label>📍 Raio para iniciar atendimento (m) <small style="color:var(--txt3)">distância máxima do local pra colab dar play sem autorização — propaga p/ todos os colabs em tempo real</small></label>
+    <input type="number" id="cfgRangeInicio" min="20" max="2000" step="10" placeholder="200">
     <div style="font-size:10px;color:var(--txt3);margin-top:3px">Veja como configurar em <code style="color:var(--acc)">APPS-SCRIPT-UPLOAD.md</code> no repo</div>
 
     <label>🧭 Modo de roteamento <small style="color:var(--txt3)">(prioridade no cálculo da rota)</small></label>
@@ -865,6 +868,7 @@ let colaboradores = {};       // {id: colab}
 let veiculos = {};            // {id: veiculo}
 let bases = {};               // {id: base Vammo}
 let turnos = {};              // {colabId: turno ativo}
+let globalSettings = {};      // {rangeInicioM: number, ...} — sincronizado com colab via Firebase
 let motExpanded = new Set();  // ids de motoristas com fila expandida
 let sync = null;
 let lastSync = null;
@@ -966,6 +970,10 @@ const STORE = (() => {
         const data = s.val() || {};
         if(handlers.onTurnosSnapshot) handlers.onTurnosSnapshot(data);
       });
+      fb.child('settings').on('value', s => {
+        const data = s.val() || {};
+        if(handlers.onSettingsSnapshot) handlers.onSettingsSnapshot(data);
+      });
       return true;
     } catch(e){ console.warn('STORE init err:', e); return false; }
   }
@@ -1017,6 +1025,11 @@ const STORE = (() => {
       catch(e){ console.warn(e); }
     },
     deleteBase(id){ if(fb) fb.child('bases').child(id).remove().catch(e => console.warn(e)); },
+    saveSetting(key, value){
+      if(!fb) return;
+      try { fb.child('settings').child(key).set(value).catch(e => console.warn('fb saveSetting:', e)); }
+      catch(e){ console.warn('fb saveSetting throw:', e); }
+    },
     saveTurno(t){
       if(!fb || !t.colabId) return;
       try { fb.child('turnos').child(t.colabId).set(cleanForFb(t)).catch(e => console.warn(e)); }
@@ -3851,6 +3864,7 @@ function openConfig(){
   $('#cfgSla').value = cfg.sla;
   $('#cfgTtKey').value = cfg.tomtomKey;
   $('#cfgUploadUrl').value = cfg.uploadUrl || '';
+  $('#cfgRangeInicio').value = globalSettings.rangeInicioM || 200;
   $('#cfgRouteType').value = cfg.routeType;
   $('#cfgTravelMode').value = cfg.travelMode;
   $('#cfgAvoidTolls').checked = cfg.routeAvoid.includes('tollRoads');
@@ -3867,6 +3881,11 @@ function saveConfig(){
   cfg.sla = +$('#cfgSla').value || 30;
   cfg.tomtomKey = $('#cfgTtKey').value.trim();
   cfg.uploadUrl = $('#cfgUploadUrl').value.trim();
+  const rangeIni = Math.max(20, Math.min(2000, +$('#cfgRangeInicio').value || 200));
+  if(rangeIni !== globalSettings.rangeInicioM){
+    globalSettings.rangeInicioM = rangeIni;
+    STORE.saveSetting('rangeInicioM', rangeIni);
+  }
   cfg.routeType = $('#cfgRouteType').value;
   cfg.travelMode = $('#cfgTravelMode').value;
   cfg.routeAvoid = [];
@@ -4231,6 +4250,9 @@ function setupStoreListeners(){
     },
     onTurnosSnapshot: (data) => {
       turnos = data || {};
+    },
+    onSettingsSnapshot: (data) => {
+      globalSettings = data || {};
     },
     onCorridaAdded: (rideId, ride) => {
       if(!ride.chamadoId) return;
