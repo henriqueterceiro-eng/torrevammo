@@ -261,56 +261,40 @@ function fitBoth(){
 }
 
 async function refreshRoute(){
-  if(!vehMarker || !destMarker) return;
-  if(Date.now() - lastRouteFetch < 20000) return;
+  if(!vehMarker || !destMarker){
+    console.log('[track] refreshRoute skipped — vehMarker:', !!vehMarker, 'destMarker:', !!destMarker);
+    return;
+  }
+  if(Date.now() - lastRouteFetch < 15000) return;
   lastRouteFetch = Date.now();
   const v = vehMarker.getLatLng(), d = destMarker.getLatLng();
+  console.log('[track] fetching OSRM route', v.lat, v.lng, '->', d.lat, d.lng);
 
-  // Tenta TomTom primeiro (tem dados de trânsito ao vivo). Se falhar (cota
-  // estourada, rede, etc), cai pra OSRM (gratuito, sem trânsito).
-  let coords = null, minTotal = null, delayMin = 0, fonte = null;
   try {
-    const url = `https://api.tomtom.com/routing/1/calculateRoute/${v.lat},${v.lng}:${d.lat},${d.lng}/json?routeType=fastest&traffic=true&travelMode=car&key=${TOMTOM_KEY}`;
+    // OSRM público — gratuito e ilimitado (sem trânsito)
+    const url = `https://router.project-osrm.org/route/v1/driving/${v.lng},${v.lat};${d.lng},${d.lat}?overview=full&geometries=geojson`;
     const r = await fetch(url);
-    if(!r.ok) throw new Error('TomTom HTTP ' + r.status);
+    if(!r.ok) throw new Error('OSRM HTTP ' + r.status);
     const data = await r.json();
-    const route = data.routes[0];
-    coords = [];
-    for(const leg of route.legs){ for(const p of leg.points){ coords.push([p.latitude, p.longitude]); } }
-    minTotal = Math.round(route.summary.travelTimeInSeconds / 60);
-    delayMin = Math.round((route.summary.trafficDelayInSeconds||0)/60);
-    fonte = 'tomtom';
-  } catch(eTomTom){
-    console.warn('[track] TomTom falhou, caindo pra OSRM:', eTomTom.message);
-    try {
-      // OSRM público: formato lng,lat
-      const url = `https://router.project-osrm.org/route/v1/driving/${v.lng},${v.lat};${d.lng},${d.lat}?overview=full&geometries=geojson`;
-      const r = await fetch(url);
-      if(!r.ok) throw new Error('OSRM HTTP ' + r.status);
-      const data = await r.json();
-      const route = data.routes && data.routes[0];
-      if(!route) throw new Error('OSRM sem rota');
-      coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // GeoJSON é lng,lat → invertemos
-      minTotal = Math.round(route.duration / 60);
-      delayMin = 0; // OSRM não tem trânsito
-      fonte = 'osrm';
-    } catch(eOsrm){
-      console.warn('[track] OSRM também falhou:', eOsrm.message);
-      return;
-    }
-  }
+    const route = data.routes && data.routes[0];
+    if(!route) throw new Error('OSRM sem rota');
+    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // GeoJSON é lng,lat → invertemos pra lat,lng do Leaflet
+    const minTotal = Math.round(route.duration / 60);
 
-  if(routeLine) map.removeLayer(routeLine);
-  routeLine = L.polyline(coords, {
-    color: '#00B4E5', weight: 5, opacity: 0.85,
-    dashArray: '14,10', lineCap: 'round',
-    className: 'osrm-route'
-  }).addTo(map);
-  document.getElementById('etav').textContent = minTotal + ' min';
-  document.getElementById('etav').className = 'v' + (delayMin > 5 ? ' late' : '');
-  document.getElementById('etal').textContent = delayMin > 0
-    ? `ETA · +${delayMin}min trânsito`
-    : (fonte === 'osrm' ? 'ETA até você (sem trânsito)' : 'ETA até você');
+    if(routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline(coords, {
+      color: '#00B4E5', weight: 5, opacity: 0.85,
+      dashArray: '14,10', lineCap: 'round',
+      className: 'osrm-route'
+    }).addTo(map);
+    document.getElementById('etav').textContent = minTotal + ' min';
+    document.getElementById('etav').className = 'v';
+    document.getElementById('etal').textContent = 'ETA até você';
+    console.log('[track] rota desenhada:', coords.length, 'pontos,', minTotal, 'min');
+  } catch(e){
+    console.warn('[track] OSRM falhou:', e.message);
+    // Não atualiza estado — mantém a rota anterior se existir
+  }
 }
 
 async function reverseGeocode(lat, lng){
