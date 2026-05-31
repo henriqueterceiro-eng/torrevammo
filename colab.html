@@ -635,6 +635,12 @@ function createSync(){
       const clean = cleanForFb(data);
       const msg = { type, data: clean, ts: Date.now(), _from: me?.id || 'anon' };
       if(bc) bc.postMessage(msg);
+      // Eventos CRÍTICOS: persiste em localStorage + retry automático até confirmar
+      const isCritical = /^chamado:(status|chegou|recusar)$/.test(type);
+      if(isCritical){
+        sendCritical(msg);
+        return;
+      }
       if(fb){
         try { fb.push(msg).catch(e => console.warn('[sync.send]', type, 'fail:', e)); }
         catch(e){ console.warn('[sync.send]', type, 'throw:', e); }
@@ -644,6 +650,69 @@ function createSync(){
     }
   };
 }
+
+// === RETRY persistente pra eventos críticos (chamado:status etc) ===
+// Garante que mesmo se o Firebase falhar momentaneamente, o evento é re-enviado.
+// Persiste em localStorage — sobrevive a fechamento do app.
+const CRIT_KEY = 'vammo_pending_critical';
+function loadPendingCritical(){
+  try { return JSON.parse(localStorage.getItem(CRIT_KEY) || '[]'); } catch(_){ return []; }
+}
+function savePendingCritical(arr){
+  try { localStorage.setItem(CRIT_KEY, JSON.stringify(arr)); } catch(_){}
+}
+function sendCritical(msg){
+  msg._id = msg._id || ('crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
+  msg._attempts = 0;
+  const arr = loadPendingCritical();
+  arr.push(msg);
+  savePendingCritical(arr);
+  flushCritical();
+}
+let _critFlushing = false;
+async function flushCritical(){
+  if(_critFlushing) return;
+  _critFlushing = true;
+  try {
+    while(true){
+      const arr = loadPendingCritical();
+      if(arr.length === 0) break;
+      const msg = arr[0];
+      msg._attempts = (msg._attempts || 0) + 1;
+      try {
+        if(typeof firebase === 'undefined' || !firebase.apps?.length){
+          throw new Error('Firebase ainda não inicializou');
+        }
+        await firebase.database().ref('vammo/events').push(msg);
+        // Sucesso — remove do array e mostra confirmação
+        const arrNow = loadPendingCritical();
+        arrNow.shift();
+        savePendingCritical(arrNow);
+        if(msg._attempts > 1){
+          showToast(`✓ Evento reenviado (após ${msg._attempts} tentativas)`);
+        }
+      } catch(e){
+        console.warn('[sendCritical] falha tentativa', msg._attempts, ':', e.message);
+        // Alerta visual quando passar de 3 tentativas
+        if(msg._attempts === 3){
+          showToast(`⚠ Falha ao enviar ${msg.type} — tentando de novo…`, true);
+        }
+        // Backoff: espera antes da próxima tentativa
+        await new Promise(r => setTimeout(r, Math.min(30000, 2000 * msg._attempts)));
+        // Salva attempts atualizado
+        const arrNow = loadPendingCritical();
+        if(arrNow[0]) arrNow[0]._attempts = msg._attempts;
+        savePendingCritical(arrNow);
+      }
+    }
+  } finally {
+    _critFlushing = false;
+  }
+}
+// Tenta flush periodicamente (caso a janela tenha pendentes ao reabrir)
+setInterval(flushCritical, 5000);
+// Tenta na volta da rede
+window.addEventListener('online', flushCritical);
 
 // Listener direto no nó dos chamados — fonte da verdade
 function setupChamadosListener(){
