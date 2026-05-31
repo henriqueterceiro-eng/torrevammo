@@ -1333,10 +1333,9 @@ function checkArrived(){
       rideMarkArrived();
       renderChamadoCard();
       updateChamadoMarkers();
-      // Abre modal de iniciar atendimento (se ainda não iniciou)
-      if(!ativo.iniciadoEm){
-        setTimeout(() => abrirModalIniciar(ativo), 600);
-      }
+      // Slide de "iniciar atendimento" agora renderiza dentro do chamadocard
+      // (sempre visível enquanto não iniciou, sem cortar em telas pequenas).
+      // Modal antigo (iniModal) preservado por compat mas não abre automaticamente.
     }
   } else {
     delete nearDestSince[ativo.id];
@@ -1752,14 +1751,28 @@ function renderChamadoCard(){
     </div>`;
   }
 
-  // Banner de chegada
+  // Banner de chegada — sem texto sobre "atender" porque agora tem slide explícito
   const arrivedBanner = c.arrived ? `
     <div class="arrivedbanner">
       <div class="ic">🎯</div>
       <div class="ti">
-        <div class="l1">VOCÊ CHEGOU!</div>
-        <div class="l2">Atenda o cliente e conclua quando terminar</div>
+        <div class="l1">VOCÊ CHEGOU NO LOCAL!</div>
+        <div class="l2">${c.iniciadoEm ? 'Atendimento em andamento' : 'Deslize abaixo pra iniciar o atendimento ↓'}</div>
       </div>
+    </div>
+  ` : '';
+
+  // Slide de iniciar atendimento — fica visível ATÉ ele iniciar, sempre que chegou no local
+  // Substitui o iniModal que era bottomsheet e podia cortar em telas pequenas.
+  const inicioSlide = (c.arrived && !c.iniciadoEm) ? `
+    <div style="margin:14px 0;padding:14px;background:linear-gradient(135deg,rgba(0,180,229,0.15),rgba(0,180,229,0.05));border:2px solid var(--acc);border-radius:14px">
+      <div style="font-size:12px;font-weight:800;color:var(--acc);text-align:center;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">🎯 Confirme o início do atendimento</div>
+      <div class="slide-confirm cyan" id="iniSlideInline" style="height:64px">
+        <div class="slide-fill"></div>
+        <div class="slide-text" style="font-size:13px">→ deslize para iniciar →</div>
+        <div class="slide-thumb" style="width:52px;height:52px;font-size:24px">▶</div>
+      </div>
+      <div style="font-size:10px;color:var(--txt2);text-align:center;margin-top:8px">Use o slide pra evitar toque acidental</div>
     </div>
   ` : '';
 
@@ -1768,6 +1781,7 @@ function renderChamadoCard(){
   el.innerHTML = `
     ${queueHead}
     ${arrivedBanner}
+    ${inicioSlide}
     <div class="head">
       <div class="icon">${c.icon || '🔧'}</div>
       <div class="ti">
@@ -1797,6 +1811,12 @@ function renderChamadoCard(){
   el.querySelectorAll('button[data-act]').forEach(b => {
     b.onclick = () => handleAction(b.dataset.act);
   });
+  // Wire do slide inline de "iniciar atendimento"
+  const inlineSlide = el.querySelector('#iniSlideInline');
+  if(inlineSlide){
+    resetSlide(inlineSlide);
+    setupSlideConfirm(inlineSlide, () => onIniciarConfirmado(c));
+  }
   bindRotinaInputs(c);
 }
 
@@ -1933,6 +1953,9 @@ function continuarConclusao(ativo){
     payload.clienteAusente = true;
     payload.ausenteMotivo = ativo._ausenteMotivo || '';
     payload.ausenteDetalhe = ativo._ausenteDetalhe || '';
+  }
+  if(ativo._semMotoMotivo){
+    payload.semMotoMotivo = ativo._semMotoMotivo;
   }
   sync.send('chamado:status', payload);
   vibrate([50, 30, 50]);
@@ -2496,14 +2519,22 @@ function bootApp(){
   document.getElementById('cargaDeixouMinus').onclick = () => { if(_cargaDeixou > 0){ _cargaDeixou--; atualizaCargaUI(); } };
   document.getElementById('cargaCancelar').onclick = fecharModalCarga;
   document.getElementById('cargaConfirmar').onclick = () => {
-    // Salva-vidas: se motivo do chamado indica pegar moto e o colab vai concluir
-    // sem adicionar nenhuma, pede confirmação explícita.
+    // TRAVA: se motivo do chamado indica pegar moto E lista vazia E não tem deixou,
+    // BLOQUEIA conclusão. Exige adicionar moto OU justificar motivo (modal próprio).
     if(_cargaPegaMoto && _cargaPegouList.length === 0 && _cargaDeixou === 0){
-      if(!confirm(
-        'Esse atendimento parece envolver PEGAR uma moto, mas você não adicionou nenhuma.\n\n' +
-        'Tem certeza que quer concluir sem registrar moto carregada?\n\n' +
-        '(Se a moto ficou no local, marque "deixou" ou clique OK)'
-      )) return;
+      const motivo = prompt(
+        '⛔ TRAVA: Esse atendimento envolve PEGAR moto, mas você não adicionou nenhuma.\n\n' +
+        'Pra concluir SEM moto, descreva o que aconteceu (obrigatório, mínimo 10 caracteres):\n\n' +
+        'Exemplos: "Cliente não estava no local" · "Moto já tinha sido recolhida por outro colab" · "Local fechado, vou voltar amanhã"'
+      );
+      if(motivo === null) return; // cancelou
+      const m = (motivo || '').trim();
+      if(m.length < 10){
+        alert('⚠ Motivo muito curto (mín 10 caracteres). Descreva o que aconteceu.');
+        return;
+      }
+      // Marca o chamado com o motivo da não-coleta — vai pra torre via payload
+      _cargaChamado._semMotoMotivo = m;
     }
     if(_cargaDeixou > 0) checkOutMotos(_cargaDeixou);
     _cargaPegouList.forEach(moto => {

@@ -4626,6 +4626,18 @@ function setupSyncListeners(){
       updates.ausenteDetalhe = c.ausenteDetalhe;
       updates.ausenteTs = c.ausenteTs;
     }
+    if(data.semMotoMotivo){
+      c.semMotoMotivo = data.semMotoMotivo;
+      updates.semMotoMotivo = data.semMotoMotivo;
+      // Alerta: colab concluiu recolhimento sem moto — gestor deve verificar
+      pushAlert({
+        id: 'sem-moto-' + c.id,
+        tipo: 'warn',
+        titulo: `Sem moto registrada: ${esc(data.motoristaNome || 'colab')}`,
+        msg: `${esc(c.cliente)} · "${esc(data.semMotoMotivo)}"`,
+        motId: data.motoristaId
+      });
+    }
     STORE.updateChamado(c.id, updates);
     if(data.status === 'concluido' || data.status === 'cancelado'){
       const oldMot = c.motoristaId;
