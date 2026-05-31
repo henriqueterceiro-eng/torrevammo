@@ -3716,6 +3716,9 @@ function openAddCh(){
   $('#addrMotivoCustom').style.display = 'none';
   $('#addrMotivoCustom').value = '';
   $('#addrResult').style.display = 'none';
+  // Reseta o botão (sai do estado "Geocodificando..." se ficou travado de uma vez anterior)
+  const btn = $('#addrSubmit');
+  if(btn){ btn.disabled = false; btn.textContent = '📍 Geocodificar e criar'; }
   $('#addch').style.display = 'flex';
   setTimeout(() => $('#addrEndereco').focus(), 100);
 }
@@ -3735,10 +3738,9 @@ async function submitAddCh(){
   const btn = $('#addrSubmit');
   btn.disabled = true; btn.textContent = '⏳ Geocodificando…';
 
-  let lat = null, lng = null, enderecoOficial = endereco;
   try {
+    let lat = null, lng = null, enderecoOficial = endereco;
     if(TT.has()){
-      // Tenta com viés pra SP — limita raio de 50km a partir do centro
       const result = await TT.geocode(endereco, { center: { lat: -23.5505, lng: -46.6333 }, radius: 80000 });
       if(result){
         lat = result.lat; lng = result.lng;
@@ -3750,31 +3752,32 @@ async function submitAddCh(){
     if(lat == null || lng == null){
       throw new Error('Endereço não encontrado. Verifique a grafia ou inclua bairro/cidade.');
     }
+
+    const ch = {
+      id: genId(),
+      ts: Date.now(),
+      cliente, motivo, placa,
+      endereco: enderecoOficial,
+      lat, lng,
+      status: 'novo',
+      travada: /travada|trava/i.test(motivo)
+    };
+    const list = loadDemoChamados();
+    list.unshift(ch);
+    saveDemoChamados(list);
+    chamados.unshift(ch);
+    STORE.saveChamado(ch);
+    selId = ch.id;
+    closeAddCh();
+    map.setView([lat, lng], 15);
+    renderAll();
+    showToast(`✓ Chamado criado: ${cliente} · ${enderecoOficial.substring(0, 40)}`);
   } catch(e){
     showToast('❌ ' + e.message, true);
+  } finally {
+    // Garante que o botão SEMPRE volta ao estado normal, mesmo em sucesso
     btn.disabled = false; btn.textContent = '📍 Geocodificar e criar';
-    return;
   }
-
-  const ch = {
-    id: genId(),
-    ts: Date.now(),
-    cliente, motivo, placa,
-    endereco: enderecoOficial,
-    lat, lng,
-    status: 'novo',
-    travada: /travada|trava/i.test(motivo)
-  };
-  const list = loadDemoChamados();
-  list.unshift(ch);
-  saveDemoChamados(list);
-  chamados.unshift(ch);
-  STORE.saveChamado(ch);
-  selId = ch.id;
-  closeAddCh();
-  map.setView([lat, lng], 15);
-  renderAll();
-  showToast(`✓ Chamado criado: ${cliente} · ${enderecoOficial.substring(0, 40)}`);
 }
 
 function clearAllChamados(){
