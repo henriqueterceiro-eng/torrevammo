@@ -581,6 +581,20 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
   </div>
 </div>
 
+<!-- MODAL DETALHE DO COLABORADOR (popup full-card) -->
+<div id="motdetailmodal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;z-index:10002;padding:20px">
+  <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
+    <div id="motDetHeader" style="padding:16px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:14px">
+      <!-- preenchido dinamicamente -->
+    </div>
+    <div id="motDetBody" style="flex:1;overflow-y:auto;padding:14px 18px"></div>
+    <div style="padding:10px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;justify-content:flex-end">
+      <button id="motDetLocate" style="background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);padding:7px 14px;font-size:12px;font-weight:700;border-radius:6px">📍 Ver no mapa</button>
+      <button onclick="closeMotDetail()" style="padding:7px 14px;font-size:12px;background:transparent;border:1px solid var(--bdr);color:var(--txt2)">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- NOVO CHAMADO POR ENDEREÇO -->
 <div id="addch" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;z-index:10000">
   <div style="background:var(--surf);border:1px solid var(--bdr2);padding:24px;border-radius:12px;width:480px;max-width:92vw">
@@ -1598,6 +1612,7 @@ function renderMotoristaMarkers(){
     } else {
       const mk = L.marker([m.lat, m.lng], { icon, zIndexOffset: 500 }).addTo(map);
       mk.bindTooltip(tip, { direction: 'top', offset: [0, -10], className: 'mot-tooltip', sticky: true });
+      mk.on('click', () => openMotDetail(id));
       motoristaMarkers[id] = mk;
     }
   }
@@ -1973,6 +1988,7 @@ function renderMot(){
           <div class="st">${stLbl} · ${filaStr}${slotsLbl} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}${m.kmh != null ? ` · <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : m.kmh+' km/h'}</span>` : ''}${ageLbl}</div>
           ${m.currentStreet ? `<div class="st" style="color:var(--acc);font-size:9px;margin-top:2px">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</div>` : ''}
         </div>
+        <button class="motinfo" data-act="info" title="Ver detalhes completos (atendimentos, slots, fila, etc)" style="background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);font-size:13px;padding:4px 9px;cursor:pointer;border-radius:6px;font-weight:700">ℹ</button>
         <button class="motrm" data-act="rm-mot" title="Remover este colaborador do mapa (se for fantasma de teste antigo)" style="background:transparent;border:none;color:var(--txt3);font-size:14px;padding:4px 8px;cursor:pointer;border-radius:4px">✕</button>
         <div class="chev">▼</div>
       </div>
@@ -1983,7 +1999,14 @@ function renderMot(){
 
   $$('#motwrap .mot').forEach(el => {
     const id = el.dataset.id;
-    el.querySelector('.mhdr').onclick = () => {
+    el.querySelector('.mhdr').onclick = (e) => {
+      // Click no botão ℹ abre popup detalhado (não toggle expand)
+      if(e.target.dataset.act === 'info' || e.target.closest('[data-act="info"]')){
+        e.stopPropagation();
+        openMotDetail(id);
+        return;
+      }
+      if(e.target.dataset.act === 'rm-mot' || e.target.closest('[data-act="rm-mot"]')) return; // tratado abaixo
       if(motExpanded.has(id)) motExpanded.delete(id);
       else motExpanded.add(id);
       renderMot();
@@ -3172,6 +3195,203 @@ function closeRank(){
   document.getElementById('rankmodal').style.display = 'none';
 }
 window.closeRank = closeRank;
+
+// ============================================================
+// POPUP DETALHE DO COLABORADOR — full status do operador
+// ============================================================
+let _motDetailId = null;
+let _motDetailTimer = null;
+
+function openMotDetail(motId){
+  _motDetailId = motId;
+  $('#motdetailmodal').style.display = 'flex';
+  renderMotDetail();
+  // Refresh a cada 5s pra manter dados vivos (km, fila, slots) enquanto aberto
+  if(_motDetailTimer) clearInterval(_motDetailTimer);
+  _motDetailTimer = setInterval(renderMotDetail, 5000);
+  $('#motDetLocate').onclick = () => {
+    const m = motoristas[_motDetailId];
+    if(m && m.lat && m.lng){ map.setView([m.lat, m.lng], 16); closeMotDetail(); }
+  };
+}
+function closeMotDetail(){
+  $('#motdetailmodal').style.display = 'none';
+  _motDetailId = null;
+  if(_motDetailTimer){ clearInterval(_motDetailTimer); _motDetailTimer = null; }
+}
+window.closeMotDetail = closeMotDetail;
+
+function renderMotDetail(){
+  const id = _motDetailId;
+  const m = id ? motoristas[id] : null;
+  if(!m){ closeMotDetail(); return; }
+  const colab = colaboradores[id] || {};
+  const veh = (() => {
+    // Busca veículo atribuído a esse colab (carro/carreta com slots)
+    for(const vid in veiculos){
+      const v = veiculos[vid];
+      if(v.atribuidoA === id) return v;
+    }
+    return null;
+  })();
+  const now = Date.now();
+  const ageS = Math.round((now - (m.lastSeen||0))/1000);
+  const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
+  const isStale = !isOff && ageS > 60;
+  const stCor = isOff ? '#6b7280' : isStale ? '#fbbf24' : m.status === 'busy' ? '#d97706' : '#16a34a';
+  const stLbl = isOff ? 'offline' : isStale ? 'sem GPS' : m.status === 'busy' ? 'em rota' : 'online';
+
+  // Header
+  $('#motDetHeader').innerHTML = `
+    <div style="width:54px;height:54px;border-radius:50%;background:${m.color || 'var(--acc)'};color:#001823;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;position:relative">
+      ${esc((m.nome||'?').charAt(0).toUpperCase())}
+      <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:${stCor};border:2px solid var(--surf)"></div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:17px;font-weight:800">${esc(m.nome)}</div>
+      <div style="font-size:11px;color:var(--txt2);margin-top:2px">
+        <span style="color:${stCor};font-weight:700">● ${stLbl}</span>
+        ${colab.base ? ` · 🏠 ${esc(colab.base)}` : ''}
+        ${colab.turno ? ` · ${({manha:'☀ Manhã',tarde:'🌇 Tarde',noite:'🌙 Noite'})[colab.turno] || colab.turno}` : ''}
+      </div>
+    </div>
+  `;
+
+  // Fila
+  const queues = loadQueues();
+  const fila = queues[id] || [];
+  const filaChamados = fila.map(cid => chamados.find(c => c.id === cid)).filter(Boolean);
+
+  // Atendimentos do dia (hoje 00:00 até agora)
+  const hojeIni = new Date(); hojeIni.setHours(0,0,0,0);
+  const corridasHoje = Object.values(corridas).filter(r =>
+    r.motoristaId === id && r.completedTs >= hojeIni.getTime()
+  );
+  const concluidoHoje = corridasHoje.filter(r => r.endStatus === 'concluido').length;
+  const canceladoHoje = corridasHoje.filter(r => r.endStatus === 'cancelado').length;
+  const kmHoje = corridasHoje.reduce((s, r) => s + (r.totalKm||0), 0);
+  const notaHoje = (() => {
+    const comNota = corridasHoje.filter(r => r.nota?.final != null);
+    if(!comNota.length) return null;
+    return comNota.reduce((s, r) => s + r.nota.final, 0) / comNota.length;
+  })();
+
+  // Slots
+  const slotsTotal = m.slotsTotal || 0;
+  const slotsOcup = m.slotsCount || 0;
+  const slotsLivre = Math.max(0, slotsTotal - slotsOcup);
+  const slotsDetalhe = m.slotsDetalhe || [];
+
+  // Veículo: prioridade do `veh` cadastrado; fallback pra placa que o colab envia
+  const placa = veh?.placa || m.placa || 'sem placa';
+  const veiculoLabel = veh
+    ? `${veh.marca || ''} ${veh.modelo || ''}`.trim() + (veh.ano ? ' (' + veh.ano + ')' : '')
+    : '—';
+  const veicTipoIcon = veh ? ({ carro:'🚗', carreta:'🚛', moto:'🏍' })[veh.tipo] || '🚗' : '🚗';
+
+  // KM info
+  const kmhTxt = m.kmh != null ? (m.kmh === 0 ? '🛑 parado' : `🏃 ${m.kmh} km/h`) : '—';
+  const ruaTxt = m.currentStreet ? `📍 ${esc(m.currentStreet)}${m.currentArea ? ' · ' + esc(m.currentArea) : ''}` : '';
+
+  // Build body
+  $('#motDetBody').innerHTML = `
+    <!-- Status geral em grid -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:var(--surf2);padding:8px 6px;border-radius:8px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:var(--acc);font-family:var(--mono)">${concluidoHoje}</div>
+        <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;margin-top:2px">Hoje ✓</div>
+      </div>
+      <div style="background:var(--surf2);padding:8px 6px;border-radius:8px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:${slotsOcup >= slotsTotal && slotsTotal > 0 ? '#dc2626' : 'var(--acc)'};font-family:var(--mono)">${slotsOcup}/${slotsTotal}</div>
+        <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;margin-top:2px">Slots 🏍</div>
+      </div>
+      <div style="background:var(--surf2);padding:8px 6px;border-radius:8px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:var(--acc);font-family:var(--mono)">${kmHoje.toFixed(1)}</div>
+        <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;margin-top:2px">Km hoje</div>
+      </div>
+      <div style="background:var(--surf2);padding:8px 6px;border-radius:8px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:${notaHoje >= 8 ? '#16a34a' : notaHoje >= 6 ? '#fbbf24' : notaHoje != null ? '#dc2626' : 'var(--txt3)'};font-family:var(--mono)">${notaHoje != null ? notaHoje.toFixed(1) : '—'}</div>
+        <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;margin-top:2px">⭐ Nota</div>
+      </div>
+    </div>
+
+    <!-- Veículo -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🚗 Veículo em uso</div>
+      <div style="background:var(--surf2);padding:10px;border-radius:8px;display:flex;align-items:center;gap:10px">
+        <div style="font-size:24px">${veicTipoIcon}</div>
+        <div style="flex:1">
+          <div style="font-family:var(--mono);font-weight:700;font-size:14px">${esc(placa)}</div>
+          <div style="font-size:11px;color:var(--txt2);margin-top:2px">${esc(veiculoLabel)}</div>
+          ${veh ? `<div style="font-size:10px;color:var(--txt3);margin-top:2px">${veh.slots != null ? `${veh.slots} slot${veh.slots===1?'':'s'} de motos` : 'sem slots'}${veh.ultimoKm ? ' · ' + veh.ultimoKm.toLocaleString('pt-BR') + ' km' : ''}</div>` : '<div style="font-size:10px;color:var(--txt3);margin-top:2px">⚠ Veículo não vinculado ao colab no cadastro</div>'}
+        </div>
+      </div>
+    </div>
+
+    <!-- Status ao vivo -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">📡 Status ao vivo</div>
+      <div style="background:var(--surf2);padding:10px;border-radius:8px;font-size:12px;line-height:1.6">
+        <div><strong>Velocidade:</strong> <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${kmhTxt}</span></div>
+        ${ruaTxt ? `<div><strong>Localização:</strong> <span style="color:var(--acc);font-size:11px">${ruaTxt}</span></div>` : ''}
+        <div><strong>Último GPS:</strong> ${ageS < 60 ? ageS + 's' : Math.floor(ageS/60) + ' min'} atrás ${isStale ? '<span style="color:#fbbf24">⚠</span>' : ''}</div>
+        ${m.modo === 'descarregando' ? '<div style="color:#dc2626;font-weight:700;margin-top:4px">🔴 Indo descarregar numa base — não recebe novos chamados</div>' : ''}
+      </div>
+    </div>
+
+    <!-- Slots ocupados -->
+    ${slotsDetalhe.length > 0 ? `
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🏍 Motos a bordo (${slotsOcup}/${slotsTotal})</div>
+      <div style="background:rgba(0,180,229,0.06);border:1px solid var(--acc);padding:8px;border-radius:8px">
+        ${slotsDetalhe.map((s, i) => {
+          const idade = Math.floor((Date.now() - (s.ocupadoEm||Date.now())) / 60000);
+          const idadeTxt = idade < 60 ? idade + 'min' : Math.floor(idade/60) + 'h' + (idade%60 ? (idade%60) + 'min' : '');
+          const origem = s.source === 'saida' ? '🚪 saída de base' : s.clienteName ? `👤 ${esc(s.clienteName)}` : '👤 cliente';
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf);border-radius:6px;margin-bottom:4px;font-size:12px">
+            <span style="font-weight:800;color:var(--acc);width:24px;text-align:center">#${i+1}</span>
+            <span style="font-family:var(--mono);font-weight:700;flex:1">${s.placa ? esc(s.placa) : '<span style="color:var(--txt3)">sem placa</span>'}</span>
+            <span style="color:var(--txt2);font-size:10px">${origem}</span>
+            <span style="color:var(--txt3);font-size:10px;font-family:var(--mono)">há ${idadeTxt}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : (slotsTotal > 0 ? `
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🏍 Motos a bordo</div>
+      <div style="background:var(--surf2);padding:10px;border-radius:8px;text-align:center;color:var(--txt3);font-size:12px">Sem motos a bordo · ${slotsLivre} slot(s) livre(s)</div>
+    </div>` : '')}
+
+    <!-- Fila atual -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">📋 Fila de atendimento (${fila.length})</div>
+      ${filaChamados.length === 0
+        ? '<div style="background:var(--surf2);padding:10px;border-radius:8px;text-align:center;color:var(--txt3);font-size:12px">Sem chamados atribuídos</div>'
+        : filaChamados.map((c, i) => `
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:${i===0?'rgba(245,158,11,0.08)':'var(--surf2)'};border-radius:6px;margin-bottom:4px;font-size:12px;border:${i===0?'1px solid #fbbf24':'1px solid transparent'}">
+            <span style="font-weight:800;color:${i===0?'#fbbf24':'var(--acc)'};width:24px;text-align:center">${i===0?'▶':i+1}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700">${esc(c.cliente || '?')}</div>
+              <div style="font-size:10px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.motivo || '')}${c.endereco ? ' · ' + esc(c.endereco.split(',')[0]) : ''}</div>
+            </div>
+            <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':'conc'}" style="font-size:9px;padding:2px 6px">${c.status==='em_rota'?'ROTA':c.status.toUpperCase()}</span>
+          </div>
+        `).join('')}
+    </div>
+
+    <!-- Atendimentos do dia -->
+    ${corridasHoje.length > 0 ? `
+    <div style="margin-bottom:8px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">📊 Atendimentos hoje (${corridasHoje.length})</div>
+      <div style="background:var(--surf2);padding:8px 10px;border-radius:8px;font-size:11px;display:flex;gap:14px;flex-wrap:wrap">
+        <div>✓ <strong style="color:#16a34a">${concluidoHoje}</strong> concluídos</div>
+        ${canceladoHoje > 0 ? `<div>✕ <strong style="color:#dc2626">${canceladoHoje}</strong> cancelados</div>` : ''}
+        <div>📍 <strong>${kmHoje.toFixed(1)}</strong> km rodados</div>
+        ${notaHoje != null ? `<div>⭐ <strong style="color:${notaHoje>=8?'#16a34a':notaHoje>=6?'#fbbf24':'#dc2626'}">${notaHoje.toFixed(1)}</strong> média</div>` : ''}
+      </div>
+    </div>` : ''}
+  `;
+}
 
 // Copia o link do colab pra clipboard (usado no header da aba Colaboradores)
 function copyColabUrl(){
@@ -4473,6 +4693,7 @@ function init(){
   document.addEventListener('keydown', (e) => {
     if(e.key !== 'Escape') return;
     if($('#addch').style.display === 'flex') return closeAddCh();
+    if($('#motdetailmodal').style.display === 'flex') return closeMotDetail();
     if($('#repmodal').style.display === 'flex') return closeRep();
     if($('#rkmmodal').style.display === 'flex') return closeRkm();
     if($('#frotamodal').style.display === 'flex') return closeFrota();
