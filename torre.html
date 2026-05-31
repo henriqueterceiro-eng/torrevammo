@@ -3414,10 +3414,13 @@ function renderMotDetail(){
     </div>
 
     <!-- Slots ocupados -->
-    ${slotsDetalhe.length > 0 ? `
+    ${slotsTotal > 0 ? `
     <div style="margin-bottom:14px">
-      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🏍 Motos a bordo (${slotsOcup}/${slotsTotal})</div>
-      <div style="background:rgba(0,180,229,0.06);border:1px solid var(--acc);padding:8px;border-radius:8px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+        <span>🏍 Motos a bordo (${slotsOcup}/${slotsTotal})</span>
+        ${slotsLivre > 0 ? `<button id="motDetAddMoto" style="background:rgba(0,180,229,0.15);border:1px solid var(--acc);color:var(--acc);padding:3px 8px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;letter-spacing:0">+ moto</button>` : ''}
+      </div>
+      ${slotsDetalhe.length > 0 ? `<div style="background:rgba(0,180,229,0.06);border:1px solid var(--acc);padding:8px;border-radius:8px">
         ${slotsDetalhe.map((s, i) => {
           const idade = Math.floor((Date.now() - (s.ocupadoEm||Date.now())) / 60000);
           const idadeTxt = idade < 60 ? idade + 'min' : Math.floor(idade/60) + 'h' + (idade%60 ? (idade%60) + 'min' : '');
@@ -3427,14 +3430,11 @@ function renderMotDetail(){
             <span style="font-family:var(--mono);font-weight:700;flex:1">${s.placa ? esc(s.placa) : '<span style="color:var(--txt3)">sem placa</span>'}</span>
             <span style="color:var(--txt2);font-size:10px">${origem}</span>
             <span style="color:var(--txt3);font-size:10px;font-family:var(--mono)">há ${idadeTxt}</span>
+            <button data-rmmoto="${s.id || i}" style="background:transparent;border:none;color:var(--txt3);cursor:pointer;font-size:13px;padding:0 4px" title="Remover esta moto dos slots">✕</button>
           </div>`;
         }).join('')}
-      </div>
-    </div>` : (slotsTotal > 0 ? `
-    <div style="margin-bottom:14px">
-      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🏍 Motos a bordo</div>
-      <div style="background:var(--surf2);padding:10px;border-radius:8px;text-align:center;color:var(--txt3);font-size:12px">Sem motos a bordo · ${slotsLivre} slot(s) livre(s)</div>
-    </div>` : '')}
+      </div>` : `<div style="background:var(--surf2);padding:10px;border-radius:8px;text-align:center;color:var(--txt3);font-size:12px">Sem motos a bordo · ${slotsLivre} slot(s) livre(s)</div>`}
+    </div>` : ''}
 
     <!-- Fila atual -->
     <div style="margin-bottom:14px">
@@ -3538,6 +3538,72 @@ function renderMotDetail(){
       listAddVeh.style.display = 'block';
     };
   }
+  // Botão "+ moto": adiciona moto manualmente nos slots do colab (quando colab esqueceu)
+  const btnAddMoto = $('#motDetAddMoto');
+  if(btnAddMoto){
+    btnAddMoto.onclick = (ev) => {
+      ev.stopPropagation();
+      const placa = prompt(`Adicionar moto ao Sergio?\n\nPlaca (deixe vazio se não tiver):`);
+      if(placa === null) return; // cancelou
+      const placaUp = (placa || '').trim().toUpperCase();
+      // Pega último chamado concluído do colab pra associar (origem do checkin)
+      const ultConcluido = corridasHoje
+        .filter(r => r.endStatus === 'concluido')
+        .sort((a,b) => b.completedTs - a.completedTs)[0];
+      const novoSlot = {
+        id: 'slot_' + Date.now() + '_' + Math.random().toString(36).substring(2,5),
+        placa: placaUp || null,
+        source: 'cliente',
+        clienteName: ultConcluido?.cliente || null,
+        chamadoId: ultConcluido?.chamadoId || null,
+        ocupadoEm: Date.now(),
+        _addedByGestor: true
+      };
+      // Atualiza turno no Firebase
+      if(!turnos[id]){ alert('Colab sem turno ativo. Não dá pra adicionar.'); return; }
+      const turnoUpd = { ...turnos[id] };
+      turnoUpd.slotsOcupados = [...(turnoUpd.slotsOcupados || []), novoSlot];
+      turnos[id] = turnoUpd;
+      try {
+        if(typeof firebase !== 'undefined' && firebase.apps?.length){
+          firebase.database().ref('vammo/turnos/' + id).set(cleanForFb(turnoUpd));
+        }
+      } catch(e){ console.warn('saveTurno fix:', e); }
+      // Atualiza o m local pra renderizar imediatamente (até o colab mandar update)
+      m.slotsCount = (m.slotsCount || 0) + 1;
+      m.slotsDetalhe = [...(m.slotsDetalhe || []), novoSlot];
+      m.isFull = m.slotsCount >= (m.slotsTotal || 0);
+      showToast(`✓ Moto ${placaUp || '(sem placa)'} adicionada ao Sergio`);
+      renderMotDetail();
+      renderMotoristaMarkers();
+      renderMot();
+    };
+  }
+  // Botão "✕" em cada moto: remove dos slots
+  $$('#motDetBody [data-rmmoto]').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const slotId = btn.dataset.rmmoto;
+      const t = turnos[id];
+      if(!t || !t.slotsOcupados) return;
+      const slot = t.slotsOcupados.find(s => (s.id || '') === slotId);
+      if(!confirm(`Remover ${slot?.placa || 'moto'} dos slots do colab?\n\n(Use só pra corrigir lançamento errado — o registro de carga/descarga oficial é feito pelo próprio colab no fluxo.)`)) return;
+      const turnoUpd = { ...t, slotsOcupados: t.slotsOcupados.filter(s => (s.id || '') !== slotId) };
+      turnos[id] = turnoUpd;
+      try {
+        if(typeof firebase !== 'undefined' && firebase.apps?.length){
+          firebase.database().ref('vammo/turnos/' + id).set(cleanForFb(turnoUpd));
+        }
+      } catch(e){ console.warn('saveTurno fix:', e); }
+      m.slotsCount = Math.max(0, (m.slotsCount || 0) - 1);
+      m.slotsDetalhe = (m.slotsDetalhe || []).filter(s => (s.id || '') !== slotId);
+      m.isFull = false;
+      showToast(`✓ ${slot?.placa || 'Moto'} removida`);
+      renderMotDetail();
+      renderMotoristaMarkers();
+      renderMot();
+    };
+  });
   // Wire dos botões de reivindicar veículo (sobrescreve atribuidoA pro colab atual)
   $$('#motDetBody [data-reivindicar]').forEach(btn => {
     btn.onclick = (e) => {
