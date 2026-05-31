@@ -3398,6 +3398,8 @@ function renderMotDetail(){
           }).join('')
       }
       ${veiculosColab.length > 0 ? `<div style="font-size:10px;color:var(--txt2);text-align:center;margin-top:4px">Total: <strong style="color:var(--acc)">${veiculosColab.reduce((s,v) => s + (v.slots||0), 0)} slots</strong> · ${slotsOcup} ocupado(s)</div>` : ''}
+      <button id="motDetAddVeh" style="width:100%;margin-top:8px;padding:8px;background:rgba(0,180,229,0.12);border:1px dashed var(--acc);color:var(--acc);font-size:11px;font-weight:700;border-radius:6px;cursor:pointer">+ Vincular outro veículo (ex: carreta)</button>
+      <div id="motDetAddVehList" style="display:none;margin-top:8px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:8px;max-height:240px;overflow-y:auto"></div>
     </div>
 
     <!-- Status ao vivo -->
@@ -3463,6 +3465,79 @@ function renderMotDetail(){
       </div>
     </div>` : ''}
   `;
+  // Botão "+ Vincular outro veículo": abre lista de veículos disponíveis pra atribuir
+  const btnAddVeh = $('#motDetAddVeh');
+  const listAddVeh = $('#motDetAddVehList');
+  if(btnAddVeh){
+    btnAddVeh.onclick = () => {
+      const expanded = listAddVeh.style.display !== 'none';
+      if(expanded){ listAddVeh.style.display = 'none'; return; }
+      const jaVinculados = new Set(veiculosColab.map(v => v.id));
+      const disponiveis = Object.values(veiculos)
+        .filter(v => !jaVinculados.has(v.id))
+        .sort((a,b) => (a.tipo||'').localeCompare(b.tipo||'') || (a.placa||'').localeCompare(b.placa||''));
+      if(disponiveis.length === 0){
+        listAddVeh.innerHTML = '<div style="font-size:11px;color:var(--txt3);text-align:center;padding:8px">Nenhum outro veículo cadastrado</div>';
+      } else {
+        listAddVeh.innerHTML = disponiveis.map(v => {
+          const ic = ({ carro:'🚗', carreta:'🚛', moto:'🏍' })[v.tipo] || '🚗';
+          const dono = v.atribuidoA ? colaboradores[v.atribuidoA] : null;
+          const donoLbl = dono ? `<span style="color:#fbbf24;font-size:9px">⚠ com ${esc(dono.nome.split(' ')[0])}</span>` : `<span style="color:#16a34a;font-size:9px">✓ livre</span>`;
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surf2);border-radius:6px;margin-bottom:4px;font-size:11px">
+            <div style="font-size:18px">${ic}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:var(--mono);font-weight:700">${esc(v.placa)}</div>
+              <div style="font-size:9px;color:var(--txt2)">${esc((v.marca||'')+' '+(v.modelo||'')).trim()} · ${v.slots||0} slot(s) · ${donoLbl.replace(/<[^>]*>/g,'')}</div>
+            </div>
+            <button data-vincular="${v.id}" style="background:var(--acc);color:#001823;border:none;padding:6px 10px;font-size:10px;font-weight:800;border-radius:6px;cursor:pointer">Vincular</button>
+          </div>`;
+        }).join('');
+        listAddVeh.querySelectorAll('[data-vincular]').forEach(b => {
+          b.onclick = (ev) => {
+            ev.stopPropagation();
+            const vid = b.dataset.vincular;
+            const v = veiculos[vid];
+            if(!v) return;
+            const donoAnt = v.atribuidoA ? colaboradores[v.atribuidoA] : null;
+            const msg = `Vincular ${v.placa} (${(v.marca||'')+' '+(v.modelo||'')}) a ${m.nome}?\n\n` +
+              (donoAnt ? `Atualmente está com: ${donoAnt.nome}\n` : 'Atualmente livre.\n') +
+              `\nIsso atualiza o cadastro e o turno (carretaId/veiculoId conforme o tipo).`;
+            if(!confirm(msg)) return;
+            // 1) Atualiza cadastro do veículo
+            const fixedVeh = { ...v, atribuidoA: id, atribuidoEm: Date.now() };
+            veiculos[vid] = fixedVeh;
+            STORE.saveVeiculo(fixedVeh);
+            // 2) Atualiza o turno do colab se existir (preferindo o slot certo)
+            if(turno){
+              const turnoUpd = { ...turno };
+              if(v.tipo === 'carreta' || (v.slots > 0 && turnoUpd.carretaId == null && turnoUpd.veiculoId)){
+                turnoUpd.carretaId = vid;
+                turnoUpd.carretaPlaca = v.placa;
+              } else if(!turnoUpd.veiculoId){
+                turnoUpd.veiculoId = vid;
+                turnoUpd.veiculoPlaca = v.placa;
+                turnoUpd.veiculoTipo = v.tipo;
+              }
+              // Recalcula slotsTotal somando carro + carreta
+              const carroSlots = turnoUpd.veiculoId && veiculos[turnoUpd.veiculoId] ? (veiculos[turnoUpd.veiculoId].slots||0) : 0;
+              const carretaSlots = turnoUpd.carretaId && veiculos[turnoUpd.carretaId] ? (veiculos[turnoUpd.carretaId].slots||0) : 0;
+              turnoUpd.slotsTotal = carroSlots + carretaSlots;
+              turnos[id] = turnoUpd;
+              try {
+                if(typeof firebase !== 'undefined' && firebase.apps?.length){
+                  firebase.database().ref('vammo/turnos/' + id).set(cleanForFb(turnoUpd));
+                }
+              } catch(e){ console.warn('saveTurno fix:', e); }
+            }
+            showToast(`✓ ${v.placa} vinculada a ${m.nome.split(' ')[0]}`);
+            listAddVeh.style.display = 'none';
+            renderMotDetail();
+          };
+        });
+      }
+      listAddVeh.style.display = 'block';
+    };
+  }
   // Wire dos botões de reivindicar veículo (sobrescreve atribuidoA pro colab atual)
   $$('#motDetBody [data-reivindicar]').forEach(btn => {
     btn.onclick = (e) => {
