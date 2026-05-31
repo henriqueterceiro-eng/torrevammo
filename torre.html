@@ -719,6 +719,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 120 * 1000;       // 120s sem update = visualmente "offline" (toleramos hiccups de rede e tela bloqueada)
+const LATEST_COLAB_VERSION = '2026-05-31.7'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
 const MOTORISTA_REMOVE_MS = 5 * 60 * 1000; // 5min sem update = remove do mapa automaticamente
 
 let cfg = loadCfg();
@@ -3330,14 +3331,25 @@ function renderMotDetail(){
   const stCor = isOff ? '#6b7280' : isStale ? '#fbbf24' : m.status === 'busy' ? '#d97706' : '#16a34a';
   const stLbl = isOff ? 'offline' : isStale ? 'sem GPS' : m.status === 'busy' ? 'em rota' : 'online';
 
-  // Header
+  // Header — inclui versão do app do colab (badge amarelo se desatualizado)
+  const appV = m.appVersion;
+  let verBadge = '';
+  if(appV){
+    if(appV === LATEST_COLAB_VERSION){
+      verBadge = `<span style="display:inline-block;font-size:9px;background:rgba(22,163,74,0.18);color:#16a34a;padding:1px 6px;border-radius:4px;font-family:var(--mono);margin-left:6px" title="App atualizado">✓ ${esc(appV)}</span>`;
+    } else {
+      verBadge = `<span style="display:inline-block;font-size:9px;background:rgba(245,158,11,0.18);color:#fbbf24;padding:1px 6px;border-radius:4px;font-family:var(--mono);margin-left:6px" title="App em versão ANTIGA (${appV}) — atual é ${LATEST_COLAB_VERSION}. Use 'Forçar atualização' no rodapé.">⚠ ${esc(appV)}</span>`;
+    }
+  } else {
+    verBadge = `<span style="display:inline-block;font-size:9px;background:rgba(220,38,38,0.18);color:#fca5a5;padding:1px 6px;border-radius:4px;font-family:var(--mono);margin-left:6px" title="App MUITO antigo — nem manda versão no payload. Precisa fechar e reabrir manualmente.">⚠ s/ versão</span>`;
+  }
   $('#motDetHeader').innerHTML = `
     <div style="width:54px;height:54px;border-radius:50%;background:${m.color || 'var(--acc)'};color:#001823;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;position:relative">
       ${esc((m.nome||'?').charAt(0).toUpperCase())}
       <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:${stCor};border:2px solid var(--surf)"></div>
     </div>
     <div style="flex:1;min-width:0">
-      <div style="font-size:17px;font-weight:800">${esc(m.nome)}</div>
+      <div style="font-size:17px;font-weight:800">${esc(m.nome)}${verBadge}</div>
       <div style="font-size:11px;color:var(--txt2);margin-top:2px">
         <span style="color:${stCor};font-weight:700">● ${stLbl}</span>
         ${colab.base ? ` · 🏠 ${esc(colab.base)}` : ''}
@@ -4541,6 +4553,7 @@ function setupSyncListeners(){
       if(data.isFull != null) m.isFull = data.isFull;
     }
     if(data.modo != null) m.modo = data.modo;
+    if(data.appVersion != null) m.appVersion = data.appVersion;
     // Reverse geocode — só 1x por 45s por motorista
     if(TT.has()){
       if(!m._lastReverse || Date.now() - m._lastReverse > 45000){

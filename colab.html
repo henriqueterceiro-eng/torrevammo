@@ -219,6 +219,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 
 /* GPS Status overlay */
 #gpsstatus{position:absolute;top:12px;left:12px;background:rgba(10,20,40,0.9);padding:8px 12px;border-radius:8px;font-size:11px;color:var(--txt2);display:flex;align-items:center;gap:6px;z-index:500;backdrop-filter:blur(8px)}
+#appver{position:absolute;bottom:8px;left:8px;font-size:9px;color:rgba(255,255,255,0.35);font-family:'IBM Plex Mono',monospace;z-index:500;pointer-events:none}
 #gpsstatus .ind{width:8px;height:8px;border-radius:50%;background:var(--txt3)}
 #gpsstatus.ok .ind{background:var(--on);box-shadow:0 0 6px var(--on)}
 #gpsstatus.err .ind{background:var(--novo);box-shadow:0 0 6px var(--novo)}
@@ -376,6 +377,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     <div id="mapcanvas"></div>
     <div id="gpsstatus"><span class="ind"></span><span id="gpstxt">Buscando GPS…</span></div>
     <button id="recenter" title="Centralizar em mim">📍</button>
+    <div id="appver">v · </div>
     <div id="empty">
       <div class="ic">🛵</div>
       <div>Aguardando chamado…</div>
@@ -551,6 +553,9 @@ const FIREBASE_CONFIG = {
 const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 
 const SYNC_CHANNEL = 'vammo-fase1';
+// Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
+// gestor se algum colab está em build antigo.
+const APP_VERSION = '2026-05-31.7';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1544,7 +1549,8 @@ function slotsSnapshot(){
     slotsCount: ocup,
     slotsDetalhe: detalhe,
     isFull: total > 0 && ocup >= total,
-    modo: turnoAtivo?.modo || null  // 'normal' | 'descarregando' | etc
+    modo: turnoAtivo?.modo || null,  // 'normal' | 'descarregando' | etc
+    appVersion: APP_VERSION
   };
 }
 
@@ -2605,6 +2611,8 @@ function bootApp(){
   initMap();
   setupSyncListeners();
   startGPS();
+  const av = document.getElementById('appver');
+  if(av) av.textContent = 'app ' + APP_VERSION;
 
   // Anuncia login
   sync.send('motorista:login', {
