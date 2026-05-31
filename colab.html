@@ -160,17 +160,18 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #app{display:none;flex-direction:column;height:100vh;height:100dvh}
 #app.show{display:flex}
 
-#topbar{flex:0 0 auto;background:linear-gradient(180deg,var(--surf) 0%,#152339 100%);border-bottom:1px solid var(--bdr);padding:12px 14px;display:flex;align-items:center;gap:10px;padding-top:max(12px,env(safe-area-inset-top));position:relative}
+/* App do colab é MOBILE-ONLY — não atende desktop. Tudo otimizado pra tela estreita. */
+#topbar{flex:0 0 auto;background:linear-gradient(180deg,var(--surf) 0%,#152339 100%);border-bottom:1px solid var(--bdr);padding:8px 10px;display:flex;align-items:center;gap:6px;padding-top:max(8px,env(safe-area-inset-top));position:relative}
 #topbar::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--acc) 50%,transparent 100%);opacity:0.6}
-#topbar .av{width:36px;height:36px;border-radius:50%;background:var(--acc);color:#001823;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex:0 0 36px;box-shadow:0 0 0 2px rgba(0,180,229,0.25)}
-#topbar .info{flex:1;min-width:0}
-#topbar .nm{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#topbar .pl{color:var(--txt2);font-size:11px;display:flex;align-items:center;gap:6px}
-#topbar .stbtn{padding:6px 10px;border-radius:20px;font-size:11px;font-weight:700;background:var(--on);color:#001823;letter-spacing:0.5px}
+#topbar .av{width:30px;height:30px;border-radius:50%;background:var(--acc);color:#001823;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:0 0 30px;box-shadow:0 0 0 2px rgba(0,180,229,0.25)}
+#topbar .info{flex:1 1 auto;min-width:0;overflow:hidden}
+#topbar .nm{font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+#topbar .pl{color:var(--txt2);font-size:10px;display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;line-height:1.2;margin-top:1px}
+#topbar .stbtn{padding:5px 8px;border-radius:12px;font-size:10px;font-weight:800;background:var(--on);color:#001823;letter-spacing:0.3px;flex:0 0 auto}
 #topbar .stbtn.busy{background:var(--busy)}
 #topbar .stbtn.off{background:var(--off);color:var(--txt)}
-#topbar .out{padding:6px 8px;border-radius:6px;background:transparent;color:var(--txt2);font-size:18px}
-#topbar .slotsbtn{padding:6px 10px;border-radius:14px;font-size:11px;font-weight:800;background:rgba(0,180,229,0.12);color:var(--acc);border:1px solid var(--acc);cursor:pointer;display:none;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace}
+#topbar .out{padding:4px 6px;border-radius:6px;background:transparent;color:var(--txt2);font-size:16px;flex:0 0 auto}
+#topbar .slotsbtn{padding:4px 8px;border-radius:10px;font-size:11px;font-weight:800;background:rgba(0,180,229,0.12);color:var(--acc);border:1px solid var(--acc);cursor:pointer;display:none;align-items:center;gap:3px;font-family:'IBM Plex Mono',monospace;flex:0 0 auto}
 #topbar .slotsbtn.show{display:flex}
 #topbar .slotsbtn.full{background:rgba(220,38,38,0.15);color:#fca5a5;border-color:#dc2626;animation:pulseFull 1.5s infinite}
 #topbar .slotsbtn.descarregando{background:rgba(220,38,38,0.2);color:#fff;border-color:#dc2626}
@@ -284,9 +285,9 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #syncdot.ok{background:var(--on)}
 
 /* ===== Wake Lock indicator ===== */
-#wakedot{width:7px;height:7px;border-radius:50%;background:var(--txt3);display:inline-block;margin-left:2px}
-#wakedot.on{background:#fbbf24;box-shadow:0 0 4px #fbbf24}
-#wakedot.on::after{content:' tela ativa'}
+#wakedot{width:6px;height:6px;border-radius:50%;background:var(--txt3);display:inline-block;margin-left:2px}
+#wakedot.on{background:#fbbf24;box-shadow:0 0 3px #fbbf24}
+/* texto 'tela ativa' removido — ocupava espaço sem agregar (a cor amarela ja indica) */
 
 /* ===== Install banner ===== */
 #installbanner{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#00B4E5,#0099c4);color:#001823;padding:14px 16px;padding-bottom:max(14px,env(safe-area-inset-bottom));display:none;align-items:center;gap:12px;z-index:200;box-shadow:0 -4px 16px rgba(0,180,229,0.4);animation:slideUp 0.4s}
@@ -414,34 +415,39 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 </div>
 
 <!-- Modal: atualizar carga antes de concluir -->
-<div id="cargaModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;padding:20px;z-index:200">
-  <div style="background:var(--surf);border-radius:14px;padding:20px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto">
-    <div style="font-size:20px;font-weight:800;text-align:center;margin-bottom:6px">🏍 Atualize a carga</div>
-    <div style="text-align:center;color:var(--txt2);font-size:12px;margin-bottom:14px">Marque o que houve com as motos antes de concluir:</div>
-    <div id="cargaSlotsInfo" style="text-align:center;padding:10px;background:var(--surf2);border-radius:8px;margin-bottom:14px;font-size:12px"></div>
-
-    <div style="margin-bottom:14px;padding:10px;background:rgba(0,180,229,0.06);border:1px solid var(--acc);border-radius:8px">
-      <div style="font-size:12px;color:var(--acc);font-weight:700;margin-bottom:8px">📥 Motos que vai PEGAR aqui</div>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <input type="text" id="cargaPlacaInput" placeholder="Placa (ex: ABC1D23)" maxlength="8" style="flex:1;padding:8px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;font-size:14px;border:1px solid var(--bdr);background:var(--surf2);color:var(--txt);border-radius:6px">
-        <button id="cargaPlacaAdd" style="padding:8px 14px;background:var(--acc);color:#001823;border:none;border-radius:6px;font-weight:800">+ Adicionar</button>
-      </div>
-      <div id="cargaPegouList" style="display:flex;flex-direction:column;gap:4px"></div>
-      <div style="font-size:10px;color:var(--txt3);margin-top:4px">💡 Placa opcional · pode adicionar sem placa também</div>
+<div id="cargaModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:flex-end;justify-content:center;z-index:200">
+  <div style="background:var(--surf);border-radius:14px 14px 0 0;width:100%;max-width:440px;max-height:92dvh;display:flex;flex-direction:column">
+    <div style="padding:16px 18px 8px;flex:0 0 auto">
+      <div style="font-size:20px;font-weight:800;text-align:center">🏍 Atualize a carga</div>
+      <div style="text-align:center;color:var(--txt2);font-size:12px;margin-top:4px">Marque o que houve com as motos antes de concluir:</div>
     </div>
+    <div style="flex:1 1 auto;overflow-y:auto;padding:0 18px 4px;min-height:0">
+      <div id="cargaSlotsInfo" style="text-align:center;padding:10px;background:var(--surf2);border-radius:8px;margin-bottom:14px;font-size:12px"></div>
 
-    <div style="margin-bottom:14px;padding:10px;background:rgba(22,163,74,0.08);border:1px solid #16a34a;border-radius:8px">
-      <div style="font-size:12px;color:#16a34a;font-weight:700;margin-bottom:6px">📤 Você DEIXOU moto pro cliente?</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button id="cargaDeixouMinus" style="padding:10px 14px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;font-size:18px;font-weight:800">−</button>
-        <div id="cargaDeixouQtd" style="flex:1;text-align:center;font-size:22px;font-weight:800;color:#16a34a;font-family:'IBM Plex Mono',monospace">0</div>
-        <button id="cargaDeixouPlus" style="padding:10px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:18px;font-weight:800">+</button>
+      <div style="margin-bottom:14px;padding:10px;background:rgba(0,180,229,0.06);border:1px solid var(--acc);border-radius:8px">
+        <div style="font-size:12px;color:var(--acc);font-weight:700;margin-bottom:8px">📥 Motos que vai PEGAR aqui</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="text" id="cargaPlacaInput" placeholder="Placa (ex: ABC1D23)" maxlength="8" style="flex:1;padding:8px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;font-size:14px;border:1px solid var(--bdr);background:var(--surf2);color:var(--txt);border-radius:6px">
+          <button id="cargaPlacaAdd" style="padding:8px 14px;background:var(--acc);color:#001823;border:none;border-radius:6px;font-weight:800">+ Adicionar</button>
+        </div>
+        <div id="cargaPegouList" style="display:flex;flex-direction:column;gap:4px"></div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:4px">💡 Placa opcional · pode adicionar sem placa também</div>
       </div>
-      <div style="font-size:10px;color:var(--txt3);margin-top:4px">Quantas motos suas você deixou aqui pro cliente (reserva, troca, etc)</div>
-    </div>
 
-    <button id="cargaConfirmar" style="width:100%;padding:14px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;margin-bottom:8px">✓ Confirmar e concluir chamado</button>
-    <button id="cargaCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px">Cancelar</button>
+      <div style="margin-bottom:14px;padding:10px;background:rgba(22,163,74,0.08);border:1px solid #16a34a;border-radius:8px">
+        <div style="font-size:12px;color:#16a34a;font-weight:700;margin-bottom:6px">📤 Você DEIXOU moto pro cliente?</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="cargaDeixouMinus" style="padding:10px 14px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;font-size:18px;font-weight:800">−</button>
+          <div id="cargaDeixouQtd" style="flex:1;text-align:center;font-size:22px;font-weight:800;color:#16a34a;font-family:'IBM Plex Mono',monospace">0</div>
+          <button id="cargaDeixouPlus" style="padding:10px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:18px;font-weight:800">+</button>
+        </div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:4px">Quantas motos suas você deixou aqui pro cliente (reserva, troca, etc)</div>
+      </div>
+    </div>
+    <div style="flex:0 0 auto;padding:10px 18px max(14px,env(safe-area-inset-bottom));background:var(--surf);border-top:1px solid var(--bdr);box-shadow:0 -4px 12px rgba(0,0,0,0.3)">
+      <button id="cargaConfirmar" style="width:100%;padding:14px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;margin-bottom:6px">✓ Confirmar e concluir chamado</button>
+      <button id="cargaCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -473,48 +479,50 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 </div>
 
 <!-- Modal: assinatura do cliente ao finalizar atendimento -->
-<div id="sigModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;align-items:center;justify-content:center;padding:14px;z-index:201">
-  <div style="background:var(--surf);border-radius:14px;padding:18px;width:100%;max-width:440px;max-height:96vh;overflow-y:auto">
-    <div style="font-size:30px;text-align:center">✍</div>
-    <div style="font-size:17px;font-weight:800;text-align:center;margin:4px 0">Assinatura do cliente</div>
-    <div id="sigSub" style="text-align:center;color:var(--txt2);font-size:11px;margin-bottom:12px">Peça pro cliente assinar pra confirmar o atendimento.</div>
-
-    <div id="sigCanvasBox" style="position:relative;border:2px dashed var(--bdr2);border-radius:10px;background:#fff;margin-bottom:8px;touch-action:none">
-      <canvas id="sigCanvas" style="display:block;width:100%;height:200px;border-radius:8px;cursor:crosshair"></canvas>
-      <div id="sigPlaceholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;pointer-events:none">Assine aqui ↓</div>
+<div id="sigModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;align-items:flex-end;justify-content:center;z-index:201">
+  <div style="background:var(--surf);border-radius:14px 14px 0 0;width:100%;max-width:440px;max-height:96dvh;display:flex;flex-direction:column">
+    <div style="padding:14px 16px 6px;flex:0 0 auto;text-align:center">
+      <div style="font-size:24px">✍</div>
+      <div style="font-size:16px;font-weight:800;margin-top:2px">Assinatura do cliente</div>
+      <div id="sigSub" style="color:var(--txt2);font-size:11px;margin-top:2px">Peça pro cliente assinar pra confirmar o atendimento.</div>
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:10px;font-size:11px">
-      <button id="sigClear" style="flex:1;padding:7px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt2);border-radius:6px">🔄 Limpar</button>
-    </div>
-
-    <div id="sigNomeBox" style="margin-bottom:10px">
-      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:3px;font-weight:600">Nome de quem assinou</label>
-      <input id="sigNome" type="text" placeholder="Ex: João Silva (cliente / portaria / responsável)" style="width:100%;padding:9px;font-size:13px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px">
-    </div>
-
-    <label id="sigAusenteWrap" style="display:flex;align-items:center;gap:8px;padding:10px;background:rgba(245,158,11,0.10);border:1px solid #fbbf24;border-radius:8px;margin-bottom:12px;cursor:pointer">
-      <input type="checkbox" id="sigAusente" style="width:18px;height:18px;accent-color:#fbbf24;cursor:pointer">
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:700;color:#fbbf24">Cliente não está no local</div>
-        <div style="font-size:10px;color:var(--txt3)">Marque pra concluir sem assinatura (registra motivo)</div>
+    <div style="flex:1 1 auto;overflow-y:auto;padding:4px 16px;min-height:0">
+      <div id="sigCanvasBox" style="position:relative;border:2px dashed var(--bdr2);border-radius:10px;background:#fff;margin-bottom:6px;touch-action:none">
+        <canvas id="sigCanvas" style="display:block;width:100%;height:180px;border-radius:8px;cursor:crosshair"></canvas>
+        <div id="sigPlaceholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;pointer-events:none">Assine aqui ↓</div>
       </div>
-    </label>
-    <div id="sigAusenteMotivo" style="display:none;margin-bottom:12px">
-      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:3px;font-weight:600">Motivo da ausência *</label>
-      <select id="sigMotivo" style="width:100%;padding:9px;font-size:13px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px">
-        <option value="">— selecione —</option>
-        <option value="cliente_nao_estava">Cliente não estava no local</option>
-        <option value="moto_recolhida">Moto deixada pra recolher posteriormente</option>
-        <option value="local_fechado">Local fechado / portão sem morador</option>
-        <option value="cliente_recusou">Cliente recusou assinar</option>
-        <option value="entregue_terceiro">Entregue a terceiro (vizinho/portaria sem cadastro)</option>
-        <option value="outro">Outro</option>
-      </select>
-      <input id="sigMotivoTxt" type="text" placeholder="Detalhes (opcional)" style="width:100%;padding:9px;font-size:12px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px;margin-top:5px">
+      <div style="display:flex;gap:6px;margin-bottom:8px;font-size:11px">
+        <button id="sigClear" style="flex:1;padding:7px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt2);border-radius:6px">🔄 Limpar</button>
+      </div>
+      <div id="sigNomeBox" style="margin-bottom:8px">
+        <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:3px;font-weight:600">Nome de quem assinou</label>
+        <input id="sigNome" type="text" placeholder="Ex: João Silva (cliente / portaria / responsável)" style="width:100%;padding:9px;font-size:13px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px">
+      </div>
+      <label id="sigAusenteWrap" style="display:flex;align-items:center;gap:8px;padding:10px;background:rgba(245,158,11,0.10);border:1px solid #fbbf24;border-radius:8px;margin-bottom:8px;cursor:pointer">
+        <input type="checkbox" id="sigAusente" style="width:18px;height:18px;accent-color:#fbbf24;cursor:pointer">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:700;color:#fbbf24">Cliente não está no local</div>
+          <div style="font-size:10px;color:var(--txt3)">Marque pra concluir sem assinatura</div>
+        </div>
+      </label>
+      <div id="sigAusenteMotivo" style="display:none;margin-bottom:8px">
+        <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:3px;font-weight:600">Motivo da ausência *</label>
+        <select id="sigMotivo" style="width:100%;padding:9px;font-size:13px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px">
+          <option value="">— selecione —</option>
+          <option value="cliente_nao_estava">Cliente não estava no local</option>
+          <option value="moto_recolhida">Moto deixada pra recolher posteriormente</option>
+          <option value="local_fechado">Local fechado / portão sem morador</option>
+          <option value="cliente_recusou">Cliente recusou assinar</option>
+          <option value="entregue_terceiro">Entregue a terceiro (vizinho/portaria sem cadastro)</option>
+          <option value="outro">Outro</option>
+        </select>
+        <input id="sigMotivoTxt" type="text" placeholder="Detalhes (opcional)" style="width:100%;padding:9px;font-size:12px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px;margin-top:5px">
+      </div>
     </div>
-
-    <button id="sigConfirmar" style="width:100%;padding:14px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px">✓ Confirmar e concluir</button>
-    <button id="sigCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:4px">Cancelar</button>
+    <div style="flex:0 0 auto;padding:10px 16px max(14px,env(safe-area-inset-bottom));background:var(--surf);border-top:1px solid var(--bdr);box-shadow:0 -4px 12px rgba(0,0,0,0.3)">
+      <button id="sigConfirmar" style="width:100%;padding:14px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;margin-bottom:6px">✓ Confirmar e concluir</button>
+      <button id="sigCancelar" style="width:100%;padding:6px;background:transparent;color:var(--txt3);border:none;font-size:11px">Cancelar</button>
+    </div>
   </div>
 </div>
 
