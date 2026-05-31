@@ -2904,10 +2904,28 @@ function renderCad(){
       </div>
       ${items.map(v => {
         const fmtTs = (ts) => ts ? new Date(ts).toLocaleDateString('pt-BR') : '—';
-        const atribuido = v.atribuidoA;
+        // Fonte da verdade: combina v.atribuidoA com turnos (que aponta veiculoId/carretaId).
+        // Se um turno ativo aponta pra este veículo mas atribuidoA está vazio (bug do
+        // checkin antigo), considera "em uso" mesmo assim e auto-corrige no Firebase.
+        let atribuido = v.atribuidoA;
+        if(!atribuido){
+          for(const cid in turnos){
+            const t = turnos[cid];
+            if(t && t.ativo !== false && (t.veiculoId === v.id || t.carretaId === v.id)){
+              atribuido = cid;
+              // Auto-fix: persiste o atribuidoA pra ficar consistente nas próximas renders
+              if(STORE.saveVeiculo){
+                const fixed = { ...v, atribuidoA: cid, atribuidoEm: t.iniciadoEm || Date.now() };
+                veiculos[v.id] = fixed;
+                try { STORE.saveVeiculo(fixed); } catch(_){}
+              }
+              break;
+            }
+          }
+        }
         const colab = atribuido ? colaboradores[atribuido] : null;
         const statusBadge = atribuido
-          ? `<span class="cd-pill" style="background:rgba(245,158,11,0.2);color:#fbbf24" title="Em uso por ${colab?.nome || '?'}">🔒 em uso</span>`
+          ? `<span class="cd-pill" style="background:rgba(245,158,11,0.2);color:#fbbf24" title="Em uso por ${colab?.nome || '?'}">🔒 ${esc(colab?.nome?.split(' ')[0] || 'em uso')}</span>`
           : `<span class="cd-pill" style="background:rgba(16,163,74,0.2);color:#16a34a">✓ livre</span>`;
         return `<div class="cdrow" data-vid="${v.id}" style="grid-template-columns:100px 1fr 50px 50px 80px 100px 60px 70px">
           <div style="font-family:var(--mono);font-weight:700">${esc(v.placa || '—')}</div>
@@ -3226,14 +3244,22 @@ function renderMotDetail(){
   const m = id ? motoristas[id] : null;
   if(!m){ closeMotDetail(); return; }
   const colab = colaboradores[id] || {};
-  const veh = (() => {
-    // Busca veículo atribuído a esse colab (carro/carreta com slots)
-    for(const vid in veiculos){
-      const v = veiculos[vid];
-      if(v.atribuidoA === id) return v;
-    }
-    return null;
-  })();
+  const turno = turnos[id] || null;
+  // Coleta TODOS os veículos atribuídos a esse colab (carro + carreta + qq outro)
+  const veiculosColab = [];
+  for(const vid in veiculos){
+    const v = veiculos[vid];
+    if(v.atribuidoA === id) veiculosColab.push(v);
+  }
+  // Se nenhum veículo está marcado em veiculos[], usa info do turno (autoritativo do check-in)
+  if(veiculosColab.length === 0 && turno){
+    if(turno.veiculoId && veiculos[turno.veiculoId]) veiculosColab.push(veiculos[turno.veiculoId]);
+    if(turno.carretaId && veiculos[turno.carretaId]) veiculosColab.push(veiculos[turno.carretaId]);
+  }
+  // Ordena: carro primeiro, carreta depois, moto por último
+  const ordemTipo = { carro: 0, carreta: 1, moto: 2 };
+  veiculosColab.sort((a,b) => (ordemTipo[a.tipo]||9) - (ordemTipo[b.tipo]||9));
+  const veh = veiculosColab[0] || null;
   const now = Date.now();
   const ageS = Math.round((now - (m.lastSeen||0))/1000);
   const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
@@ -3315,17 +3341,27 @@ function renderMotDetail(){
       </div>
     </div>
 
-    <!-- Veículo -->
+    <!-- Veículo(s) em uso — pode ser carro + carreta -->
     <div style="margin-bottom:14px">
-      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🚗 Veículo em uso</div>
-      <div style="background:var(--surf2);padding:10px;border-radius:8px;display:flex;align-items:center;gap:10px">
-        <div style="font-size:24px">${veicTipoIcon}</div>
-        <div style="flex:1">
-          <div style="font-family:var(--mono);font-weight:700;font-size:14px">${esc(placa)}</div>
-          <div style="font-size:11px;color:var(--txt2);margin-top:2px">${esc(veiculoLabel)}</div>
-          ${veh ? `<div style="font-size:10px;color:var(--txt3);margin-top:2px">${veh.slots != null ? `${veh.slots} slot${veh.slots===1?'':'s'} de motos` : 'sem slots'}${veh.ultimoKm ? ' · ' + veh.ultimoKm.toLocaleString('pt-BR') + ' km' : ''}</div>` : '<div style="font-size:10px;color:var(--txt3);margin-top:2px">⚠ Veículo não vinculado ao colab no cadastro</div>'}
-        </div>
-      </div>
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🚗 Veículo${veiculosColab.length > 1 ? 's' : ''} em uso ${veiculosColab.length > 1 ? `(${veiculosColab.length})` : ''}</div>
+      ${veiculosColab.length === 0
+        ? `<div style="background:var(--surf2);padding:10px;border-radius:8px;font-size:11px;color:var(--txt3)">⚠ Nenhum veículo vinculado ao colab. Pode ser que ele não fez check-in ou os veículos foram cadastrados depois.</div>`
+        : veiculosColab.map(v => {
+            const ic = ({ carro:'🚗', carreta:'🚛', moto:'🏍' })[v.tipo] || '🚗';
+            const lbl = `${v.marca || ''} ${v.modelo || ''}`.trim() + (v.ano ? ' ('+v.ano+')' : '');
+            const slotsLbl = v.slots != null && v.slots > 0 ? `${v.slots} slot${v.slots===1?'':'s'} 🏍` : 'sem slots';
+            const kmLbl = v.ultimoKm ? v.ultimoKm.toLocaleString('pt-BR') + ' km' : '';
+            return `<div style="background:var(--surf2);padding:10px;border-radius:8px;display:flex;align-items:center;gap:10px;margin-bottom:6px">
+              <div style="font-size:24px">${ic}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:var(--mono);font-weight:700;font-size:14px">${esc(v.placa || '—')}</div>
+                <div style="font-size:11px;color:var(--txt2);margin-top:2px">${esc(lbl)}</div>
+                <div style="font-size:10px;color:var(--txt3);margin-top:2px">${slotsLbl}${kmLbl ? ' · ' + kmLbl : ''}</div>
+              </div>
+            </div>`;
+          }).join('')
+      }
+      ${veiculosColab.length > 0 ? `<div style="font-size:10px;color:var(--txt2);text-align:center;margin-top:4px">Total: <strong style="color:var(--acc)">${veiculosColab.reduce((s,v) => s + (v.slots||0), 0)} slots</strong> · ${slotsOcup} ocupado(s)</div>` : ''}
     </div>
 
     <!-- Status ao vivo -->
