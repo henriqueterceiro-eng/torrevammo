@@ -472,6 +472,52 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   </div>
 </div>
 
+<!-- Modal: assinatura do cliente ao finalizar atendimento -->
+<div id="sigModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;align-items:center;justify-content:center;padding:14px;z-index:201">
+  <div style="background:var(--surf);border-radius:14px;padding:18px;width:100%;max-width:440px;max-height:96vh;overflow-y:auto">
+    <div style="font-size:30px;text-align:center">✍</div>
+    <div style="font-size:17px;font-weight:800;text-align:center;margin:4px 0">Assinatura do cliente</div>
+    <div id="sigSub" style="text-align:center;color:var(--txt2);font-size:11px;margin-bottom:12px">Peça pro cliente assinar pra confirmar o atendimento.</div>
+
+    <div id="sigCanvasBox" style="position:relative;border:2px dashed var(--bdr2);border-radius:10px;background:#fff;margin-bottom:8px;touch-action:none">
+      <canvas id="sigCanvas" style="display:block;width:100%;height:200px;border-radius:8px;cursor:crosshair"></canvas>
+      <div id="sigPlaceholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;pointer-events:none">Assine aqui ↓</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;font-size:11px">
+      <button id="sigClear" style="flex:1;padding:7px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt2);border-radius:6px">🔄 Limpar</button>
+    </div>
+
+    <div id="sigNomeBox" style="margin-bottom:10px">
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:3px;font-weight:600">Nome de quem assinou</label>
+      <input id="sigNome" type="text" placeholder="Ex: João Silva (cliente / portaria / responsável)" style="width:100%;padding:9px;font-size:13px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px">
+    </div>
+
+    <label id="sigAusenteWrap" style="display:flex;align-items:center;gap:8px;padding:10px;background:rgba(245,158,11,0.10);border:1px solid #fbbf24;border-radius:8px;margin-bottom:12px;cursor:pointer">
+      <input type="checkbox" id="sigAusente" style="width:18px;height:18px;accent-color:#fbbf24;cursor:pointer">
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700;color:#fbbf24">Cliente não está no local</div>
+        <div style="font-size:10px;color:var(--txt3)">Marque pra concluir sem assinatura (registra motivo)</div>
+      </div>
+    </label>
+    <div id="sigAusenteMotivo" style="display:none;margin-bottom:12px">
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:3px;font-weight:600">Motivo da ausência *</label>
+      <select id="sigMotivo" style="width:100%;padding:9px;font-size:13px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px">
+        <option value="">— selecione —</option>
+        <option value="cliente_nao_estava">Cliente não estava no local</option>
+        <option value="moto_recolhida">Moto deixada pra recolher posteriormente</option>
+        <option value="local_fechado">Local fechado / portão sem morador</option>
+        <option value="cliente_recusou">Cliente recusou assinar</option>
+        <option value="entregue_terceiro">Entregue a terceiro (vizinho/portaria sem cadastro)</option>
+        <option value="outro">Outro</option>
+      </select>
+      <input id="sigMotivoTxt" type="text" placeholder="Detalhes (opcional)" style="width:100%;padding:9px;font-size:12px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px;margin-top:5px">
+    </div>
+
+    <button id="sigConfirmar" style="width:100%;padding:14px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px">✓ Confirmar e concluir</button>
+    <button id="sigCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:4px">Cancelar</button>
+  </div>
+</div>
+
 <!-- Banner pra instalar PWA -->
 <div id="installbanner">
   <div class="ic">📲</div>
@@ -1834,23 +1880,157 @@ function handleAction(act){
   }
 
   if(act === 'concluido'){
-    // Antes de concluir, abre modal de atualizar carga (se tem turno com slots)
+    // Fluxo: carga (se tem slots) → assinatura → concluido
+    const finalizar = () => abrirModalAssinatura(ativo, () => continuarConclusao(ativo));
     if(turnoAtivo && slotsTotalCount() > 0){
-      abrirModalCarga(ativo, () => continuarConclusao(ativo));
+      abrirModalCarga(ativo, finalizar);
       return;
     }
-    continuarConclusao(ativo);
+    finalizar();
     return;
   }
 }
 
 function continuarConclusao(ativo){
   rideFinalize('concluido');
-  sync.send('chamado:status', { chamadoId: ativo.id, status: 'concluido', motoristaId: me.id });
+  // Anexa assinatura/ausência ao status enviado pra torre
+  const payload = {
+    chamadoId: ativo.id,
+    status: 'concluido',
+    motoristaId: me.id
+  };
+  if(ativo._assinatura){
+    payload.assinatura = ativo._assinatura;
+    payload.assinaturaNome = ativo._assinaturaNome || '';
+  } else if(ativo._clienteAusente){
+    payload.clienteAusente = true;
+    payload.ausenteMotivo = ativo._ausenteMotivo || '';
+    payload.ausenteDetalhe = ativo._ausenteDetalhe || '';
+  }
+  sync.send('chamado:status', payload);
   vibrate([50, 30, 50]);
-  // Continua o fluxo original
   _doShiftAndAfter(ativo);
 }
+
+// =========== MODAL DE ASSINATURA ===========
+let _sigDrawing = false, _sigHasInk = false, _sigCtx = null, _sigChamado = null, _sigOnDone = null;
+
+function abrirModalAssinatura(chamado, onDone){
+  _sigChamado = chamado;
+  _sigOnDone = onDone;
+  _sigHasInk = false;
+  document.getElementById('sigSub').innerHTML = `Atendimento de <strong style="color:var(--acc)">${esc(chamado.cliente || 'cliente')}</strong> — coleta de assinatura obrigatória.`;
+  document.getElementById('sigNome').value = '';
+  document.getElementById('sigAusente').checked = false;
+  document.getElementById('sigAusenteMotivo').style.display = 'none';
+  document.getElementById('sigMotivo').value = '';
+  document.getElementById('sigMotivoTxt').value = '';
+  document.getElementById('sigPlaceholder').style.display = 'flex';
+  document.getElementById('sigModal').style.display = 'flex';
+  setTimeout(setupSigCanvas, 30);
+}
+
+function setupSigCanvas(){
+  const canvas = document.getElementById('sigCanvas');
+  const rect = canvas.getBoundingClientRect();
+  // Resolução real do canvas pra ficar nítido em retina
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  _sigCtx = canvas.getContext('2d');
+  _sigCtx.scale(dpr, dpr);
+  _sigCtx.lineCap = 'round';
+  _sigCtx.lineJoin = 'round';
+  _sigCtx.strokeStyle = '#001823';
+  _sigCtx.lineWidth = 2.5;
+  _sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const getXY = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - r.left, y: t.clientY - r.top };
+  };
+  const start = (e) => {
+    e.preventDefault();
+    _sigDrawing = true;
+    const { x, y } = getXY(e);
+    _sigCtx.beginPath();
+    _sigCtx.moveTo(x, y);
+  };
+  const move = (e) => {
+    if(!_sigDrawing) return;
+    e.preventDefault();
+    const { x, y } = getXY(e);
+    _sigCtx.lineTo(x, y);
+    _sigCtx.stroke();
+    if(!_sigHasInk){
+      _sigHasInk = true;
+      document.getElementById('sigPlaceholder').style.display = 'none';
+    }
+  };
+  const end = (e) => { if(_sigDrawing){ e.preventDefault(); } _sigDrawing = false; };
+
+  // Remove listeners antigos clonando o canvas — evita acumular
+  canvas.onmousedown = start; canvas.onmousemove = move;
+  canvas.onmouseup = end; canvas.onmouseleave = end;
+  canvas.ontouchstart = start; canvas.ontouchmove = move;
+  canvas.ontouchend = end; canvas.ontouchcancel = end;
+}
+
+document.getElementById('sigClear').onclick = () => {
+  const canvas = document.getElementById('sigCanvas');
+  if(_sigCtx){ _sigCtx.clearRect(0, 0, canvas.width, canvas.height); }
+  _sigHasInk = false;
+  document.getElementById('sigPlaceholder').style.display = 'flex';
+};
+
+document.getElementById('sigAusente').onchange = (e) => {
+  const ausente = e.target.checked;
+  document.getElementById('sigAusenteMotivo').style.display = ausente ? 'block' : 'none';
+  // Quando marca "ausente" deixa o canvas opaco pra dar feedback visual
+  document.getElementById('sigCanvasBox').style.opacity = ausente ? '0.4' : '1';
+  document.getElementById('sigNomeBox').style.opacity = ausente ? '0.4' : '1';
+};
+
+document.getElementById('sigCancelar').onclick = () => {
+  document.getElementById('sigModal').style.display = 'none';
+  _sigChamado = null; _sigOnDone = null;
+};
+
+document.getElementById('sigConfirmar').onclick = () => {
+  if(!_sigChamado) return;
+  const ausente = document.getElementById('sigAusente').checked;
+
+  if(ausente){
+    const motivo = document.getElementById('sigMotivo').value;
+    if(!motivo){
+      alert('Selecione o motivo da ausência');
+      return;
+    }
+    _sigChamado._clienteAusente = true;
+    _sigChamado._ausenteMotivo = motivo;
+    _sigChamado._ausenteDetalhe = document.getElementById('sigMotivoTxt').value.trim();
+  } else {
+    if(!_sigHasInk){
+      alert('Assinatura obrigatória. Se o cliente não está no local, marque a opção amarela abaixo.');
+      return;
+    }
+    const nome = document.getElementById('sigNome').value.trim();
+    if(!nome){
+      alert('Informe o nome de quem assinou');
+      document.getElementById('sigNome').focus();
+      return;
+    }
+    // Captura a assinatura como PNG base64
+    const canvas = document.getElementById('sigCanvas');
+    _sigChamado._assinatura = canvas.toDataURL('image/png');
+    _sigChamado._assinaturaNome = nome;
+  }
+  document.getElementById('sigModal').style.display = 'none';
+  const cb = _sigOnDone;
+  _sigChamado = null; _sigOnDone = null;
+  if(cb) cb();
+};
 
 function _doShiftAndAfter(ativo){
   fila.shift();

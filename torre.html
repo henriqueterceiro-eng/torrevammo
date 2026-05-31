@@ -4016,7 +4016,27 @@ function setupSyncListeners(){
       const i = list.findIndex(x => x.id === c.id);
       if(i >= 0){ list[i].status = data.status; saveDemoChamados(list); }
     }
-    STORE.updateChamado(c.id, { status: data.status });
+    // Anexa assinatura ou ausência (quando colab finaliza atendimento)
+    const updates = { status: data.status };
+    if(data.assinatura){
+      c.assinatura = data.assinatura;
+      c.assinaturaNome = data.assinaturaNome || '';
+      c.assinaturaTs = Date.now();
+      updates.assinatura = data.assinatura;
+      updates.assinaturaNome = data.assinaturaNome || '';
+      updates.assinaturaTs = c.assinaturaTs;
+    }
+    if(data.clienteAusente){
+      c.clienteAusente = true;
+      c.ausenteMotivo = data.ausenteMotivo || '';
+      c.ausenteDetalhe = data.ausenteDetalhe || '';
+      c.ausenteTs = Date.now();
+      updates.clienteAusente = true;
+      updates.ausenteMotivo = c.ausenteMotivo;
+      updates.ausenteDetalhe = c.ausenteDetalhe;
+      updates.ausenteTs = c.ausenteTs;
+    }
+    STORE.updateChamado(c.id, updates);
     if(data.status === 'concluido' || data.status === 'cancelado'){
       const oldMot = c.motoristaId;
       queueRemove(c.id);
@@ -4024,7 +4044,8 @@ function setupSyncListeners(){
       if(oldMot) updateRouteFor(oldMot);
     }
     renderAll();
-    showToast(`Chamado de ${c.cliente}: ${data.status === 'em_rota' ? '▶ em rota' : data.status === 'concluido' ? '✓ concluído' : data.status}`);
+    const extra = data.assinatura ? ' · ✍ assinado' : data.clienteAusente ? ' · 🚫 cliente ausente' : '';
+    showToast(`Chamado de ${c.cliente}: ${data.status === 'em_rota' ? '▶ em rota' : data.status === 'concluido' ? '✓ concluído' : data.status}${extra}`);
   });
 
   // Colaborador pediu autorização pra iniciar atendimento fora do range
