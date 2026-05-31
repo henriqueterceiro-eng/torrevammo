@@ -1342,6 +1342,18 @@ function checkArrived(){
   if(ativo.arrived) return;
   if(ativo.status !== 'em_rota' && ativo.status !== 'novo') return;
   const d = haversine(myPos, { lat: ativo.lat, lng: ativo.lng });
+  // "Está chegando" — dispara uma vez quando entra no raio NEARING (300m).
+  // Avisa a torre antes mesmo da chegada confirmada.
+  if(d < NEARING_THRESHOLD_M && !ativo._nearingNotified){
+    ativo._nearingNotified = true;
+    sync.send('chamado:chegando', {
+      chamadoId: ativo.id,
+      motoristaId: me.id,
+      cliente: ativo.cliente,
+      distM: Math.round(d),
+      pos: { lat: myPos.lat, lng: myPos.lng }
+    });
+  }
   if(d < ARRIVED_THRESHOLD_M){
     if(!nearDestSince[ativo.id]) nearDestSince[ativo.id] = Date.now();
     else if(Date.now() - nearDestSince[ativo.id] > ARRIVED_TIME_MS){
@@ -1360,9 +1372,6 @@ function checkArrived(){
       rideMarkArrived();
       renderChamadoCard();
       updateChamadoMarkers();
-      // Slide de "iniciar atendimento" agora renderiza dentro do chamadocard
-      // (sempre visível enquanto não iniciou, sem cortar em telas pequenas).
-      // Modal antigo (iniModal) preservado por compat mas não abre automaticamente.
     }
   } else {
     delete nearDestSince[ativo.id];
@@ -1574,8 +1583,9 @@ let routeCoords = null;   // coordenadas da rota desenhada [[lat,lng], ...] pra 
 // Detecção de desvio + geofence
 const OFF_ROUTE_THRESHOLD_M = 100;       // distância pra considerar fora da rota
 const OFF_ROUTE_TIME_MS = 30 * 1000;     // tempo fora antes de alertar
-const ARRIVED_THRESHOLD_M = 60;          // distância pra considerar "chegou"
+const ARRIVED_THRESHOLD_M = 100;         // distância pra considerar "chegou" (era 60m, aumentado pra tolerar GPS impreciso)
 const ARRIVED_TIME_MS = 8 * 1000;        // tempo perto antes de marcar chegada
+const NEARING_THRESHOLD_M = 300;         // distância pra avisar "está chegando" (notif preview)
 let offRouteSince = null;
 let offRouteAlerted = false;
 let nearDestSince = {};                  // {chamadoId: ts}

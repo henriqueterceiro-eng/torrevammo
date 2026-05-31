@@ -4735,7 +4735,22 @@ function setupSyncListeners(){
     setTimeout(() => { if(motoristas[data.motoristaId]){ delete motoristas[data.motoristaId]._offRoute; renderMotoristaMarkers(); renderMot(); }}, 30000);
   });
 
-  // Colaborador chegou no local (auto-detectado por GPS)
+  // Colaborador está CHEGANDO (entrou em 300m do destino) — alerta preview
+  sync.on('chamado:chegando', (data) => {
+    const c = chamados.find(x => x.id === data.chamadoId);
+    const mot = motoristas[data.motoristaId];
+    if(!c || !mot) return;
+    pushAlert({
+      id: 'chegando-' + data.chamadoId,
+      tipo: 'warn',
+      titulo: `${mot.nome} está chegando`,
+      msg: `${esc(c.cliente)} · a ${data.distM}m do destino`,
+      motId: data.motoristaId,
+      autoCloseMs: 30000 // some sozinho em 30s (será substituído pelo 'chegou')
+    });
+  });
+
+  // Colaborador CHEGOU no local (auto-detectado por GPS dentro do range)
   sync.on('chamado:chegou', (data) => {
     const c = chamados.find(x => x.id === data.chamadoId);
     const mot = motoristas[data.motoristaId];
@@ -4743,7 +4758,36 @@ function setupSyncListeners(){
     c.arrived = true;
     c.arrivedAt = Date.now();
     STORE.updateChamado(c.id, { arrived: true, arrivedAt: c.arrivedAt });
-    showToast(`🎯 ${mot ? mot.nome+' chegou no local — ' : 'Colaborador chegou em '}${c.cliente}`);
+    // Limpa alerta de "chegando" se ainda estiver na tela
+    clearAlert('chegando-' + data.chamadoId);
+    // Alerta persistente: chegou no local (verde)
+    const stack = $('#alertstack');
+    const id = 'chegou-' + data.chamadoId;
+    if(stack && !_alertsAtivos.has(id)){
+      const card = document.createElement('div');
+      card.className = 'alert-card';
+      card.style.background = 'linear-gradient(135deg,#065f46,#10b981)';
+      card.innerHTML = `
+        <div class="ic">🎯</div>
+        <div class="body">
+          <strong>${esc(mot ? mot.nome : 'Colaborador')} chegou no local</strong>
+          ${esc(c.cliente)}${c.endereco ? ' · ' + esc(c.endereco.split(',')[0]) : ''}
+          <small><a href="#" data-mapa style="color:#fff;text-decoration:underline">📍 Ver no mapa</a> · <a href="#" data-detail style="color:#fff;text-decoration:underline">ℹ Abrir detalhe</a></small>
+        </div>
+        <button class="x" title="Dispensar">✕</button>
+      `;
+      card.querySelector('.x').onclick = () => {
+        card.style.animation = 'alertSlide 0.25s ease-out reverse';
+        setTimeout(() => { card.remove(); _alertsAtivos.delete(id); }, 250);
+      };
+      const mapaA = card.querySelector('[data-mapa]');
+      if(mapaA) mapaA.onclick = (e) => { e.preventDefault(); const m = motoristas[data.motoristaId]; if(m && m.lat) map.setView([m.lat, m.lng], 16); };
+      const detA = card.querySelector('[data-detail]');
+      if(detA) detA.onclick = (e) => { e.preventDefault(); openMotDetail(data.motoristaId); };
+      stack.appendChild(card);
+      _alertsAtivos.set(id, card);
+      playAlertSound();
+    }
     renderAll();
   });
 
