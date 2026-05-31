@@ -1832,7 +1832,15 @@ function renderList(){
     const ord = orderMap[c.id];
     const slaBadge = al ? `<span class="b b-sla${al==='crit'?' crit':''}">⏱ ${fmtElapsed(c.ts)}</span>` : '';
     const trBadge = c.travada ? `<span class="b b-trav">⚠ TRAV</span>` : '';
-    const arrivedBadge = c.arrived ? `<span class="b b-arrived">🎯 NO LOCAL</span>` : '';
+    // "NO LOCAL" só faz sentido quando o atendimento está em curso.
+    // Após concluir, mostra "✍ ASSINADO" ou "🚫 AUSENTE" no lugar.
+    let arrivedBadge = '';
+    if(c.status === 'concluido'){
+      if(c.assinatura) arrivedBadge = `<span class="b b-arrived" title="Assinado por ${esc(c.assinaturaNome||'cliente')}">✍ ASSINADO</span>`;
+      else if(c.clienteAusente) arrivedBadge = `<span class="b b-trav" title="${esc(c.ausenteMotivo||'cliente ausente')}">🚫 AUSENTE</span>`;
+    } else if(c.arrived){
+      arrivedBadge = `<span class="b b-arrived">🎯 NO LOCAL</span>`;
+    }
     const ride = corridas[c.id];
     const notaBadge = (ride && ride.nota) ? (() => {
       const v = ride.nota.final;

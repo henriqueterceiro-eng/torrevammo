@@ -2077,6 +2077,15 @@ function abrirModalCarga(chamado, onConfirm){
   _cargaDeixou = 0;
   _cargaChamado = chamado; _cargaCallback = onConfirm;
   document.getElementById('cargaPlacaInput').value = '';
+  // Pré-popula com a placa do chamado se o motivo indica que vai PEGAR a moto
+  // (recolhimento, acidente, encaminhamento, etc.) e a placa não é fake (XYZ/TEST de demo)
+  const motivo = (chamado.motivo || '').toLowerCase();
+  const pegaMoto = /recolh|acidente|encaminh|guincho|reboque|busca|retirar|troca/.test(motivo);
+  const placa = (chamado.placa || '').toUpperCase().trim();
+  const placaParecemReal = placa && !/^XYZ\d+$/.test(placa) && !/^TEST/.test(placa);
+  if(pegaMoto && placaParecemReal && slotsTotalCount() > 0 && slotsCount() < slotsTotalCount()){
+    _cargaPegouList.push({ placa, _auto: true });
+  }
   atualizaCargaUI();
   document.getElementById('cargaModal').style.display = 'flex';
   setTimeout(() => document.getElementById('cargaPlacaInput').focus(), 100);
