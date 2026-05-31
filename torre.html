@@ -176,6 +176,11 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 .mt-icon .pulse{position:absolute;inset:0;border-radius:50%;animation:motpulse 2s ease-out infinite;opacity:0.5}
 @keyframes motpulse{0%{transform:scale(1);opacity:0.5}100%{transform:scale(1.8);opacity:0}}
 .mt-icon .lbl{position:absolute;top:50px;left:50%;transform:translateX(-50%);background:rgba(10,20,40,0.95);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap;border:1px solid var(--acc);font-family:var(--mono)}
+.mt-icon .stats{position:absolute;top:69px;left:50%;transform:translateX(-50%);background:rgba(10,20,40,0.9);color:#fff;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;white-space:nowrap;border:1px solid rgba(255,255,255,0.15);font-family:var(--mono);display:flex;gap:6px;align-items:center;letter-spacing:0.2px}
+.mt-icon .stats .s-slots{color:var(--acc)}
+.mt-icon .stats .s-slots.full{color:#dc2626}
+.mt-icon .stats .s-kmh{color:#fbbf24}
+.mt-icon .stats .s-kmh.stop{color:#9ca3af}
 .mt-icon .badge{position:absolute;top:-4px;right:-4px;background:var(--acc);color:#001823;font-size:10px;font-weight:800;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
 .mt-icon.off{opacity:0.4}
 .mt-icon.off .pulse{display:none}
@@ -1550,15 +1555,29 @@ function renderMotoristaMarkers(){
     const initial = (m.nome || '?').charAt(0).toUpperCase();
     const lblExtra = m.isFull ? ' FULL' : m.modo === 'descarregando' ? ' 🔴' : '';
     const lblColor = (m.isFull || m.modo === 'descarregando') ? '#dc2626' : '';
+    // Stats badge: slots ocupados/total + velocidade — sempre visível no marker
+    const statsParts = [];
+    if(m.slotsTotal > 0){
+      const ocup = m.slotsCount || 0;
+      const isFullCls = m.isFull ? ' full' : '';
+      statsParts.push(`<span class="s-slots${isFullCls}">🏍 ${ocup}/${m.slotsTotal}</span>`);
+    }
+    if(m.kmh != null){
+      const stopCls = m.kmh === 0 ? ' stop' : '';
+      statsParts.push(`<span class="s-kmh${stopCls}">${m.kmh === 0 ? '🛑' : '🏃 '+m.kmh+'km/h'}</span>`);
+    }
+    const statsHtml = statsParts.length ? `<div class="stats">${statsParts.join('<span style="opacity:0.4">·</span>')}</div>` : '';
+
     const html = `<div class="marker">
       <div class="pulse" style="background:${ringColor}"></div>
       <div class="ring" style="background:${m.color || '#00B4E5'};border-color:${ringColor}">${initial}</div>
       ${m.activeCount ? `<div class="badge">${m.activeCount}</div>` : ''}
       <div class="lbl"${lblColor?` style="border-color:${lblColor};color:${lblColor}"`:''}>${esc(m.nome.split(' ')[0])}${lblExtra}</div>
+      ${statsHtml}
     </div>`;
     const warnCls = m._offRoute ? ' warn' : '';
     const staleCls = isStale ? ' stale' : '';
-    const icon = L.divIcon({ className: `mt-icon ${isOff?'off':''}${warnCls}${staleCls}`, html, iconSize:[46,70], iconAnchor:[23,23] });
+    const icon = L.divIcon({ className: `mt-icon ${isOff?'off':''}${warnCls}${staleCls}`, html, iconSize:[100,90], iconAnchor:[50,23] });
     const stTxt = isOff ? 'offline' : m.status === 'busy' ? 'em rota' : 'online';
     const ageTxt = isStale ? ` · <span style="color:#fbbf24">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
     const filaTxt = m.activeCount > 0 ? ` · ${m.activeCount} na fila` : '';
@@ -1614,25 +1633,10 @@ function pushTrail(motoristaId, lat, lng){
 }
 
 function renderTrail(motoristaId){
-  const arr = snappedTrails[motoristaId] || trails[motoristaId];
-  const mot = motoristas[motoristaId];
-  if(!arr || arr.length < 2 || !mot){
-    if(trailLines[motoristaId]){ map.removeLayer(trailLines[motoristaId]); delete trailLines[motoristaId]; }
-    return;
-  }
-  const pts = arr.map(p => [p.lat, p.lng]);
-  if(trailLines[motoristaId]){
-    trailLines[motoristaId].setLatLngs(pts);
-    trailLines[motoristaId].setStyle({ color: mot.color });
-  } else {
-    trailLines[motoristaId] = L.polyline(pts, {
-      color: mot.color || '#00B4E5',
-      weight: 4,
-      opacity: 0.7,
-      lineCap: 'round',
-      lineJoin: 'round'
-    }).addTo(map);
-  }
+  // Rastro do colab desligado por decisão de UX: polui a tela quando tem
+  // muitos colabs operando. Trails ainda são gravados internamente pro
+  // log da corrida (sumiço, desvio, score), mas não desenha no mapa.
+  if(trailLines[motoristaId]){ map.removeLayer(trailLines[motoristaId]); delete trailLines[motoristaId]; }
 }
 
 function renderAllTrails(){
@@ -1913,27 +1917,27 @@ function renderMot(){
       : 'sem chamados';
     const isExp = expanded.has(id);
 
-    // Lista das motos carregadas (slots ocupados)
+    // Lista das motos carregadas (slots ocupados) — fica visível SEM precisar expandir
     let motosHtml = '';
     if(m.slotsDetalhe && m.slotsDetalhe.length > 0){
-      motosHtml = `<div style="margin-bottom:10px;padding:10px;background:rgba(0,180,229,0.06);border:1px solid var(--acc);border-radius:8px">
-        <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🏍 Motos a bordo · ${m.slotsDetalhe.length}/${m.slotsTotal}</div>
+      motosHtml = `<div style="margin:0 8px 6px;padding:6px 8px;background:rgba(0,180,229,0.06);border:1px solid var(--acc);border-radius:6px">
+        <div style="font-size:9px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">🏍 Motos a bordo · ${m.slotsDetalhe.length}/${m.slotsTotal}</div>
         ${m.slotsDetalhe.map((s, i) => {
           const idade = Math.floor((Date.now() - (s.ocupadoEm||Date.now())) / 60000);
           const idadeTxt = idade < 60 ? idade+'min' : Math.floor(idade/60)+'h';
           const origem = s.source === 'saida' ? '🚪 saída' : s.clienteName ? `👤 ${esc(s.clienteName)}` : '👤 cliente';
-          return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--surf);border-radius:6px;margin-bottom:3px;font-size:11px">
-            <span style="font-weight:800;color:var(--acc);width:18px">${i+1}</span>
+          return `<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;background:var(--surf);border-radius:4px;margin-bottom:2px;font-size:10px">
+            <span style="font-weight:800;color:var(--acc);width:14px">${i+1}</span>
             <span style="font-family:var(--mono);font-weight:700;flex:1">${s.placa ? esc(s.placa) : '<span style="color:var(--txt3)">sem placa</span>'}</span>
-            <span style="color:var(--txt2);font-size:10px">${origem}</span>
-            <span style="color:var(--txt3);font-size:9px;font-family:var(--mono)">há ${idadeTxt}</span>
+            <span style="color:var(--txt2);font-size:9px">${origem}</span>
+            <span style="color:var(--txt3);font-size:8px;font-family:var(--mono)">há ${idadeTxt}</span>
           </div>`;
         }).join('')}
       </div>`;
     }
 
-    // Fila expandida
-    let filaHtml = motosHtml;
+    // Fila expandida (motos a bordo agora aparecem FORA do filadrop — sempre visíveis)
+    let filaHtml = '';
     if(fila.length === 0){
       filaHtml += `<div class="filaempty">Sem chamados atribuídos</div>`;
     } else {
@@ -1972,6 +1976,7 @@ function renderMot(){
         <button class="motrm" data-act="rm-mot" title="Remover este colaborador do mapa (se for fantasma de teste antigo)" style="background:transparent;border:none;color:var(--txt3);font-size:14px;padding:4px 8px;cursor:pointer;border-radius:4px">✕</button>
         <div class="chev">▼</div>
       </div>
+      ${motosHtml}
       <div class="filadrop">${filaHtml}</div>
     </div>`;
   }).join('');
