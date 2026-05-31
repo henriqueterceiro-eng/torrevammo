@@ -359,6 +359,19 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #toast.show{transform:translateX(-50%) translateY(0)}
 #toast.err{background:var(--novo);color:#fff}
 
+/* ALERTAS PERSISTENTES — banner que fica até o gestor dispensar */
+#alertstack{position:fixed;top:78px;right:14px;z-index:10005;display:flex;flex-direction:column;gap:8px;max-width:380px;width:calc(100vw - 28px);max-width:380px}
+.alert-card{background:linear-gradient(135deg,#7c2d12,#dc2626);color:#fff;border-radius:10px;padding:12px 14px;box-shadow:0 10px 30px rgba(220,38,38,0.45);border:1px solid rgba(255,255,255,0.15);font-size:13px;display:flex;gap:10px;align-items:flex-start;animation:alertSlide 0.3s ease-out;position:relative}
+@keyframes alertSlide{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+.alert-card .ic{font-size:22px;flex:0 0 22px;animation:alertPulse 1.2s infinite}
+@keyframes alertPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+.alert-card .body{flex:1;min-width:0;line-height:1.35}
+.alert-card .body strong{font-size:14px;display:block;margin-bottom:2px}
+.alert-card .body small{font-size:10px;opacity:0.85;display:block;margin-top:3px}
+.alert-card .x{background:rgba(255,255,255,0.15);border:none;color:#fff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;flex:0 0 24px;font-weight:800}
+.alert-card .x:hover{background:rgba(255,255,255,0.3)}
+.alert-card.warn{background:linear-gradient(135deg,#78350f,#f59e0b);color:#fff}
+
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:4px}
@@ -695,6 +708,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 </div>
 
 <div id="toast"></div>
+<div id="alertstack"></div>
 
 <script>
 'use strict';
@@ -4323,6 +4337,75 @@ function showToast(msg, isErr){
   showToast._to = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// Beep curto via Web Audio — chama atenção pra alertas críticos
+function playAlertSound(){
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    const ac = playAlertSound._ac || (playAlertSound._ac = new Ctx());
+    if(ac.state === 'suspended') ac.resume().catch(()=>{});
+    [880, 1320].forEach((freq, i) => {
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0, ac.currentTime + i * 0.22);
+      g.gain.linearRampToValueAtTime(0.18, ac.currentTime + i * 0.22 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i * 0.22 + 0.18);
+      osc.connect(g); g.connect(ac.destination);
+      osc.start(ac.currentTime + i * 0.22);
+      osc.stop(ac.currentTime + i * 0.22 + 0.2);
+    });
+  } catch(_){}
+}
+
+// Alerta persistente no canto superior direito — fica até o gestor fechar (X)
+// opts: { id (string único — evita duplicata), tipo ('crit'|'warn'), titulo, msg, motId (pra Ver no Mapa), onClose?, autoCloseMs? }
+const _alertsAtivos = new Map(); // id -> element
+function pushAlert(opts){
+  const id = opts.id || ('a_' + Date.now());
+  // Se já existe alerta com mesmo id, só piscar o existente em vez de criar duplicata
+  if(_alertsAtivos.has(id)){
+    const el = _alertsAtivos.get(id);
+    el.style.animation = 'none';
+    requestAnimationFrame(() => { el.style.animation = 'alertSlide 0.3s ease-out'; });
+    return;
+  }
+  const stack = $('#alertstack');
+  const card = document.createElement('div');
+  card.className = 'alert-card' + (opts.tipo === 'warn' ? ' warn' : '');
+  card.innerHTML = `
+    <div class="ic">${opts.tipo === 'warn' ? '⚠' : '🚨'}</div>
+    <div class="body">
+      <strong>${esc(opts.titulo || 'Alerta')}</strong>
+      ${opts.msg ? esc(opts.msg) : ''}
+      ${opts.motId && motoristas[opts.motId] ? `<small><a href="#" data-mapa style="color:#fff;text-decoration:underline">📍 Ver no mapa</a> · <a href="#" data-detail style="color:#fff;text-decoration:underline">ℹ Abrir detalhe</a></small>` : ''}
+    </div>
+    <button class="x" title="Dispensar">✕</button>
+  `;
+  card.querySelector('.x').onclick = () => {
+    card.style.animation = 'alertSlide 0.25s ease-out reverse';
+    setTimeout(() => { card.remove(); _alertsAtivos.delete(id); }, 250);
+    if(opts.onClose) opts.onClose();
+  };
+  if(opts.motId){
+    const mapaA = card.querySelector('[data-mapa]');
+    if(mapaA) mapaA.onclick = (e) => { e.preventDefault(); const m = motoristas[opts.motId]; if(m && m.lat) map.setView([m.lat, m.lng], 16); };
+    const detA = card.querySelector('[data-detail]');
+    if(detA) detA.onclick = (e) => { e.preventDefault(); openMotDetail(opts.motId); };
+  }
+  stack.appendChild(card);
+  _alertsAtivos.set(id, card);
+  playAlertSound();
+  if(opts.autoCloseMs){
+    setTimeout(() => { if(_alertsAtivos.has(id)){ card.querySelector('.x').click(); } }, opts.autoCloseMs);
+  }
+}
+function clearAlert(id){
+  const el = _alertsAtivos.get(id);
+  if(el) el.querySelector('.x').click();
+}
+
 // ============== CONFIG MODAL ==============
 function openConfig(){
   $('#cfgSla').value = cfg.sla;
@@ -4604,13 +4687,20 @@ function setupSyncListeners(){
     const mot = motoristas[data.motoristaId];
     const c = chamados.find(x => x.id === data.chamadoId);
     if(!mot) return;
-    showToast(`⚠ ${mot.nome} saiu da rota ${c ? '· '+c.cliente : ''} (${data.distFromRoute}m fora)`, true);
-    // Marca visualmente
+    // Alerta persistente (banner + som) — fica até o gestor dispensar
+    pushAlert({
+      id: 'fora-rota-' + data.motoristaId + '-' + data.chamadoId,
+      tipo: 'crit',
+      titulo: `${mot.nome} saiu da rota`,
+      msg: `${data.distFromRoute}m fora do trajeto${c ? ' · indo pra ' + c.cliente : ''}`,
+      motId: data.motoristaId
+    });
+    // Marca visualmente o marker
     mot._offRoute = true;
     mot._offRouteCliente = c ? c.cliente : '';
     renderMotoristaMarkers();
     renderMot();
-    // Some o alerta visual depois de 30s
+    // Some marca visual do marker depois de 30s (o banner segue até o gestor dispensar)
     setTimeout(() => { if(motoristas[data.motoristaId]){ delete motoristas[data.motoristaId]._offRoute; renderMotoristaMarkers(); renderMot(); }}, 30000);
   });
 
