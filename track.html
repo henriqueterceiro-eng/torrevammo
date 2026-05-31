@@ -417,9 +417,24 @@ if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
   ).then(() => {
     try {
       firebase.initializeApp(FIREBASE_CONFIG);
+      // Listener 1: chamado persistente em vammo/chamados/{id}
+      // É como o cliente recebe os dados quando abre o link em outro device/horário
+      firebase.database().ref('vammo/chamados/' + CHAMADO_ID).on('value', snap => {
+        const c = snap.val();
+        if(!c){
+          // Fallback: chamado pode estar com ID parcial (endsWith)
+          console.warn('[track] chamado não encontrado em vammo/chamados/' + CHAMADO_ID);
+          return;
+        }
+        console.log('[track] chamado recebido:', c);
+        dadosChamado = { ...(dadosChamado || {}), ...c };
+        setChamado(dadosChamado);
+      });
+      // Listener 2: eventos em tempo real (motorista:posicao, status, etc.)
+      // Janela de 1h pra capturar histórico recente se cliente abre depois
       fb = firebase.database().ref('vammo/events');
-      const startTime = Date.now() - 5 * 60 * 1000;
-      fb.orderByKey().limitToLast(100).on('child_added', (snap) => {
+      const startTime = Date.now() - 60 * 60 * 1000;
+      fb.orderByKey().limitToLast(200).on('child_added', (snap) => {
         const m = snap.val();
         if(!m) return;
         if(m.ts && m.ts < startTime) return;
@@ -429,10 +444,9 @@ if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
   });
 }
 
-// Recupera estado do localStorage (se na mesma origin)
+// Recupera estado do localStorage (caso cliente abra no mesmo device — fallback)
 function recoverFromStorage(){
   try {
-    // Tenta encontrar o chamado nas estruturas do torre
     const demo = JSON.parse(localStorage.getItem('vammo_demo_ch') || '[]');
     const ch = demo.find(x => x.id === CHAMADO_ID || x.id.endsWith(CHAMADO_ID));
     if(!ch) return;

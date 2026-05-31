@@ -2241,7 +2241,7 @@ function renderDetail(){
   $$('#detail .statbtns button').forEach(b => b.onclick = () => updateStatus(c.id, b.dataset.st));
   const tc = $('#trackcopy'); if(tc) tc.onclick = (e) => {
     e.preventDefault();
-    const url = location.origin + '/track.html?id=' + encodeURIComponent(c.id);
+    const url = location.origin + '/track?id=' + encodeURIComponent(c.id);
     if(navigator.clipboard){
       navigator.clipboard.writeText(url).then(() => showToast('📋 Link público copiado! Envie pro cliente'));
     } else {
