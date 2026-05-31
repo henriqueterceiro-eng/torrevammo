@@ -3583,53 +3583,12 @@ function renderMotDetail(){
       listAddVeh.style.display = 'block';
     };
   }
-  // Botão "+ moto": adiciona moto manualmente nos slots do colab (quando colab esqueceu)
+  // Botão "+ moto": abre mini-form pra adicionar moto com seleção de origem (cliente)
   const btnAddMoto = $('#motDetAddMoto');
   if(btnAddMoto){
-    btnAddMoto.onclick = async (ev) => {
+    btnAddMoto.onclick = (ev) => {
       ev.stopPropagation();
-      const placa = prompt(`Adicionar moto ao ${m.nome.split(' ')[0]}?\n\nPlaca (deixe vazio se não tiver):`);
-      if(placa === null) return;
-      const placaUp = (placa || '').trim().toUpperCase();
-      const ultConcluido = corridasHoje
-        .filter(r => r.endStatus === 'concluido')
-        .sort((a,b) => b.completedTs - a.completedTs)[0];
-      const novoSlot = {
-        id: 'slot_' + Date.now() + '_' + Math.random().toString(36).substring(2,5),
-        placa: placaUp || null,
-        source: 'cliente',
-        clienteName: ultConcluido?.cliente || null,
-        chamadoId: ultConcluido?.chamadoId || null,
-        ocupadoEm: Date.now(),
-        _addedByGestor: true
-      };
-      if(!turnos[id]){ alert('Colab sem turno ativo. Ele precisa fazer check-in primeiro.'); return; }
-      const turnoUpd = { ...turnos[id] };
-      turnoUpd.slotsOcupados = [...(turnoUpd.slotsOcupados || []), novoSlot];
-      // Aguarda confirmação real do Firebase ANTES de atualizar UI — pra não dar falso positivo
-      btnAddMoto.disabled = true;
-      btnAddMoto.textContent = '⏳ salvando…';
-      try {
-        if(typeof firebase === 'undefined' || !firebase.apps?.length){
-          throw new Error('Firebase não conectado — recarregue a torre');
-        }
-        await firebase.database().ref('vammo/turnos/' + id).set(cleanForFb(turnoUpd));
-        // Só atualiza local DEPOIS de confirmar gravação
-        turnos[id] = turnoUpd;
-        m.slotsCount = (m.slotsCount || 0) + 1;
-        m.slotsDetalhe = [...(m.slotsDetalhe || []), novoSlot];
-        m.isFull = m.slotsCount >= (m.slotsTotal || 0);
-        showToast(`✓ Moto ${placaUp || '(sem placa)'} salva no Firebase · ${m.nome.split(' ')[0]} agora tem ${m.slotsCount}/${m.slotsTotal}`);
-        renderMotDetail();
-        renderMotoristaMarkers();
-        renderMot();
-      } catch(err){
-        console.error('Erro ao salvar moto:', err);
-        alert('❌ Falha ao salvar a moto no Firebase: ' + err.message + '\n\nA moto NÃO foi adicionada. Tente novamente ou recarregue a página.');
-      } finally {
-        btnAddMoto.disabled = false;
-        btnAddMoto.textContent = '+ moto';
-      }
+      openAddMotoForm(id, m);
     };
   }
   // Botão "✕" em cada moto: remove dos slots
@@ -3677,6 +3636,123 @@ function renderMotDetail(){
       renderMotDetail();
     };
   });
+}
+
+// Mini-form pra adicionar moto manualmente com escolha de origem
+function openAddMotoForm(colabId, m){
+  const hojeIni = new Date(); hojeIni.setHours(0,0,0,0);
+  // Chamados que esse colab fez hoje (independente do status) — possíveis origens
+  const chamadosColab = chamados.filter(c => c.motoristaId === colabId);
+  // Concluídos hoje
+  const concHoje = chamadosColab.filter(c => c.status === 'concluido');
+  // Em rota ou novos do mesmo colab
+  const naoConc = chamadosColab.filter(c => c.status === 'em_rota' || c.status === 'novo');
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10010;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;width:100%;max-width:440px;padding:20px;max-height:90vh;overflow-y:auto">
+      <h2 style="font-size:16px;margin-bottom:4px">🏍 Adicionar moto ao ${esc(m.nome.split(' ')[0])}</h2>
+      <p style="color:var(--txt2);font-size:11px;margin-bottom:14px">Use quando o colab pegou moto mas o app dele não registrou.</p>
+
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600">Placa da moto</label>
+      <input id="addmotoPlaca" type="text" placeholder="ABC1D23" maxlength="8" style="width:100%;text-transform:uppercase;font-family:var(--mono);font-weight:700;padding:10px;font-size:14px;margin-bottom:14px">
+
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600">De quem é a moto? *</label>
+      <select id="addmotoOrigem" style="width:100%;padding:10px;font-size:13px;margin-bottom:8px">
+        <option value="">— selecione —</option>
+        ${concHoje.length ? `<optgroup label="Atendimentos concluídos hoje (${concHoje.length})">
+          ${concHoje.map(c => `<option value="ch:${esc(c.id)}">${esc(c.cliente || '?')} · ${esc((c.endereco||'').split(',')[0])}</option>`).join('')}
+        </optgroup>` : ''}
+        ${naoConc.length ? `<optgroup label="Em rota / aberto na fila do colab (${naoConc.length})">
+          ${naoConc.map(c => `<option value="ch:${esc(c.id)}">${esc(c.cliente || '?')} · ${esc((c.endereco||'').split(',')[0])}</option>`).join('')}
+        </optgroup>` : ''}
+        <optgroup label="Outras origens">
+          <option value="saida">🚪 Saída de base (pegou em base pra entregar)</option>
+          <option value="outro_cliente">👤 Outro cliente (digite o nome abaixo)</option>
+          <option value="sem_origem">— Sem origem definida</option>
+        </optgroup>
+      </select>
+      <input id="addmotoClienteCustom" type="text" placeholder="Nome do cliente" style="width:100%;padding:9px;font-size:12px;margin-bottom:14px;display:none">
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="addmotoCancel" style="padding:9px 14px;font-size:12px;background:transparent;border:1px solid var(--bdr);color:var(--txt2)">Cancelar</button>
+        <button id="addmotoSave" class="primary" style="padding:9px 14px;font-size:12px;font-weight:800">✓ Adicionar moto</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const placaInp = overlay.querySelector('#addmotoPlaca');
+  const origemSel = overlay.querySelector('#addmotoOrigem');
+  const customInp = overlay.querySelector('#addmotoClienteCustom');
+  setTimeout(() => placaInp.focus(), 50);
+  origemSel.onchange = () => {
+    customInp.style.display = origemSel.value === 'outro_cliente' ? 'block' : 'none';
+    if(origemSel.value === 'outro_cliente') setTimeout(() => customInp.focus(), 50);
+  };
+  const close = () => overlay.remove();
+  overlay.querySelector('#addmotoCancel').onclick = close;
+  overlay.onclick = (e) => { if(e.target === overlay) close(); };
+
+  overlay.querySelector('#addmotoSave').onclick = async () => {
+    const placaUp = placaInp.value.trim().toUpperCase();
+    const origemVal = origemSel.value;
+    if(!origemVal){ alert('Selecione de quem é a moto'); return; }
+
+    // Resolve source + clienteName + chamadoId baseado na seleção
+    let source = 'cliente', clienteName = null, chamadoId = null;
+    if(origemVal.startsWith('ch:')){
+      const chId = origemVal.slice(3);
+      const c = chamados.find(x => x.id === chId);
+      if(c){ clienteName = c.cliente || null; chamadoId = c.id; }
+      source = 'cliente';
+    } else if(origemVal === 'saida'){
+      source = 'saida';
+      clienteName = null;
+    } else if(origemVal === 'outro_cliente'){
+      source = 'cliente';
+      const nm = customInp.value.trim();
+      if(!nm){ alert('Digite o nome do cliente'); customInp.focus(); return; }
+      clienteName = nm;
+    } else if(origemVal === 'sem_origem'){
+      source = 'cliente';
+      clienteName = null;
+    }
+
+    const novoSlot = {
+      id: 'slot_' + Date.now() + '_' + Math.random().toString(36).substring(2,5),
+      placa: placaUp || null,
+      source, clienteName, chamadoId,
+      ocupadoEm: Date.now(),
+      _addedByGestor: true
+    };
+    if(!turnos[colabId]){ alert('Colab sem turno ativo. Ele precisa fazer check-in primeiro.'); return; }
+    const turnoUpd = { ...turnos[colabId] };
+    turnoUpd.slotsOcupados = [...(turnoUpd.slotsOcupados || []), novoSlot];
+
+    const btn = overlay.querySelector('#addmotoSave');
+    btn.disabled = true; btn.textContent = '⏳ salvando…';
+    try {
+      if(typeof firebase === 'undefined' || !firebase.apps?.length) throw new Error('Firebase não conectado — recarregue a torre');
+      await firebase.database().ref('vammo/turnos/' + colabId).set(cleanForFb(turnoUpd));
+      turnos[colabId] = turnoUpd;
+      const mLive = motoristas[colabId];
+      if(mLive){
+        mLive.slotsCount = (mLive.slotsCount || 0) + 1;
+        mLive.slotsDetalhe = [...(mLive.slotsDetalhe || []), novoSlot];
+        mLive.isFull = mLive.slotsCount >= (mLive.slotsTotal || 0);
+      }
+      showToast(`✓ Moto ${placaUp || '(sem placa)'} adicionada · ${m.nome.split(' ')[0]} agora tem ${mLive?.slotsCount}/${mLive?.slotsTotal}`);
+      close();
+      if(_motDetailId === colabId) renderMotDetail();
+      renderMotoristaMarkers();
+      renderMot();
+    } catch(err){
+      console.error(err);
+      alert('❌ Falha ao salvar: ' + err.message);
+      btn.disabled = false; btn.textContent = '✓ Adicionar moto';
+    }
+  };
 }
 
 // Copia o link do colab pra clipboard (usado no header da aba Colaboradores)
