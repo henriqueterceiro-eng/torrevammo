@@ -1325,6 +1325,23 @@ function onGPSUpdate(pos){
   checkArrivedAtBase();
 }
 
+// Snapshot dos slots pra incluir no payload — torre usa pra mostrar X/Y motos e placas
+function slotsSnapshot(){
+  const total = (typeof slotsTotalCount === 'function') ? slotsTotalCount() : 0;
+  const ocup = (typeof slotsCount === 'function') ? slotsCount() : 0;
+  const detalhe = (turnoAtivo?.slotsOcupados || []).map(s => ({
+    id: s.id, placa: s.placa, source: s.source,
+    clienteName: s.clienteName, chamadoId: s.chamadoId, ocupadoEm: s.ocupadoEm
+  }));
+  return {
+    slotsTotal: total,
+    slotsCount: ocup,
+    slotsDetalhe: detalhe,
+    isFull: total > 0 && ocup >= total,
+    modo: turnoAtivo?.modo || null  // 'normal' | 'descarregando' | etc
+  };
+}
+
 function sendPos(pos){
   if(!me) return;
   bufferLastPos(pos);
@@ -1339,7 +1356,8 @@ function sendPos(pos){
     lng: pos.lng,
     accuracy: pos.accuracy,
     kmh: pos.kmh,
-    heading: pos.heading
+    heading: pos.heading,
+    ...slotsSnapshot()
   });
   lastSentPos = pos;
   lastSentAt = Date.now();
@@ -1368,7 +1386,8 @@ function flushLastPos(){
     if(ageMs > 30000){
       sync.send('motorista:posicao', {
         id: me.id, nome: me.nome, placa: me.placa, color: me.color, status: me.status,
-        lat: p.lat, lng: p.lng, accuracy: p.accuracy, kmh: p.kmh, heading: p.heading
+        lat: p.lat, lng: p.lng, accuracy: p.accuracy, kmh: p.kmh, heading: p.heading,
+        ...slotsSnapshot()
       });
       console.log('[colab] flush last pos: ', Math.round(ageMs/1000), 's antes');
     }

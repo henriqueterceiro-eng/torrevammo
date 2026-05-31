@@ -1880,7 +1880,12 @@ function renderMot(){
     const stLbl = isOff ? 'offline' : m.modo === 'descarregando' ? '🔴 descarregando' : m.status === 'busy' ? 'em rota' : 'online';
     const ageLbl = isStale ? ` · <span style="color:#fbbf24;font-weight:700">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
     const slotsLbl = (m.slotsTotal != null && m.slotsTotal > 0)
-      ? ` · <span style="color:${m.isFull?'#dc2626':'var(--txt)'};font-weight:700">${m.slotsCount||0}/${m.slotsTotal} 🏍${m.isFull?' FULL':''}</span>` : '';
+      ? (() => {
+          const ocup = m.slotsCount || 0;
+          const disp = Math.max(0, m.slotsTotal - ocup);
+          const cor = m.isFull ? '#dc2626' : disp <= 1 ? '#fbbf24' : '#16a34a';
+          return ` · <span style="color:${cor};font-weight:700" title="${ocup} moto(s) carregada(s), ${disp} slot(s) livre(s) de ${m.slotsTotal} totais">🏍 ${ocup}/${m.slotsTotal}${m.isFull ? ' FULL' : ` · ${disp} livre${disp===1?'':'s'}`}</span>`;
+        })() : '';
     const hasGeo = m.lat != null && m.lng != null;
     const filaStr = ac > 0
       ? `<span style="color:var(--acc);font-weight:700">${ac} na fila</span>`
