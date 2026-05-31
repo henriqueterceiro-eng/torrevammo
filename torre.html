@@ -2904,28 +2904,34 @@ function renderCad(){
       </div>
       ${items.map(v => {
         const fmtTs = (ts) => ts ? new Date(ts).toLocaleDateString('pt-BR') : '—';
-        // Fonte da verdade: combina v.atribuidoA com turnos (que aponta veiculoId/carretaId).
-        // Se um turno ativo aponta pra este veículo mas atribuidoA está vazio (bug do
-        // checkin antigo), considera "em uso" mesmo assim e auto-corrige no Firebase.
+        // Fonte da verdade: v.atribuidoA. Auto-fix CONSERVADOR só pega o turno mais
+        // recente E só se o colab estiver online (lastSeen < 5min). Evita marcar
+        // veículo pra um turno órfão de quem esqueceu de fazer checkout.
         let atribuido = v.atribuidoA;
         if(!atribuido){
+          const candidatos = [];
           for(const cid in turnos){
             const t = turnos[cid];
             if(t && t.ativo !== false && (t.veiculoId === v.id || t.carretaId === v.id)){
-              atribuido = cid;
-              // Auto-fix: persiste o atribuidoA pra ficar consistente nas próximas renders
-              if(STORE.saveVeiculo){
-                const fixed = { ...v, atribuidoA: cid, atribuidoEm: t.iniciadoEm || Date.now() };
-                veiculos[v.id] = fixed;
-                try { STORE.saveVeiculo(fixed); } catch(_){}
-              }
-              break;
+              const m = motoristas[cid];
+              const online = m && (Date.now() - (m.lastSeen||0)) < 5*60*1000;
+              candidatos.push({ cid, iniciadoEm: t.iniciadoEm || 0, online });
+            }
+          }
+          // Filtra os online e pega o mais recente
+          const ativos = candidatos.filter(c => c.online).sort((a,b) => b.iniciadoEm - a.iniciadoEm);
+          if(ativos.length > 0){
+            atribuido = ativos[0].cid;
+            if(STORE.saveVeiculo){
+              const fixed = { ...v, atribuidoA: atribuido, atribuidoEm: ativos[0].iniciadoEm || Date.now() };
+              veiculos[v.id] = fixed;
+              try { STORE.saveVeiculo(fixed); } catch(_){}
             }
           }
         }
         const colab = atribuido ? colaboradores[atribuido] : null;
         const statusBadge = atribuido
-          ? `<span class="cd-pill" style="background:rgba(245,158,11,0.2);color:#fbbf24" title="Em uso por ${colab?.nome || '?'}">🔒 ${esc(colab?.nome?.split(' ')[0] || 'em uso')}</span>`
+          ? `<span class="cd-pill" style="background:rgba(245,158,11,0.2);color:#fbbf24;cursor:pointer" title="Em uso por ${colab?.nome || '?'} · click pra liberar manualmente" data-libera="${v.id}">🔒 ${esc(colab?.nome?.split(' ')[0] || 'em uso')}</span>`
           : `<span class="cd-pill" style="background:rgba(16,163,74,0.2);color:#16a34a">✓ livre</span>`;
         return `<div class="cdrow" data-vid="${v.id}" style="grid-template-columns:100px 1fr 50px 50px 80px 100px 60px 70px">
           <div style="font-family:var(--mono);font-weight:700">${esc(v.placa || '—')}</div>
@@ -2945,6 +2951,22 @@ function renderCad(){
   $$('#cadlist .cdrow:not(.hdr)').forEach(row => {
     row.onclick = (e) => {
       if(e.target.tagName === 'A') return;
+      // Click no badge 🔒 X → libera veículo (não abre form de edição)
+      if(e.target.dataset.libera || e.target.closest('[data-libera]')){
+        e.stopPropagation();
+        const el = e.target.dataset.libera ? e.target : e.target.closest('[data-libera]');
+        const vid = el.dataset.libera;
+        const v = veiculos[vid];
+        if(!v) return;
+        const colab = colaboradores[v.atribuidoA];
+        if(!confirm(`Liberar a ${v.placa} de ${colab?.nome || 'colaborador'}?\n\nIsso desvincula o veículo (status volta a 'livre'). Use quando souber que o colab esqueceu de fazer checkout e está com turno fantasma. NÃO mexe no turno do colab — se ele estiver ativo, o turno continua até ele encerrar manualmente.`)) return;
+        const fixed = { ...v, atribuidoA: null, atribuidoEm: null };
+        veiculos[vid] = fixed;
+        STORE.saveVeiculo(fixed);
+        showToast(`✓ ${v.placa} liberada`);
+        renderCad();
+        return;
+      }
       const id = row.dataset.cid || row.dataset.vid || row.dataset.bid;
       if(id) openCadForm(cadTab, id);
     };
