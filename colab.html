@@ -377,6 +377,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     <div id="mapcanvas"></div>
     <div id="gpsstatus"><span class="ind"></span><span id="gpstxt">Buscando GPS…</span></div>
     <button id="recenter" title="Centralizar em mim">📍</button>
+    <button id="basebtn" title="Ir até uma base Vammo" style="position:absolute;bottom:84px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid var(--acc);box-shadow:0 4px 12px rgba(0,180,229,0.4);display:flex;align-items:center;justify-content:center;font-size:22px;z-index:500;color:var(--acc)">🏠</button>
     <div id="appver">v · </div>
     <div id="empty">
       <div class="ic">🛵</div>
@@ -480,6 +481,100 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   </div>
 </div>
 
+<!-- Modal: opções ao chegar numa base (descarregar, carregar, peças) -->
+<div id="baseOpcoesModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;align-items:center;justify-content:center;padding:18px;z-index:203">
+  <div style="background:var(--surf);border:2px solid var(--acc);border-radius:14px;padding:18px;max-width:420px;width:100%">
+    <div style="font-size:36px;text-align:center">🏠</div>
+    <div id="baseOpcoesTit" style="font-size:17px;font-weight:800;text-align:center;margin:4px 0">Você chegou na base</div>
+    <div id="baseOpcoesSub" style="text-align:center;color:var(--txt2);font-size:11px;margin-bottom:14px">O que vai fazer aqui?</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button id="opcDescarregar" style="padding:14px;background:rgba(220,38,38,0.15);border:1px solid #dc2626;color:#fca5a5;border-radius:10px;font-weight:800;font-size:13px;text-align:left;display:flex;gap:10px;align-items:center">
+        <span style="font-size:24px">📤</span>
+        <div style="flex:1">
+          <div>Descarregar motos</div>
+          <div id="opcDescarregarSub" style="font-size:10px;color:var(--txt3);font-weight:500;margin-top:2px">Deixar motos a bordo aqui na base</div>
+        </div>
+      </button>
+      <button id="opcCarregar" style="padding:14px;background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);border-radius:10px;font-weight:800;font-size:13px;text-align:left;display:flex;gap:10px;align-items:center">
+        <span style="font-size:24px">📥</span>
+        <div style="flex:1">
+          <div>Carregar motos</div>
+          <div id="opcCarregarSub" style="font-size:10px;color:var(--txt3);font-weight:500;margin-top:2px">Pegar moto da base pra entregar / atender</div>
+        </div>
+      </button>
+      <button id="opcPecas" style="padding:14px;background:rgba(245,158,11,0.12);border:1px solid #fbbf24;color:#fbbf24;border-radius:10px;font-weight:800;font-size:13px;text-align:left;display:flex;gap:10px;align-items:center">
+        <span style="font-size:24px">🧰</span>
+        <div style="flex:1">
+          <div>Peças e kits</div>
+          <div style="font-size:10px;color:var(--txt3);font-weight:500;margin-top:2px">Reabastecer estoque / devolver peças usadas</div>
+        </div>
+      </button>
+      ${''/* checkout só aparece se for a base do veículo */}
+      <button id="opcCheckout" style="padding:14px;background:rgba(22,163,74,0.15);border:1px solid #16a34a;color:#86efac;border-radius:10px;font-weight:800;font-size:13px;text-align:left;display:flex;gap:10px;align-items:center;display:none">
+        <span style="font-size:24px">🏁</span>
+        <div style="flex:1">
+          <div>Encerrar turno aqui</div>
+          <div style="font-size:10px;color:var(--txt3);font-weight:500;margin-top:2px">Checkout do carro/carreta nesta base</div>
+        </div>
+      </button>
+    </div>
+    <button id="baseOpcoesFechar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:10px">Fechar (volto depois)</button>
+  </div>
+</div>
+
+<!-- Modal: Carregar motos (pegar da base) -->
+<div id="carregarModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;align-items:flex-end;justify-content:center;z-index:203">
+  <div style="background:var(--surf);border-radius:14px 14px 0 0;width:100%;max-width:440px;max-height:92dvh;display:flex;flex-direction:column">
+    <div style="padding:14px 16px 6px;text-align:center;flex:0 0 auto">
+      <div style="font-size:30px">📥</div>
+      <div style="font-size:17px;font-weight:800;margin:2px 0">Carregar motos da base</div>
+      <div id="carregarSub" style="color:var(--txt2);font-size:11px">Quais motos você está pegando daqui?</div>
+    </div>
+    <div style="flex:1 1 auto;overflow-y:auto;padding:8px 16px;min-height:0">
+      <div id="carregarSlotsInfo" style="text-align:center;padding:8px;background:var(--surf2);border-radius:8px;margin-bottom:10px;font-size:11px"></div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input type="text" id="carregarPlacaInput" placeholder="Placa (ex: ABC1D23)" maxlength="8" style="flex:1;padding:9px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;font-size:14px;border:1px solid var(--bdr);background:var(--surf2);color:var(--txt);border-radius:6px">
+        <button id="carregarPlacaAdd" style="padding:9px 14px;background:var(--acc);color:#001823;border:none;border-radius:6px;font-weight:800">+ Adicionar</button>
+      </div>
+      <div id="carregarList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>
+      <div style="font-size:10px;color:var(--txt3);text-align:center">💡 Placa opcional · também pode adicionar sem placa</div>
+    </div>
+    <div style="padding:10px 16px max(14px,env(safe-area-inset-bottom));background:var(--surf);border-top:1px solid var(--bdr);box-shadow:0 -4px 12px rgba(0,0,0,0.3);flex:0 0 auto">
+      <button id="carregarConfirmar" style="width:100%;padding:13px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;margin-bottom:6px">✓ Confirmar carregamento</button>
+      <button id="carregarCancelar" style="width:100%;padding:6px;background:transparent;color:var(--txt3);border:none;font-size:11px">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Peças e kits -->
+<div id="pecasModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;align-items:flex-end;justify-content:center;z-index:203">
+  <div style="background:var(--surf);border-radius:14px 14px 0 0;width:100%;max-width:440px;max-height:92dvh;display:flex;flex-direction:column">
+    <div style="padding:14px 16px 6px;text-align:center;flex:0 0 auto">
+      <div style="font-size:30px">🧰</div>
+      <div style="font-size:17px;font-weight:800;margin:2px 0">Peças e kits</div>
+      <div style="color:var(--txt2);font-size:11px">Registre o que pegou ou devolveu na base</div>
+    </div>
+    <div style="flex:1 1 auto;overflow-y:auto;padding:6px 16px;min-height:0">
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600;margin-top:8px">Tipo de movimento</label>
+      <select id="pecasTipo" style="width:100%;padding:9px;font-size:13px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px;margin-bottom:10px">
+        <option value="retirada">📤 Retirei peças/kit (carregando)</option>
+        <option value="devolucao">📥 Devolvi peças/kit (descarregando)</option>
+        <option value="troca">🔄 Troca (devolvi usado e peguei novo)</option>
+      </select>
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600">Itens (um por linha ou separados por vírgula)</label>
+      <textarea id="pecasItens" placeholder="Ex:&#10;Bateria 60Ah · 2&#10;Cabo chupeta&#10;Pneu aro 17 · 1&#10;Kit ferramenta básico" style="width:100%;min-height:120px;padding:9px;font-size:12px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px;margin-bottom:10px;font-family:inherit;resize:vertical"></textarea>
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600">Foto (opcional — comprova o material)</label>
+      <div id="pecasFoto" style="margin-bottom:10px"></div>
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600">Observações (opcional)</label>
+      <input id="pecasObs" type="text" placeholder="Ex: bateria do cliente Y" style="width:100%;padding:9px;font-size:12px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:6px">
+    </div>
+    <div style="padding:10px 16px max(14px,env(safe-area-inset-bottom));background:var(--surf);border-top:1px solid var(--bdr);box-shadow:0 -4px 12px rgba(0,0,0,0.3);flex:0 0 auto">
+      <button id="pecasConfirmar" style="width:100%;padding:13px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;margin-bottom:6px">✓ Registrar</button>
+      <button id="pecasCancelar" style="width:100%;padding:6px;background:transparent;color:var(--txt3);border:none;font-size:11px">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Sair longe da base — exige slide pra ativar modo "destinar pra base" -->
 <div id="checkoutLongeModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;align-items:center;justify-content:center;padding:18px;z-index:202">
   <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;padding:20px;max-width:420px;width:100%">
@@ -571,7 +666,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-06-03.2';
+const APP_VERSION = '2026-06-03.3';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2666,6 +2761,21 @@ function bootApp(){
   document.getElementById('recenter').onclick = () => {
     if(myPos) map.setView([myPos.lat, myPos.lng], 15);
   };
+  document.getElementById('basebtn').onclick = () => {
+    // Se já está numa base (raio 100m), abre direto o menu de opções
+    if(myPos){
+      for(const bid in bases){
+        const b = bases[bid];
+        if(!b.lat || !b.lng) continue;
+        if(haversine(myPos, { lat:b.lat, lng:b.lng }) <= ARRIVED_THRESHOLD_M){
+          abrirBaseOpcoes(b);
+          return;
+        }
+      }
+    }
+    // Senão, abre seletor pra escolher qual base ir
+    abrirModalBase(false);
+  };
 
   // Toca som de welcome (precisa gesto do user, mas o submit do form vale)
   setTimeout(() => playBeep(), 200);
@@ -3701,13 +3811,198 @@ function checkArrivedAtBase(){
 function onArrivedAtBase(base){
   vibrate([100, 50, 100, 50, 300]);
   playBeep(); setTimeout(playBeep, 250);
-  if(slotsCount() === 0){
-    sairModoDescarga();
-    showToast(`🏠 Chegou em ${base.nome} · sem motos`);
-    return;
-  }
-  abrirModalDescarga(base);
+  // Sai do modo descarregando (rota vermelha some) — o colab está aqui agora
+  sairModoDescarga();
+  // Mostra menu de opções: descarregar, carregar, peças, [checkout se base do veículo]
+  abrirBaseOpcoes(base);
 }
+
+// ============== MODAL OPÇÕES NA BASE ==============
+let _baseAtual = null; // base onde o colab está agora (visitando)
+
+function abrirBaseOpcoes(base){
+  _baseAtual = base;
+  document.getElementById('baseOpcoesTit').textContent = `Você chegou em ${base.nome}`;
+  document.getElementById('baseOpcoesSub').textContent = base.endereco || 'O que vai fazer aqui?';
+  // Atualiza sub-textos com contadores
+  document.getElementById('opcDescarregarSub').textContent = slotsCount() > 0
+    ? `Você tem ${slotsCount()} moto(s) a bordo`
+    : 'Você não tem motos a bordo (nada pra descarregar)';
+  document.getElementById('opcCarregarSub').textContent = slotsDisponiveis() > 0
+    ? `${slotsDisponiveis()} slot(s) livre(s) pra novas motos`
+    : 'Slots cheios — descarregue antes';
+  // Habilita/desabilita conforme situação
+  const btnDesc = document.getElementById('opcDescarregar');
+  btnDesc.disabled = slotsCount() === 0;
+  btnDesc.style.opacity = slotsCount() === 0 ? '0.45' : '1';
+  const btnCarr = document.getElementById('opcCarregar');
+  btnCarr.disabled = slotsDisponiveis() === 0;
+  btnCarr.style.opacity = slotsDisponiveis() === 0 ? '0.45' : '1';
+  // Checkout só aparece se essa é a base CADASTRADA do veículo dele
+  const checkoutBase = getCheckoutBase();
+  const podeCheckout = checkoutBase && checkoutBase.id === base.id;
+  document.getElementById('opcCheckout').style.display = podeCheckout ? 'flex' : 'none';
+  document.getElementById('baseOpcoesModal').style.display = 'flex';
+}
+function fecharBaseOpcoes(){
+  document.getElementById('baseOpcoesModal').style.display = 'none';
+}
+
+// Wires dos botões do modal de opções
+document.getElementById('baseOpcoesFechar').onclick = fecharBaseOpcoes;
+document.getElementById('opcDescarregar').onclick = () => {
+  if(slotsCount() === 0) return;
+  fecharBaseOpcoes();
+  abrirModalDescarga(_baseAtual);
+};
+document.getElementById('opcCarregar').onclick = () => {
+  if(slotsDisponiveis() === 0) return;
+  fecharBaseOpcoes();
+  abrirModalCarregar(_baseAtual);
+};
+document.getElementById('opcPecas').onclick = () => {
+  fecharBaseOpcoes();
+  abrirModalPecas(_baseAtual);
+};
+document.getElementById('opcCheckout').onclick = () => {
+  fecharBaseOpcoes();
+  startCheckOut();
+};
+
+// ============== CARREGAR MOTOS DA BASE ==============
+let _carregarBase = null;
+let _carregarList = []; // [{placa}]
+
+function abrirModalCarregar(base){
+  _carregarBase = base;
+  _carregarList = [];
+  document.getElementById('carregarSub').textContent = `Da base ${base.nome}`;
+  document.getElementById('carregarPlacaInput').value = '';
+  atualizarCarregarUI();
+  document.getElementById('carregarModal').style.display = 'flex';
+  // Mobile: não foca o input (abre teclado e atrapalha)
+  if(window.innerWidth > 600) setTimeout(() => document.getElementById('carregarPlacaInput').focus(), 100);
+}
+function fecharModalCarregar(){
+  document.getElementById('carregarModal').style.display = 'none';
+  _carregarBase = null; _carregarList = [];
+}
+function atualizarCarregarUI(){
+  const ocup = slotsCount();
+  const total = slotsTotalCount();
+  const apos = ocup + _carregarList.length;
+  const cor = apos >= total ? '#dc2626' : apos > total * 0.7 ? '#fbbf24' : '#16a34a';
+  document.getElementById('carregarSlotsInfo').innerHTML = `
+    Slots agora: <strong>${ocup}/${total}</strong> · Após carregar: <strong style="color:${cor}">${apos}/${total}</strong>
+  `;
+  document.getElementById('carregarList').innerHTML = _carregarList.length === 0
+    ? '<div style="font-size:11px;color:var(--txt3);text-align:center;padding:8px">Nenhuma moto adicionada</div>'
+    : _carregarList.map((m, i) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(0,180,229,0.1);border:1px solid var(--acc);border-radius:6px;font-size:12px">
+        <span style="font-weight:800;color:var(--acc)">🏍 #${i+1}</span>
+        <span style="flex:1;font-family:'IBM Plex Mono',monospace;font-weight:700">${m.placa ? esc(m.placa) : '<span style="color:var(--txt3)">sem placa</span>'}</span>
+        <button data-rm="${i}" style="padding:2px 8px;background:var(--surf);border:1px solid var(--bdr);color:var(--novo);border-radius:4px;font-size:11px;font-weight:700">✕</button>
+      </div>`).join('');
+  document.getElementById('carregarList').querySelectorAll('[data-rm]').forEach(b => {
+    b.onclick = () => { _carregarList.splice(+b.dataset.rm, 1); atualizarCarregarUI(); };
+  });
+  const podeAdd = apos < total;
+  document.getElementById('carregarPlacaAdd').disabled = !podeAdd;
+  document.getElementById('carregarPlacaAdd').style.opacity = podeAdd ? 1 : 0.5;
+  document.getElementById('carregarConfirmar').disabled = _carregarList.length === 0;
+  document.getElementById('carregarConfirmar').style.opacity = _carregarList.length === 0 ? 0.5 : 1;
+}
+function adicionarCarregar(){
+  const inp = document.getElementById('carregarPlacaInput');
+  const placa = inp.value.trim().toUpperCase();
+  if(slotsCount() + _carregarList.length >= slotsTotalCount()){
+    showToast('⚠ Slots cheios', true); return;
+  }
+  if(placa && _carregarList.some(m => m.placa === placa)){ showToast('⚠ Placa já adicionada', true); return; }
+  _carregarList.push({ placa: placa || null });
+  inp.value = '';
+  atualizarCarregarUI();
+  inp.focus();
+}
+document.getElementById('carregarPlacaAdd').onclick = adicionarCarregar;
+document.getElementById('carregarPlacaInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter'){ e.preventDefault(); adicionarCarregar(); }
+});
+document.getElementById('carregarCancelar').onclick = fecharModalCarregar;
+document.getElementById('carregarConfirmar').onclick = () => {
+  if(_carregarList.length === 0) return;
+  const base = _carregarBase;
+  _carregarList.forEach(m => {
+    checkInMoto({
+      source: 'saida_base',
+      baseId: base?.id || null,
+      baseNome: base?.nome || null,
+      clienteName: null,
+      chamadoId: null,
+      placa: m.placa || null
+    });
+  });
+  showToast(`✓ ${_carregarList.length} moto(s) carregada(s) da base ${base?.nome || ''}`);
+  fecharModalCarregar();
+};
+
+// ============== PEÇAS E KITS ==============
+let _pecasBase = null;
+
+function abrirModalPecas(base){
+  _pecasBase = base;
+  document.getElementById('pecasTipo').value = 'retirada';
+  document.getElementById('pecasItens').value = '';
+  document.getElementById('pecasObs').value = '';
+  // Limpa foto
+  const fotoBox = document.getElementById('pecasFoto');
+  fotoBox.innerHTML = `<label style="display:block;padding:10px;background:var(--surf2);border:1px dashed var(--bdr2);border-radius:6px;text-align:center;cursor:pointer;font-size:12px;color:var(--acc)">📷 Tirar foto
+    <input id="pecasFotoInput" type="file" accept="image/*" capture="environment" style="display:none">
+  </label>`;
+  fotoBox.dataset.foto = '';
+  document.getElementById('pecasFotoInput').onchange = async (e) => {
+    const f = e.target.files[0];
+    if(!f) return;
+    const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+    fotoBox.dataset.foto = b64;
+    fotoBox.innerHTML = `<div style="position:relative;display:inline-block"><img src="${b64}" style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid var(--bdr)"><button id="pecasFotoRm" style="position:absolute;top:-6px;right:-6px;background:var(--novo);color:#fff;border:none;width:24px;height:24px;border-radius:50%;font-size:12px;font-weight:800">✕</button></div>`;
+    document.getElementById('pecasFotoRm').onclick = () => {
+      fotoBox.dataset.foto = '';
+      abrirModalPecas(_pecasBase); // re-abre limpo
+    };
+  };
+  document.getElementById('pecasModal').style.display = 'flex';
+}
+function fecharModalPecas(){
+  document.getElementById('pecasModal').style.display = 'none';
+  _pecasBase = null;
+}
+document.getElementById('pecasCancelar').onclick = fecharModalPecas;
+document.getElementById('pecasConfirmar').onclick = async () => {
+  const tipo = document.getElementById('pecasTipo').value;
+  const itensTxt = document.getElementById('pecasItens').value.trim();
+  if(!itensTxt){ alert('Liste pelo menos 1 item'); return; }
+  const obs = document.getElementById('pecasObs').value.trim();
+  const foto = document.getElementById('pecasFoto').dataset.foto || null;
+  // Quebra os itens por linha ou vírgula
+  const itens = itensTxt.split(/[\n,]+/).map(s => s.trim()).filter(s => s.length > 0);
+  const reg = {
+    id: 'pecas_' + Date.now() + '_' + Math.random().toString(36).substring(2,5),
+    motoristaId: me.id,
+    motoristaNome: me.nome,
+    baseId: _pecasBase?.id || null,
+    baseNome: _pecasBase?.nome || null,
+    tipo, itens, obs, foto,
+    ts: Date.now()
+  };
+  try {
+    await ensureFb();
+    await firebase.database().ref('vammo/pecas/' + reg.id).set(cleanForFb(reg));
+    showToast(`✓ Registro de peças salvo (${itens.length} item(ns))`);
+    fecharModalPecas();
+  } catch(e){
+    alert('❌ Falha ao salvar: ' + e.message);
+  }
+};
 
 async function encerrarTurno(){
   if(!me?.id) return;
