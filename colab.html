@@ -480,6 +480,22 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   </div>
 </div>
 
+<!-- Modal: Sair longe da base — exige slide pra ativar modo "destinar pra base" -->
+<div id="checkoutLongeModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;align-items:center;justify-content:center;padding:18px;z-index:202">
+  <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;padding:20px;max-width:420px;width:100%">
+    <div style="font-size:42px;text-align:center">🏁</div>
+    <div style="font-size:18px;font-weight:800;text-align:center;margin:6px 0">Você não está na base</div>
+    <div id="checkoutLongeMsg" style="text-align:center;color:var(--txt2);font-size:12px;margin-bottom:16px;line-height:1.4">—</div>
+    <div class="slide-confirm cyan" id="checkoutLongeSlide" style="height:60px">
+      <div class="slide-fill"></div>
+      <div class="slide-text" style="font-size:12px">→ deslize p/ ir pra base →</div>
+      <div class="slide-thumb" style="width:50px;height:50px;font-size:20px">🏁</div>
+    </div>
+    <div style="font-size:10px;color:var(--txt3);text-align:center;margin-top:10px">Depois de deslizar, o app abre rota até a base e te avisa quando chegar.</div>
+    <button id="checkoutLongeCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:8px">Cancelar (continuar atendendo)</button>
+  </div>
+</div>
+
 <!-- Modal: assinatura do cliente ao finalizar atendimento -->
 <div id="sigModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;align-items:flex-end;justify-content:center;z-index:201">
   <div style="background:var(--surf);border-radius:14px 14px 0 0;width:100%;max-width:440px;max-height:96dvh;display:flex;flex-direction:column">
@@ -555,7 +571,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-06-03.1';
+const APP_VERSION = '2026-06-03.2';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1534,6 +1550,7 @@ function onGPSUpdate(pos){
   checkOffRoute();
   checkArrived();
   checkArrivedAtBase();
+  checkArrivedAtCheckoutBase();
 }
 
 // Snapshot dos slots pra incluir no payload — torre usa pra mostrar X/Y motos e placas
@@ -2813,8 +2830,103 @@ async function startCheckIn(){
 }
 
 // === ENTRADA: inicia wizard de check-out ===
+// ============== CHECKOUT — BASE DO VEÍCULO ==============
+// Modal "destinar pra base" que abre quando o colab tenta sair longe da base.
+// Slide ativa "modo destino" — entra em entrarModoDestinoCheckout que cria rota
+// até a base. Quando chega no raio, notifica e abre o wizard.
+let _aguardandoBaseCheckout = null; // base que o colab está indo pra fazer checkout
+
+function abrirCheckoutLongeBase(base, dist){
+  const msg = document.getElementById('checkoutLongeMsg');
+  const distTxt = dist != null
+    ? `Você está a <strong style="color:#fbbf24">${Math.round(dist)}m</strong> da base.`
+    : 'Não foi possível medir sua distância (sem GPS).';
+  msg.innerHTML = `${distTxt}<br><br>O checkout só pode ser feito na base <strong style="color:var(--acc)">${esc(base.nome)}</strong>.<br><br>${base.endereco ? `📍 ${esc(base.endereco)}` : ''}`;
+  document.getElementById('checkoutLongeModal').style.display = 'flex';
+  const slide = document.getElementById('checkoutLongeSlide');
+  resetSlide(slide);
+  setupSlideConfirm(slide, () => {
+    document.getElementById('checkoutLongeModal').style.display = 'none';
+    entrarModoDestinoCheckout(base);
+  });
+  document.getElementById('checkoutLongeCancelar').onclick = () => {
+    document.getElementById('checkoutLongeModal').style.display = 'none';
+  };
+}
+
+function entrarModoDestinoCheckout(base){
+  _aguardandoBaseCheckout = base;
+  showToast(`🏁 Indo pra base ${base.nome} pra fazer checkout`);
+  vibrate(80);
+  // Reusa o sistema de baseDestino que já existe pra descarga: cria marker, rota, etc.
+  if(typeof entrarModoDescarga === 'function'){
+    // entra em modo destinar (sem precisar descarregar — flag _checkoutDestino marca isso)
+    entrarModoDescarga(base.id);
+    if(turnoAtivo) turnoAtivo._checkoutDestino = true;
+  }
+}
+
+// Checa se chegou na base de checkout — chamado no checkArrivedAtBase
+function checkArrivedAtCheckoutBase(){
+  if(!_aguardandoBaseCheckout || !myPos) return;
+  const dist = haversine(myPos, { lat: _aguardandoBaseCheckout.lat, lng: _aguardandoBaseCheckout.lng });
+  if(dist <= ARRIVED_THRESHOLD_M){
+    const baseChegou = _aguardandoBaseCheckout;
+    _aguardandoBaseCheckout = null;
+    vibrate([100, 50, 100, 50, 300]);
+    playBeep();
+    // Notificação grande pro colab saber que pode fazer checkout
+    showToast(`🎯 Chegou em ${baseChegou.nome} · clique no ⏻ pra encerrar o turno`);
+    setTimeout(() => playBeep(), 250);
+    // Mostra um banner persistente em vez de só um toast
+    mostrarBannerChegouBase(baseChegou);
+  }
+}
+
+function mostrarBannerChegouBase(base){
+  // Se já tem o banner aberto, ignora
+  if(document.getElementById('chegouBaseBanner')) return;
+  const div = document.createElement('div');
+  div.id = 'chegouBaseBanner';
+  div.style.cssText = 'position:fixed;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 16px;border-radius:12px;box-shadow:0 6px 20px rgba(16,185,129,0.5);z-index:300;display:flex;align-items:center;gap:12px;animation:slideDown 0.4s ease-out';
+  div.innerHTML = `
+    <div style="font-size:30px">🎯</div>
+    <div style="flex:1;line-height:1.3">
+      <div style="font-weight:800;font-size:14px">Você chegou em ${esc(base.nome)}!</div>
+      <div style="font-size:11px;opacity:0.9;margin-top:2px">Inicie o checkout pra encerrar o turno e liberar os veículos.</div>
+    </div>
+    <button id="bannerCheckoutBtn" style="background:#fff;color:#065f46;border:none;padding:8px 12px;border-radius:8px;font-weight:800;font-size:12px;white-space:nowrap">▶ Checkout</button>
+    <button id="bannerCheckoutFechar" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:14px">×</button>
+  `;
+  document.body.appendChild(div);
+  div.querySelector('#bannerCheckoutBtn').onclick = () => { div.remove(); startCheckOut(); };
+  div.querySelector('#bannerCheckoutFechar').onclick = () => div.remove();
+}
+
+// Resolve a base de checkout do colab — preferindo a base cadastrada no CARRO
+// (veículo principal do turno). Se o carro não tem baseId, tenta a da carreta.
+// Se nenhum tem, retorna null = pode fazer checkout em qualquer lugar (fallback).
+function getCheckoutBase(){
+  if(!turnoAtivo) return null;
+  // Procura base do carro primeiro, depois da carreta
+  const carroBaseId = _turnoVeiculos[turnoAtivo.veiculoId]?.baseId;
+  const carretaBaseId = turnoAtivo.carretaId ? _turnoVeiculos[turnoAtivo.carretaId]?.baseId : null;
+  const baseId = carroBaseId || carretaBaseId;
+  if(!baseId) return null;
+  return bases[baseId] || null;
+}
+
+// Checa se o colab está perto o suficiente da base pra fazer checkout
+function isAtCheckoutBase(){
+  const base = getCheckoutBase();
+  if(!base || base.lat == null || base.lng == null) return { ok: true, base: null }; // sem base cadastrada = permite
+  if(!myPos) return { ok: false, base, dist: null, motivo: 'sem GPS' };
+  const dist = haversine(myPos, { lat: base.lat, lng: base.lng });
+  return { ok: dist <= ARRIVED_THRESHOLD_M, base, dist };
+}
+
 async function startCheckOut(){
-  // TRAVA 1: não pode encerrar com motos a bordo. Lista as placas pro colab saber o que precisa descarregar.
+  // TRAVA 1: não pode encerrar com motos a bordo.
   if(slotsCount() > 0){
     const motos = (turnoAtivo?.slotsOcupados || []).map((s,i) => `  ${i+1}. ${s.placa || '(sem placa)'}`).join('\n');
     alert(
@@ -2829,6 +2941,12 @@ async function startCheckOut(){
   // TRAVA 2: precisa ter carro vinculado pra fazer checkout. Caso raro mas defensivo.
   if(!turnoAtivo?.veiculoId){
     alert('⚠ Não há veículo vinculado ao turno. Recarregue o app.');
+    return;
+  }
+  // TRAVA 3: checkout só na BASE do veículo. Se longe, abre fluxo "destinar pra base".
+  const chk = isAtCheckoutBase();
+  if(!chk.ok && chk.base){
+    abrirCheckoutLongeBase(chk.base, chk.dist);
     return;
   }
   wizMode = 'out';

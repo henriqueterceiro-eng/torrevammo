@@ -719,7 +719,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 120 * 1000;       // 120s sem update = visualmente "offline" (toleramos hiccups de rede e tela bloqueada)
-const LATEST_COLAB_VERSION = '2026-06-03.1'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const LATEST_COLAB_VERSION = '2026-06-03.2'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
 const MOTORISTA_REMOVE_MS = 5 * 60 * 1000; // 5min sem update = remove do mapa automaticamente
 
 let cfg = loadCfg();
@@ -3113,6 +3113,17 @@ function openCadForm(tab, id){
         <div class="cdform-field"><label>Slots de motos <small style="color:var(--txt3)">${tab==='moto'?'(motos não levam)':tab==='carreta'?'(quantas motos cabem)':'(0 — carreta carrega)'}</small></label><input id="f_slots" type="number" min="0" max="20" placeholder="${tab==='carreta'?'2':tab==='moto'?'0':'0'}" value="${item?.slots ?? (tab==='carreta'?2:0)}"></div>
         <div class="cdform-field"><label>Município licenciamento</label><input id="f_municipio" type="text" placeholder="São Paulo / SP" value="${esc(item?.municipio || '')}"></div>
       </div>
+      <div class="cdform-field"><label>🏠 Base de origem <small style="color:var(--txt3)">(colab só pode fazer checkout NESTA base)</small></label>${(() => {
+        const opts = Object.values(bases).filter(b => b.ativo !== false).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+        if(!opts.length){
+          return `<select id="f_baseid" disabled style="opacity:0.6"><option>— Cadastre uma base primeiro (aba 🏠 Bases) —</option></select>`;
+        }
+        const cur = item?.baseId || '';
+        return `<select id="f_baseid">
+          <option value="">— sem base (checkout em qualquer lugar) —</option>
+          ${opts.map(b => `<option value="${esc(b.id)}"${cur===b.id?' selected':''}>${esc(b.nome)}</option>`).join('')}
+        </select>`;
+      })()}</div>
       <div class="cdform-field"><label>Observações</label><input id="f_obs" type="text" placeholder="Opcional" value="${esc(item?.obs || '')}"></div>
     `;
   }
@@ -3213,6 +3224,7 @@ function openCadForm(tab, id){
         ultimoKmTs: (item?.ultimoKm !== km) ? Date.now() : (item?.ultimoKmTs || Date.now()),
         slots,
         municipio: $('#f_municipio').value.trim(),
+        baseId: $('#f_baseid') ? $('#f_baseid').value || null : (item?.baseId || null),
         docUrl: $('#f_doc').value.trim(),
         obs: $('#f_obs').value.trim(),
         ativo: true,
