@@ -1736,6 +1736,14 @@ async function updateRouteFor(motoristaId){
     if(!c.lat || !c.lng) continue;
     stops.push({ lat: c.lat, lng: c.lng, id: c.id });
   }
+  // Se o colab está em modo 'descarregando' (indo pra uma base), adiciona a base
+  // como destino final da rota — assim a torre vê o trajeto até a base.
+  if(m.modo === 'descarregando' && m.baseDestinoId){
+    const base = bases[m.baseDestinoId];
+    if(base && base.lat != null && base.lng != null){
+      stops.push({ lat: base.lat, lng: base.lng, id: 'base_' + m.baseDestinoId, _base: true });
+    }
+  }
   if(stops.length === 0){ clearRoute(motoristaId); return; }
   // Cache: só refaz se motorista andou bastante OU se a fila mudou
   const hashKey = stops.map(s => s.id).join('|');
