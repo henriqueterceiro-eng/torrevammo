@@ -403,7 +403,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     <div id="gpsstatus"><span class="ind"></span><span id="gpstxt">Buscando GPS…</span></div>
     <button id="recenter" title="Centralizar em mim">📍</button>
     <button id="basebtn" title="Ir até uma base Vammo" style="position:absolute;bottom:84px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid var(--acc);box-shadow:0 4px 12px rgba(0,180,229,0.4);display:flex;align-items:center;justify-content:center;font-size:22px;z-index:500;color:var(--acc)">🏠</button>
-    <button id="docsbtn" title="Documentos (CNH + CRLV) — pra blitz" style="position:absolute;bottom:144px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid #fbbf24;box-shadow:0 4px 12px rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;font-size:20px;z-index:500;color:#fbbf24">📄</button>
+    <button id="docsbtn" onclick="(typeof abrirDocsModal==='function')?abrirDocsModal():alert('⚠ App nao atualizou ainda. Feche COMPLETAMENTE o app (tire da pilha de apps abertos) e abra de novo.')" title="Documentos (CNH + CRLV) — pra blitz" style="position:absolute;bottom:144px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid #fbbf24;box-shadow:0 4px 12px rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;font-size:20px;z-index:500;color:#fbbf24">📄</button>
     <div id="appver">v · </div>
     <div id="empty">
       <div class="ic">🛵</div>
@@ -703,7 +703,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-06-03.7';
+const APP_VERSION = '2026-06-03.8';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3973,9 +3973,11 @@ function driveToPreview(url){
   return url;
 }
 
-function abrirDocsModal(){
+window.abrirDocsModal = function abrirDocsModal(){
+  // FEEDBACK IMEDIATO — vibra + toast pra confirmar visualmente que o clique chegou
+  try { if(typeof vibrate === 'function') vibrate(60); } catch(_){}
+  try { if(typeof showToast === 'function') showToast('📄 Abrindo documentos...'); } catch(_){}
   // ETAPA 1 — abre o modal IMEDIATAMENTE com o que tem em cache.
-  // Mesmo sem nenhum dado, garante feedback visual em qualquer cenário.
   const modal = document.getElementById('docsModal');
   if(!modal){
     alert('⚠ Modal de documentos não disponível — feche o app COMPLETAMENTE (tire da pilha de apps) e abra de novo pra atualizar.');
@@ -3991,7 +3993,7 @@ function abrirDocsModal(){
   }
   // ETAPA 2 — em paralelo, busca dados frescos do Firebase pra atualizar se necessário
   hidratarDocsDoFirebase();
-}
+};
 
 async function hidratarDocsDoFirebase(){
   try {
