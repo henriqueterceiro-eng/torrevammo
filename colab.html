@@ -555,7 +555,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-05-31.8';
+const APP_VERSION = '2026-06-03.1';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2814,9 +2814,21 @@ async function startCheckIn(){
 
 // === ENTRADA: inicia wizard de check-out ===
 async function startCheckOut(){
+  // TRAVA 1: não pode encerrar com motos a bordo. Lista as placas pro colab saber o que precisa descarregar.
   if(slotsCount() > 0){
-    if(!confirm(`⚠ Você tem ${slotsCount()} moto(s) ainda em slots.\n\nNão é possível encerrar o turno com motos. Vou abrir o modal pra você ir a uma base descarregar.`)) return;
+    const motos = (turnoAtivo?.slotsOcupados || []).map((s,i) => `  ${i+1}. ${s.placa || '(sem placa)'}`).join('\n');
+    alert(
+      `⛔ Não dá pra encerrar o turno com motos a bordo.\n\n` +
+      `Você tem ${slotsCount()} moto(s) ocupando slot:\n${motos}\n\n` +
+      `Vou abrir agora o seletor de base — escolhe uma pra descarregar.\n` +
+      `Depois de descarregar todas as motos, tente encerrar de novo.`
+    );
     abrirModalBase(false);
+    return;
+  }
+  // TRAVA 2: precisa ter carro vinculado pra fazer checkout. Caso raro mas defensivo.
+  if(!turnoAtivo?.veiculoId){
+    alert('⚠ Não há veículo vinculado ao turno. Recarregue o app.');
     return;
   }
   wizMode = 'out';
@@ -2825,7 +2837,8 @@ async function startCheckOut(){
     kit: { consumiveis: {}, checklist: {}, ciente: false },
     kmFinal: null,
     fotosVeiculo: { frente:null, lateral_d:null, traseira:null, lateral_e:null, painel:null },
-    fotoCarreta: null,
+    fotoCarreta: null, // compat
+    fotosCarretaOut: { placa: null, lateral_d: null, lateral_e: null },
     assinaturaData: null
   };
   await loadVeiculosDisponiveis();
@@ -3076,25 +3089,38 @@ function renderStepVeiculoOut(){
   const body = document.getElementById('wiz-body');
   const v = _turnoVeiculos[turnoAtivo?.veiculoId];
   const c = turnoAtivo?.carretaId ? _turnoVeiculos[turnoAtivo.carretaId] : null;
+  // Inicializa fotos da carreta como objeto (igual no check-in) se ainda não foi
+  if(c && (!wizData.fotosCarretaOut || typeof wizData.fotosCarretaOut !== 'object')){
+    wizData.fotosCarretaOut = { placa: null, lateral_d: null, lateral_e: null };
+  }
   body.innerHTML = `
     <div class="step-tit">🚗 Devolução do veículo</div>
-    <div class="step-sub">Confirme o KM final e tire as fotos de devolução.</div>
+    <div class="step-sub">Confirme o KM final e tire TODAS as fotos. Sem foto, o veículo não é liberado.</div>
+
     <div class="vitem selected">
       <div class="placa">${({carro:'🚗',moto:'🏍',caminhao:'🚛'}[v?.tipo]||'🚗')} ${esc(v?.placa||'?')}</div>
       <div class="modelo">${esc((v?.marca||'')+' '+(v?.modelo||'')).trim()}</div>
       <div class="meta">KM inicial: ${turnoAtivo?.kmInicial?.toLocaleString('pt-BR') || '—'}</div>
     </div>
+    ${c ? `<div class="vitem selected" style="margin-top:8px">
+      <div class="placa">🚛 ${esc(c.placa)}</div>
+      <div class="modelo">${esc((c.marca||'')+' '+(c.modelo||'')).trim()}</div>
+      <div class="meta" style="color:#fbbf24">⚠ Carreta engatada — devolva PRIMEIRO a carreta, depois o carro</div>
+    </div>` : ''}
+
     <div class="km-box">
       <label>KM final do veículo</label>
       <input type="number" id="vw_km" min="${turnoAtivo?.kmInicial || 0}" placeholder="000000" inputmode="numeric" value="${wizData.kmFinal ?? ''}">
       <div style="font-size:10px;color:var(--txt3);margin-top:6px">Deve ser ≥ ${turnoAtivo?.kmInicial?.toLocaleString('pt-BR') || 0} km</div>
     </div>
+
     <div style="margin-top:18px">
-      <div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">📸 Fotos de devolução (4 lados + painel)</div>
+      <div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">📸 Fotos do CARRO · 5 obrigatórias</div>
       <div class="fotos-grid" id="vw_fotos"></div>
     </div>
+
     ${c ? `<div style="margin-top:18px">
-      <div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">🚛 Foto da carreta (placa)</div>
+      <div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">🚛 Fotos da CARRETA · 3 obrigatórias</div>
       <div class="fotos-grid" id="ct_fotos"></div>
     </div>` : ''}
   `;
@@ -3106,18 +3132,24 @@ function renderStepVeiculoOut(){
     ['frente','Frente'],['lateral_d','Lateral D'],['traseira','Traseira'],['lateral_e','Lateral E'],['painel','Painel']
   ]);
   if(c){
-    renderFotosGrid('ct_fotos', { placa: wizData.fotoCarreta }, [['placa','Placa']], (k, val) => {
-      wizData.fotoCarreta = val;
+    renderFotosGrid('ct_fotos', wizData.fotosCarretaOut, [
+      ['placa','Placa'],['lateral_d','Lateral D'],['lateral_e','Lateral E']
+    ], (k, val) => {
+      wizData.fotosCarretaOut[k] = val;
+      // Compat: mantém wizData.fotoCarreta = foto da placa (campo antigo)
+      if(k === 'placa') wizData.fotoCarreta = val;
       validateStep();
     });
   }
 }
-// Validador depende do modo
+// Validador depende do modo: TODAS as fotos obrigatórias (carro + carreta se houver)
 function validateStepOut1(){
   const f = wizData.fotosVeiculo;
-  const baseOk = wizData.kmFinal >= (turnoAtivo?.kmInicial || 0) && f.frente && f.lateral_d && f.traseira && f.lateral_e && f.painel;
-  if(!turnoAtivo?.carretaId) return baseOk;
-  return baseOk && wizData.fotoCarreta;
+  const carroOk = wizData.kmFinal >= (turnoAtivo?.kmInicial || 0) && f.frente && f.lateral_d && f.traseira && f.lateral_e && f.painel;
+  if(!turnoAtivo?.carretaId) return carroOk;
+  const fc = wizData.fotosCarretaOut || {};
+  const carretaOk = fc.placa && fc.lateral_d && fc.lateral_e;
+  return carroOk && carretaOk;
 }
 
 // =========== STEP RESUMO + ASSINATURA =============
@@ -3564,24 +3596,38 @@ async function encerrarTurno(){
   try {
     await ensureFb();
     const db = firebase.database();
-    // Carrega turno
     const snap = await db.ref('vammo/turnos/' + me.id).once('value');
     const t = snap.val();
     if(t){
-      // Libera veículos
-      if(t.veiculoId){
-        await db.ref('vammo/veiculos/' + t.veiculoId).update({ atribuidoA: null, atribuidoEm: null });
-      }
+      // SEQUÊNCIA OBRIGATÓRIA: carreta primeiro, carro depois (regra do negócio:
+      // não dá pra liberar o carro deixando a carreta engatada no Firebase).
       if(t.carretaId){
-        await db.ref('vammo/veiculos/' + t.carretaId).update({ atribuidoA: null, atribuidoEm: null });
+        await db.ref('vammo/veiculos/' + t.carretaId).update({
+          atribuidoA: null, atribuidoEm: null,
+          ultimoKm: wizData?.kmFinal || null,
+          ultimoKmTs: Date.now()
+        });
       }
-      // Marca turno como encerrado (mantém histórico)
+      if(t.veiculoId){
+        await db.ref('vammo/veiculos/' + t.veiculoId).update({
+          atribuidoA: null, atribuidoEm: null,
+          ultimoKm: wizData?.kmFinal || null,
+          ultimoKmTs: Date.now()
+        });
+      }
+      // Marca turno como encerrado (mantém histórico em vammo/turnos com ativo:false)
       await db.ref('vammo/turnos/' + me.id).update({
         ativo: false,
-        encerradoEm: Date.now()
+        encerradoEm: Date.now(),
+        kmFinal: wizData?.kmFinal || null,
+        checkOut: wizData ? {
+          kit: wizData.kit,
+          fotosVeiculo: wizData.fotosVeiculo,
+          fotosCarreta: wizData.fotosCarretaOut || (wizData.fotoCarreta ? { placa: wizData.fotoCarreta } : null),
+          assinatura: wizData.assinaturaData,
+          ts: Date.now()
+        } : null
       });
-      // Move pra histórico?
-      // Por ora deixa em vammo/turnos com ativo:false
     }
   } catch(err){ console.warn('encerrarTurno fail:', err); }
 }
