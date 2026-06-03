@@ -378,6 +378,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     <div id="gpsstatus"><span class="ind"></span><span id="gpstxt">Buscando GPS…</span></div>
     <button id="recenter" title="Centralizar em mim">📍</button>
     <button id="basebtn" title="Ir até uma base Vammo" style="position:absolute;bottom:84px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid var(--acc);box-shadow:0 4px 12px rgba(0,180,229,0.4);display:flex;align-items:center;justify-content:center;font-size:22px;z-index:500;color:var(--acc)">🏠</button>
+    <button id="docsbtn" title="Documentos (CNH + CRLV) — pra blitz" style="position:absolute;bottom:144px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid #fbbf24;box-shadow:0 4px 12px rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;font-size:20px;z-index:500;color:#fbbf24">📄</button>
     <div id="appver">v · </div>
     <div id="empty">
       <div class="ic">🛵</div>
@@ -478,6 +479,17 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     </div>
     <button id="descConfirmar" style="width:100%;padding:13px;background:var(--conc);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px">✓ Confirmar descarga</button>
     <button id="descCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:4px">Cancelar</button>
+  </div>
+</div><!-- Modal: Documentos do colab pra apresentar em blitz -->
+<div id="docsModal" style="position:fixed;inset:0;background:#000;display:none;flex-direction:column;z-index:300">
+  <div style="flex:0 0 auto;padding:max(12px,env(safe-area-inset-top)) 14px 8px;background:linear-gradient(180deg,#0a1428,#06101e);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bdr)">
+    <div style="font-size:18px;font-weight:800;flex:1">📄 Documentos</div>
+    <button id="docsFechar" style="background:rgba(255,255,255,0.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px">×</button>
+  </div>
+  <div id="docsTabs" style="flex:0 0 auto;display:flex;gap:4px;padding:8px 12px;background:var(--surf);overflow-x:auto;white-space:nowrap"></div>
+  <div id="docsBody" style="flex:1 1 auto;overflow-y:auto;padding:14px;background:var(--bg)"></div>
+  <div style="flex:0 0 auto;padding:10px 14px max(14px,env(safe-area-inset-bottom));background:var(--surf);border-top:1px solid var(--bdr);text-align:center;font-size:10px;color:var(--txt3)">
+    📱 Mostre essa tela ao agente · documentos oficiais armazenados no Drive da Vammo
   </div>
 </div>
 
@@ -666,7 +678,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-06-03.4';
+const APP_VERSION = '2026-06-03.5';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2859,6 +2871,7 @@ function bootApp(){
   document.getElementById('recenter').onclick = () => {
     if(myPos) map.setView([myPos.lat, myPos.lng], 15);
   };
+  document.getElementById('docsbtn').onclick = abrirDocsModal;
   document.getElementById('basebtn').onclick = () => {
     // Se já está numa base (raio 100m), abre direto o menu de opções
     if(myPos){
@@ -3921,6 +3934,147 @@ function onArrivedAtBase(base){
   abrirBaseOpcoes(base);
 }
 
+// ============== MODAL DOCUMENTOS (BLITZ) ==============
+// Mostra a CNH do colab + CRLV dos veiculos atrelados ao turno em
+// tela cheia, com tabs e preview do Drive. Pra apresentar em fiscalização.
+let _docsTabAtiva = null;
+
+// Converte URL do Drive em preview embedable (formato /file/d/{id}/preview)
+function driveToPreview(url){
+  if(!url) return null;
+  const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if(m) return `https://drive.google.com/file/d/${m[1]}/preview`;
+  return url;
+}
+
+function abrirDocsModal(){
+  // Lista dinâmica de tabs: CNH + Carro + Carreta (se houver)
+  const tabs = [];
+  tabs.push({
+    key: 'cnh',
+    label: '👤 CNH',
+    title: 'Carteira Nacional de Habilitação',
+    docUrl: me?.cnhDocUrl,
+    dados: [
+      ['Nome', me?.nome],
+      ['CPF', me?.cpf],
+      ['RG', me?.rg],
+      ['Data nascimento', me?.dataNascimento ? new Date(me.dataNascimento).toLocaleDateString('pt-BR') : null],
+      ['Nº CNH', me?.cnhNumero],
+      ['Categoria', me?.cnhCat],
+      ['Validade', me?.cnhValidade ? new Date(me.cnhValidade).toLocaleDateString('pt-BR') : null],
+      ['1ª habilitação', me?.cnhPrimeira ? new Date(me.cnhPrimeira).toLocaleDateString('pt-BR') : null],
+      ['UF emissão', me?.cnhUf],
+      ['Atividade remunerada (EAR)', me?.cnhEar === 'sim' ? 'Sim' : me?.cnhEar === 'nao' ? 'Não' : null]
+    ]
+  });
+  // Carro
+  if(turnoAtivo?.veiculoId){
+    const v = _turnoVeiculos[turnoAtivo.veiculoId];
+    if(v){
+      tabs.push({
+        key: 'carro',
+        label: ({carro:'🚗',moto:'🏍'})[v.tipo] + ' ' + (v.placa || 'Carro'),
+        title: `${(v.marca||'')+' '+(v.modelo||'')}`.trim() || 'Veículo',
+        docUrl: v.docUrl,
+        dados: [
+          ['Placa', v.placa],
+          ['RENAVAM', v.renavam],
+          ['Chassi', v.chassi],
+          ['Marca', v.marca],
+          ['Modelo', v.modelo],
+          ['Ano fabricação', v.anoFabricacao],
+          ['Ano modelo', v.ano],
+          ['Cor', v.cor],
+          ['Combustível', v.combustivel],
+          ['Categoria', v.categoria],
+          ['Município', v.municipio]
+        ]
+      });
+    }
+  }
+  // Carreta
+  if(turnoAtivo?.carretaId){
+    const c = _turnoVeiculos[turnoAtivo.carretaId];
+    if(c){
+      tabs.push({
+        key: 'carreta',
+        label: '🚛 ' + (c.placa || 'Carreta'),
+        title: `${(c.marca||'')+' '+(c.modelo||'')}`.trim() || 'Carreta',
+        docUrl: c.docUrl,
+        dados: [
+          ['Placa', c.placa],
+          ['RENAVAM', c.renavam],
+          ['Chassi', c.chassi],
+          ['Marca', c.marca],
+          ['Modelo', c.modelo],
+          ['Ano fabricação', c.anoFabricacao],
+          ['Ano modelo', c.ano],
+          ['Categoria', c.categoria]
+        ]
+      });
+    }
+  }
+  // Renderiza tabs
+  document.getElementById('docsTabs').innerHTML = tabs.map(t => `
+    <button data-tab="${t.key}" style="padding:8px 14px;border-radius:8px;font-size:12px;font-weight:800;border:1px solid var(--bdr);background:var(--surf2);color:var(--txt2);cursor:pointer;white-space:nowrap">${t.label}</button>
+  `).join('');
+  document.getElementById('docsTabs').querySelectorAll('[data-tab]').forEach(b => {
+    b.onclick = () => renderDocsTab(b.dataset.tab, tabs);
+  });
+  // Ativa primeira tab (CNH)
+  _docsTabAtiva = tabs[0]?.key;
+  renderDocsTab(_docsTabAtiva, tabs);
+  document.getElementById('docsModal').style.display = 'flex';
+  // Vibra pra dar feedback que abriu (útil em situação de stress)
+  vibrate(40);
+}
+
+function renderDocsTab(key, tabs){
+  _docsTabAtiva = key;
+  const t = tabs.find(x => x.key === key);
+  if(!t){ document.getElementById('docsBody').innerHTML = ''; return; }
+  // Atualiza estilo das tabs (ativa fica azul)
+  document.getElementById('docsTabs').querySelectorAll('[data-tab]').forEach(b => {
+    const ativo = b.dataset.tab === key;
+    b.style.background = ativo ? 'var(--acc)' : 'var(--surf2)';
+    b.style.color = ativo ? '#001823' : 'var(--txt2)';
+    b.style.borderColor = ativo ? 'var(--acc)' : 'var(--bdr)';
+  });
+  const previewUrl = driveToPreview(t.docUrl);
+  document.getElementById('docsBody').innerHTML = `
+    <div style="text-align:center;margin-bottom:10px">
+      <div style="font-size:18px;font-weight:800">${esc(t.title)}</div>
+    </div>
+    ${previewUrl ? `
+      <div style="background:#fff;border-radius:10px;overflow:hidden;margin-bottom:14px;aspect-ratio:1/1.3;box-shadow:0 4px 20px rgba(0,180,229,0.2);border:2px solid var(--acc)">
+        <iframe src="${esc(previewUrl)}" style="width:100%;height:100%;border:none" allow="autoplay"></iframe>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <a href="${esc(t.docUrl)}" target="_blank" rel="noopener" style="flex:1;background:var(--acc);color:#001823;text-decoration:none;text-align:center;padding:10px;border-radius:8px;font-weight:800;font-size:12px">⛶ Abrir tela cheia</a>
+      </div>
+    ` : `
+      <div style="background:rgba(220,38,38,0.12);border:1px solid #dc2626;color:#fca5a5;padding:18px;border-radius:10px;text-align:center;margin-bottom:14px;font-size:13px;line-height:1.5">
+        ⚠ Documento não cadastrado no sistema.<br>
+        <small>Avise o gestor pra subir o documento no cadastro.</small>
+      </div>
+    `}
+    <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:10px;padding:12px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">Dados oficiais</div>
+      ${t.dados.filter(d => d[1]).map(([k,v]) => `
+        <div style="display:flex;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px;align-items:center">
+          <span style="color:var(--txt2);width:140px;font-size:11px">${esc(k)}</span>
+          <span style="flex:1;font-weight:700;${k==='Placa'||k==='RENAVAM'||k==='Chassi'||k==='Nº CNH'||k==='CPF'?'font-family:var(--mono);letter-spacing:0.5px':''}">${esc(String(v))}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+document.getElementById('docsFechar').onclick = () => {
+  document.getElementById('docsModal').style.display = 'none';
+};
+
 // ============== MODAL OPÇÕES NA BASE ==============
 let _baseAtual = null; // base onde o colab está agora (visitando)
 
@@ -4221,7 +4375,18 @@ function meFromColab(colab){
     base: colab.base,
     turno: colab.turno,
     color: colorFromId(colab.id),
-    status: 'online'
+    status: 'online',
+    // Documento e dados da CNH — pra mostrar em blitz pelo botão "📄 Docs"
+    cnhDocUrl: colab.cnhDocUrl || null,
+    cnhNumero: colab.cnhNumero || null,
+    cnhCat: colab.cnhCat || null,
+    cnhValidade: colab.cnhValidade || null,
+    cnhPrimeira: colab.cnhPrimeira || null,
+    cnhUf: colab.cnhUf || null,
+    cnhEar: colab.cnhEar || null,
+    rg: colab.rg || null,
+    dataNascimento: colab.dataNascimento || null,
+    nomeMae: colab.nomeMae || null
   };
 }
 
