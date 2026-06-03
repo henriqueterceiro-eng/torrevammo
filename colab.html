@@ -666,7 +666,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-06-03.3';
+const APP_VERSION = '2026-06-03.4';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -686,7 +686,7 @@ let sync = null;
 let lastSentAt = 0;
 
 const STATUS_ORDER = ['online','busy','off'];
-const STATUS_LBL = {online:'ONLINE', busy:'EM ROTA', off:'OFFLINE'};
+const STATUS_LBL = {online:'ONLINE', busy:'EM ROTA', off:'PAUSA'};
 
 // ====================== STORAGE ======================
 function loadMe(){
@@ -1648,7 +1648,7 @@ function onGPSUpdate(pos){
   checkArrivedAtCheckoutBase();
 }
 
-// Snapshot dos slots pra incluir no payload — torre usa pra mostrar X/Y motos e placas
+// Snapshot do estado atual pra payload — torre usa pra mostrar slots, kit e peças
 function slotsSnapshot(){
   const total = (typeof slotsTotalCount === 'function') ? slotsTotalCount() : 0;
   const ocup = (typeof slotsCount === 'function') ? slotsCount() : 0;
@@ -1656,14 +1656,48 @@ function slotsSnapshot(){
     id: s.id, placa: s.placa, source: s.source,
     clienteName: s.clienteName, chamadoId: s.chamadoId, ocupadoEm: s.ocupadoEm
   }));
+  // Estoque atual de peças consumíveis (decremento ao usar em atendimento)
+  const estoque = turnoAtivo?.estoque || {};
+  // Peças usadas que ficaram com o colab pra descartar na base no checkout
+  const pecasUsadas = turnoAtivo?.pecasUsadas || [];
   return {
     slotsTotal: total,
     slotsCount: ocup,
     slotsDetalhe: detalhe,
     isFull: total > 0 && ocup >= total,
-    modo: turnoAtivo?.modo || null,  // 'normal' | 'descarregando' | etc
+    modo: turnoAtivo?.modo || null,
+    estoque,
+    pecasUsadas,
     appVersion: APP_VERSION
   };
+}
+
+// Funções auxiliares pra estoque
+function estoqueAtual(key){
+  return turnoAtivo?.estoque?.[key] || 0;
+}
+function consumirPeca(key, qtd){
+  qtd = qtd || 1;
+  if(!turnoAtivo) return false;
+  turnoAtivo.estoque = turnoAtivo.estoque || {};
+  const cur = turnoAtivo.estoque[key] || 0;
+  if(cur < qtd) return false;
+  turnoAtivo.estoque[key] = cur - qtd;
+  // Se gera peça usada, registra
+  const meta = KIT_CONSUMIVEIS.find(x => x.key === key);
+  if(meta?.geraUsado){
+    turnoAtivo.pecasUsadas = turnoAtivo.pecasUsadas || [];
+    for(let i = 0; i < qtd; i++){
+      turnoAtivo.pecasUsadas.push({
+        id: 'pu_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        key, label: meta.label,
+        consumidoEm: Date.now()
+      });
+    }
+  }
+  saveTurno();
+  syncTurnoToTorre();
+  return true;
 }
 
 function sendPos(pos){
@@ -2056,6 +2090,7 @@ function renderChamadoCard(){
       ${tel ? `<a href="${tel}">📞 Ligar</a>` : ''}
     </div>
     ${c.iniciadoEm ? renderRotinaHtml(c) : ''}
+    ${c.iniciadoEm ? renderPecasUsoHtml(c) : ''}
     <div class="actions">
       ${c.status === 'novo' && !c.iniciadoEm ? '<button class="go" data-act="em_rota">▶ Iniciar rota</button>' : ''}
       ${c.iniciadoEm ? `<button class="done" data-act="concluido" ${rotinaCompleta(c)?'':'disabled style="opacity:0.45;cursor:not-allowed"'}>${rotinaCompleta(c)?`✓ Concluir${fila.length>1?' → Próximo':''}`:'⏳ Complete a rotina pra concluir'}</button>` : ''}
@@ -2111,9 +2146,72 @@ function renderRotinaHtml(c){
   </div>`;
 }
 
+// Caixa de "peças usadas neste atendimento" — colab marca aqui o que consumiu.
+// Decrementa estoque e (se aplicável) gera peça usada pra descartar na base.
+function renderPecasUsoHtml(c){
+  // Lista só peças que estão no estoque atual (qtd > 0) — não polui com itens que ele não tem
+  const disponiveis = KIT_CONSUMIVEIS.filter(p => estoqueAtual(p.key) > 0);
+  // Lista as peças que ele já marcou neste chamado (pra mostrar contador)
+  const usadasNoChamado = (c._pecasUsadasNoChamado || []);
+  const cntUsadas = usadasNoChamado.length;
+  if(disponiveis.length === 0 && cntUsadas === 0){
+    return '';
+  }
+  return `<div class="rotina-box" style="background:rgba(245,158,11,0.05);border-color:#fbbf24">
+    <div class="rot-tit" style="color:#fbbf24">
+      🧰 Peças usadas neste atendimento
+      <span class="ct" style="background:#fbbf24">${cntUsadas}</span>
+    </div>
+    ${disponiveis.length === 0
+      ? '<div style="font-size:11px;color:var(--txt3);text-align:center;padding:4px">Sem peças disponíveis no estoque</div>'
+      : disponiveis.map(p => {
+          const cur = estoqueAtual(p.key);
+          const usadasItem = usadasNoChamado.filter(u => u.key === p.key).length;
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surf);border-radius:6px;margin-bottom:4px;font-size:12px">
+            <div style="flex:1">
+              <div style="font-weight:700">${esc(p.label)}</div>
+              <div style="font-size:9px;color:var(--txt3)">Estoque: ${cur}${p.geraUsado?' · <span style="color:#fbbf24">⚠ gera peça usada</span>':''}</div>
+            </div>
+            ${usadasItem > 0 ? `<span style="background:#fbbf24;color:#001823;font-weight:800;padding:2px 8px;border-radius:10px;font-size:10px">×${usadasItem}</span>` : ''}
+            <button data-usar="${p.key}" data-cid="${c.id}" style="background:rgba(245,158,11,0.2);border:1px solid #fbbf24;color:#fbbf24;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:800">+ usei 1</button>
+          </div>`;
+        }).join('')
+    }
+    ${cntUsadas > 0 ? `<div style="font-size:10px;color:var(--txt3);text-align:center;margin-top:6px">💡 Peças que geram resíduo ficam pra descartar na base no checkout</div>` : ''}
+  </div>`;
+}
+
 function bindRotinaInputs(c){
   const el = document.getElementById('chamadocard');
+  // Wire botões "+ usei 1" das peças usadas
+  el.querySelectorAll('[data-usar]').forEach(btn => {
+    btn.onclick = () => {
+      const key = btn.dataset.usar;
+      const cid = btn.dataset.cid;
+      const chamado = fila.find(x => x.id === cid);
+      if(!chamado) return;
+      if(estoqueAtual(key) <= 0){ showToast('⚠ Sem estoque dessa peça', true); return; }
+      const meta = KIT_CONSUMIVEIS.find(p => p.key === key);
+      // Confirma se gera peça usada (pra colab saber que vai ter que descartar na base)
+      if(meta?.geraUsado){
+        if(!confirm(`Marcar 1 uso de "${meta.label}"?\n\n⚠ Essa peça GERA RESÍDUO: a peça usada (substituída) fica com você pra descartar na base no checkout.`)) return;
+      }
+      consumirPeca(key, 1);
+      chamado._pecasUsadasNoChamado = chamado._pecasUsadasNoChamado || [];
+      chamado._pecasUsadasNoChamado.push({ key, label: meta?.label, ts: Date.now() });
+      // Anota no rotinaSteps pra persistir
+      chamado.rotinaSteps = chamado.rotinaSteps || {};
+      chamado.rotinaSteps._pecasUsadas = chamado._pecasUsadasNoChamado;
+      persistRotina(chamado);
+      vibrate(40);
+      renderChamadoCard();
+    };
+  });
   const steps = c.rotinaSteps = c.rotinaSteps || {};
+  // Restaura peças usadas do localStorage se houver
+  if(steps._pecasUsadas && !c._pecasUsadasNoChamado){
+    c._pecasUsadasNoChamado = steps._pecasUsadas;
+  }
   el.querySelectorAll('.rot-step').forEach(step => {
     const id = step.dataset.stepid;
     const tipo = step.dataset.tipo;
@@ -2866,14 +2964,17 @@ let wizSteps = [];         // array de funções pra renderizar cada step
 let wizData = {};          // dados acumulados no wizard
 
 // === CONFIG DO KIT ===
+// geraUsado: ao consumir essa peça em atendimento, fica o usado pra descartar na base
+// servicoTipo: regex de match com motivo do chamado pra alertar a torre se atribuir
+//   chamado deste tipo a um colab que NÃO tem essa peça em estoque
 const KIT_CONSUMIVEIS = [
-  { key: 'roda_traseira',  label: 'Roda traseira' },
-  { key: 'roda_dianteira', label: 'Roda dianteira' },
-  { key: 'bateria_cpx',    label: 'Bateria CPX' },
-  { key: 'bateria_confort',label: 'Bateria Confort' },
-  { key: 'ecu',            label: 'ECU' },
-  { key: 'central_alarme', label: 'Central de alarme' },
-  { key: 'manete_freio',   label: 'Manete de freio' }
+  { key: 'roda_traseira',  label: 'Roda traseira',  geraUsado: true,  servicoTipo: 'pneu|roda|furo' },
+  { key: 'roda_dianteira', label: 'Roda dianteira', geraUsado: true,  servicoTipo: 'pneu|roda|furo' },
+  { key: 'bateria_cpx',    label: 'Bateria CPX',    geraUsado: true,  servicoTipo: 'bateria|não.?liga|nao.?liga|pane.?eletric' },
+  { key: 'bateria_confort',label: 'Bateria Confort',geraUsado: true,  servicoTipo: 'bateria|não.?liga|nao.?liga|pane.?eletric' },
+  { key: 'ecu',            label: 'ECU',            geraUsado: false, servicoTipo: 'eletronic|ecu|injec' },
+  { key: 'central_alarme', label: 'Central de alarme', geraUsado: false, servicoTipo: 'alarme' },
+  { key: 'manete_freio',   label: 'Manete de freio',geraUsado: true,  servicoTipo: 'manete|freio|queda|acidente' }
 ];
 const KIT_BOLSA = [
   { key: 'bolsa',           label: 'Bolsa / mala' },
@@ -3591,6 +3692,9 @@ async function finalizarCheckIn(){
     carretaId: cId || null, carretaPlaca: c?.placa || null,
     slotsTotal,
     slotsOcupados: [],
+    // Estoque inicial: copia das quantidades de consumíveis declaradas no check-in
+    estoque: { ...(wizData.kit?.consumiveis || {}) },
+    pecasUsadas: [],  // preenche conforme o colab consome peças em atendimentos
     kmInicial: wizData.km,
     iniciadoEm: Date.now(),
     modo: 'normal',

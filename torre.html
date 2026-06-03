@@ -719,7 +719,18 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 120 * 1000;       // 120s sem update = visualmente "offline" (toleramos hiccups de rede e tela bloqueada)
-const LATEST_COLAB_VERSION = '2026-06-03.3'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const LATEST_COLAB_VERSION = '2026-06-03.4'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+// Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
+// e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
+const KIT_CONSUMIVEIS_TORRE = [
+  { key: 'roda_traseira',  label: 'Roda traseira',  geraUsado: true,  servicoTipo: 'pneu|roda|furo' },
+  { key: 'roda_dianteira', label: 'Roda dianteira', geraUsado: true,  servicoTipo: 'pneu|roda|furo' },
+  { key: 'bateria_cpx',    label: 'Bateria CPX',    geraUsado: true,  servicoTipo: 'bateria|não.?liga|nao.?liga|pane.?eletric' },
+  { key: 'bateria_confort',label: 'Bateria Confort',geraUsado: true,  servicoTipo: 'bateria|não.?liga|nao.?liga|pane.?eletric' },
+  { key: 'ecu',            label: 'ECU',            geraUsado: false, servicoTipo: 'eletronic|ecu|injec' },
+  { key: 'central_alarme', label: 'Central de alarme', geraUsado: false, servicoTipo: 'alarme' },
+  { key: 'manete_freio',   label: 'Manete de freio',geraUsado: true,  servicoTipo: 'manete|freio|queda|acidente' }
+];
 const MOTORISTA_REMOVE_MS = 5 * 60 * 1000; // 5min sem update = remove do mapa automaticamente
 
 let cfg = loadCfg();
@@ -2393,6 +2404,31 @@ function atribuir(chamadoId, motoristaId){
     if(mot && mot.modo === 'descarregando'){
       if(!confirm(`🔴 ${mot.nome} está indo descarregar numa base. Atribuir mesmo assim vai interromper.\n\nContinuar?`)) return;
     }
+    // Checa compatibilidade do chamado com o estoque de peças do colab
+    if(mot){
+      const motivo = (c.motivo || '').toLowerCase();
+      const pecasNecessarias = KIT_CONSUMIVEIS_TORRE.filter(p => {
+        if(!p.servicoTipo) return false;
+        try { return new RegExp(p.servicoTipo, 'i').test(motivo); }
+        catch(_){ return false; }
+      });
+      if(pecasNecessarias.length > 0){
+        const estoque = mot.estoque || {};
+        const semEstoque = pecasNecessarias.filter(p => (estoque[p.key] || 0) <= 0);
+        // Se TODAS as peças possíveis estão sem estoque, alerta
+        if(semEstoque.length === pecasNecessarias.length){
+          if(!confirm(
+            `⚠ INCOMPATIBILIDADE DE ESTOQUE\n\n` +
+            `O chamado "${c.cliente}" (${c.motivo}) provavelmente vai precisar de:\n` +
+            pecasNecessarias.map(p => `  • ${p.label}`).join('\n') +
+            `\n\n${mot.nome} NÃO tem nenhuma dessas peças no estoque.\n\n` +
+            `Atribuir mesmo assim?`
+          )){
+            return;
+          }
+        }
+      }
+    }
     queueRemove(chamadoId);
     queueAdd(motoristaId, chamadoId);
     a[chamadoId] = motoristaId;
@@ -3506,6 +3542,37 @@ function renderMotDetail(){
           </div>
         `).join('')}
     </div>
+
+    <!-- Kit a bordo (estoque atual + peças usadas pra descartar) -->
+    ${(() => {
+      const est = m.estoque || {};
+      const usadas = m.pecasUsadas || [];
+      const itensComEstoque = KIT_CONSUMIVEIS_TORRE.filter(p => (est[p.key] || 0) > 0);
+      if(itensComEstoque.length === 0 && usadas.length === 0) return '';
+      // Agrupa usadas por key
+      const usadasAgrupadas = {};
+      usadas.forEach(u => { usadasAgrupadas[u.key] = (usadasAgrupadas[u.key]||0)+1; });
+      return `<div style="margin-bottom:14px">
+        <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">🧰 Kit a bordo</div>
+        ${itensComEstoque.length > 0 ? `<div style="background:var(--surf2);padding:8px 10px;border-radius:8px;margin-bottom:6px">
+          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;margin-bottom:4px">Disponível em estoque</div>
+          ${itensComEstoque.map(p => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px">
+            <span style="flex:1">${esc(p.label)}</span>
+            <span style="background:var(--acc);color:#001823;font-weight:800;padding:2px 8px;border-radius:10px;font-size:11px;font-family:var(--mono)">${est[p.key]}</span>
+          </div>`).join('')}
+        </div>` : ''}
+        ${usadas.length > 0 ? `<div style="background:rgba(245,158,11,0.08);border:1px solid #fbbf24;padding:8px 10px;border-radius:8px">
+          <div style="font-size:10px;color:#fbbf24;text-transform:uppercase;letter-spacing:0.4px;font-weight:700;margin-bottom:4px">⚠ Peças usadas — descartar na base no checkout (${usadas.length})</div>
+          ${Object.entries(usadasAgrupadas).map(([k,qtd]) => {
+            const meta = KIT_CONSUMIVEIS_TORRE.find(p => p.key === k);
+            return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px">
+              <span style="flex:1">${esc(meta?.label || k)}</span>
+              <span style="background:#fbbf24;color:#001823;font-weight:800;padding:2px 8px;border-radius:10px;font-size:11px;font-family:var(--mono)">×${qtd}</span>
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+      </div>`;
+    })()}
 
     <!-- Atendimentos do dia -->
     ${corridasHoje.length > 0 ? `
@@ -4639,6 +4706,8 @@ function setupSyncListeners(){
     }
     if(data.modo != null) m.modo = data.modo;
     if(data.appVersion != null) m.appVersion = data.appVersion;
+    if(data.estoque != null) m.estoque = data.estoque;
+    if(data.pecasUsadas != null) m.pecasUsadas = data.pecasUsadas;
     // Reverse geocode DESLIGADO por causa de cota TomTom estourada.
     // Esse era o maior consumidor (45s por colab) — descomente quando recarregar.
     // if(TT.has()){
