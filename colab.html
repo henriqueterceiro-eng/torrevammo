@@ -404,6 +404,14 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     <button id="recenter" title="Centralizar em mim">📍</button>
     <button id="basebtn" title="Ir até uma base Vammo" style="position:absolute;bottom:84px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid var(--acc);box-shadow:0 4px 12px rgba(0,180,229,0.4);display:flex;align-items:center;justify-content:center;font-size:22px;z-index:500;color:var(--acc)">🏠</button>
     <button id="docsbtn" onclick="(typeof abrirDocsModal==='function')?abrirDocsModal():alert('⚠ App nao atualizou ainda. Feche COMPLETAMENTE o app (tire da pilha de apps abertos) e abra de novo.')" title="Documentos (CNH + CRLV) — pra blitz" style="position:absolute;bottom:144px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid #fbbf24;box-shadow:0 4px 12px rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;font-size:20px;z-index:500;color:#fbbf24">📄</button>
+    <div id="destinoBanner" style="display:none;position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;background:linear-gradient(135deg,#7c2d12,#dc2626);color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 6px 20px rgba(220,38,38,0.5);z-index:550;display:none;align-items:center;gap:10px">
+      <div style="font-size:22px">🔴</div>
+      <div style="flex:1;line-height:1.3;min-width:0">
+        <div style="font-weight:800;font-size:13px">Indo pra <span id="destinoNome">base</span></div>
+        <div style="font-size:10px;opacity:0.85" id="destinoSub">não recebe novos chamados até chegar</div>
+      </div>
+      <button id="destinoCancelar" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:6px 12px;font-size:11px;font-weight:800;border-radius:6px;cursor:pointer;white-space:nowrap">✕ Cancelar</button>
+    </div>
     <div id="appver">v · </div>
     <div id="empty">
       <div class="ic">🛵</div>
@@ -552,6 +560,13 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
         <div style="flex:1">
           <div>Encerrar turno aqui</div>
           <div style="font-size:10px;color:var(--txt3);font-weight:500;margin-top:2px">Checkout do carro/carreta nesta base</div>
+        </div>
+      </button>
+      <button id="opcOutraBase" style="padding:12px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt2);border-radius:10px;font-weight:600;font-size:12px;text-align:left;display:flex;gap:10px;align-items:center">
+        <span style="font-size:20px">🚗</span>
+        <div style="flex:1">
+          <div>Ir pra OUTRA base</div>
+          <div style="font-size:10px;color:var(--txt3);font-weight:500;margin-top:2px">Quero me deslocar pra outra base Vammo</div>
         </div>
       </button>
     </div>
@@ -703,7 +718,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-06-03.9';
+const APP_VERSION = '2026-06-03.10';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2011,6 +2026,30 @@ function renderTopBar(){
   const stbtn = document.getElementById('ststatus');
   stbtn.textContent = STATUS_LBL[me.status];
   stbtn.className = 'stbtn ' + (me.status === 'busy' ? 'busy' : me.status === 'off' ? 'off' : '');
+  // Banner de destino (modo descarregando OU aguardando base de checkout)
+  renderDestinoBanner();
+}
+
+function renderDestinoBanner(){
+  const banner = document.getElementById('destinoBanner');
+  if(!banner) return;
+  let baseAlvo = null, contexto = '';
+  if(turnoAtivo?.modo === 'descarregando' && turnoAtivo.baseDestinoId){
+    baseAlvo = bases[turnoAtivo.baseDestinoId];
+    contexto = slotsCount() > 0
+      ? `${slotsCount()} moto(s) a bordo · não recebe novos chamados`
+      : 'em rota pra base';
+  } else if(_aguardandoBaseCheckout){
+    baseAlvo = _aguardandoBaseCheckout;
+    contexto = 'indo pra fazer checkout';
+  }
+  if(baseAlvo){
+    document.getElementById('destinoNome').textContent = baseAlvo.nome || 'base';
+    document.getElementById('destinoSub').textContent = contexto;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
 }
 
 function renderChamadoCard(){
@@ -2897,6 +2936,13 @@ function bootApp(){
     if(myPos) map.setView([myPos.lat, myPos.lng], 15);
   };
   document.getElementById('docsbtn').onclick = abrirDocsModal;
+  document.getElementById('destinoCancelar').onclick = () => {
+    if(!confirm('Cancelar destino e voltar a receber chamados normalmente?')) return;
+    _aguardandoBaseCheckout = null; // cancela destino de checkout
+    if(typeof sairModoDescarga === 'function') sairModoDescarga(); // cancela modo descarga
+    renderDestinoBanner();
+    showToast('✓ Destino cancelado — voltando ao modo normal');
+  };
   document.getElementById('basebtn').onclick = () => {
     // Se já está numa base (raio 100m), abre direto o menu de opções
     if(myPos){
@@ -4216,6 +4262,10 @@ document.getElementById('opcPecas').onclick = () => {
 document.getElementById('opcCheckout').onclick = () => {
   fecharBaseOpcoes();
   startCheckOut();
+};
+document.getElementById('opcOutraBase').onclick = () => {
+  fecharBaseOpcoes();
+  abrirModalBase(false);
 };
 
 // ============== CARREGAR MOTOS DA BASE ==============
