@@ -342,6 +342,31 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   <div class="ver">build · 2026-05-30 · v4</div>
 </div>
 
+<!-- Tela intermediária: confirmar intenção de ficar online após login -->
+<div id="intencaoOnline" style="display:none;flex-direction:column;height:100dvh;background:var(--bg);padding:24px;padding-top:max(24px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom))">
+  <div style="text-align:center;margin-bottom:20px">
+    <div style="font-size:48px">👋</div>
+    <h1 style="font-size:24px;margin:8px 0 4px">Olá, <span id="intNomeColab">colaborador</span>!</h1>
+    <div style="color:var(--txt2);font-size:13px;line-height:1.4">Bem-vindo de volta. Deseja iniciar seu turno agora?</div>
+  </div>
+  <div style="background:var(--surf);border-radius:14px;padding:18px;margin-bottom:18px;border:1px solid var(--bdr)">
+    <div style="font-size:11px;font-weight:800;color:var(--acc);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">⚠ Importante</div>
+    <ul style="font-size:12px;color:var(--txt);line-height:1.5;padding-left:20px;margin:0">
+      <li>Pra ficar online, você precisa estar dentro de uma <strong style="color:var(--acc)">base Vammo</strong></li>
+      <li>Ao confirmar, abre o <strong>check-in</strong>: kit, fotos do carro/carreta, KM inicial e assinatura</li>
+      <li>Você pode pausar/ficar offline a qualquer momento depois</li>
+    </ul>
+  </div>
+  <div id="intBaseInfo" style="background:var(--surf2);border:1px solid var(--bdr);border-radius:10px;padding:12px;margin-bottom:14px;text-align:center;font-size:12px">Detectando GPS…</div>
+  <div style="flex:1"></div>
+  <div class="slide-confirm cyan" id="intSlide" style="height:64px;margin-bottom:12px">
+    <div class="slide-fill"></div>
+    <div class="slide-text" style="font-size:13px">→ deslize p/ ficar online →</div>
+    <div class="slide-thumb" style="width:52px;height:52px;font-size:22px">▶</div>
+  </div>
+  <button id="intSair" style="width:100%;padding:10px;background:transparent;color:var(--txt3);border:none;font-size:12px">Sair (cancelar)</button>
+</div>
+
 <!-- WIZARD DE TURNO (check-in e check-out) -->
 <div id="turno">
   <div id="wiz-header">
@@ -678,7 +703,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-06-03.5';
+const APP_VERSION = '2026-06-03.6';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3710,6 +3735,7 @@ async function finalizarCheckIn(){
     pecasUsadas: [],  // preenche conforme o colab consome peças em atendimentos
     kmInicial: wizData.km,
     iniciadoEm: Date.now(),
+    baseEntradaId: window._baseEntradaTurno || null,  // base onde fez check-in
     modo: 'normal',
     ativo: true,
     checkIn: {
@@ -4431,6 +4457,7 @@ document.getElementById('loginform').addEventListener('submit', async (e) => {
 async function goToTurnoOuApp(){
   const t = await loadTurnoExistente(me.id);
   if(t && t.ativo){
+    // Já tinha turno aberto — restaura direto (não pede intenção de novo)
     turnoAtivo = t;
     me.veiculoId = t.veiculoId;
     me.veiculoPlaca = t.veiculoPlaca;
@@ -4443,10 +4470,100 @@ async function goToTurnoOuApp(){
     if(!sync){ sync = createSync(); }
     bootApp();
   } else {
-    await startCheckIn();
-    setupValidators();
-    renderWizStep();
+    // Sem turno: mostra tela de intenção primeiro, depois abre check-in
+    abrirTelaIntencao();
   }
+}
+
+async function abrirTelaIntencao(){
+  document.getElementById('login').classList.add('hide');
+  document.getElementById('turno').classList.remove('show');
+  document.getElementById('intencaoOnline').style.display = 'flex';
+  document.getElementById('intNomeColab').textContent = (me.nome || '').split(' ')[0] || 'colaborador';
+  const slide = document.getElementById('intSlide');
+  resetSlide(slide);
+  setupSlideConfirm(slide, () => confirmarIntencaoOnline());
+  // Carrega bases do Firebase se ainda não tem
+  if(Object.keys(bases).length === 0){
+    try {
+      await ensureFb();
+      const snap = await firebase.database().ref('vammo/bases').once('value');
+      bases = snap.val() || {};
+    } catch(e){ console.warn('Falha carregando bases:', e); }
+  }
+  atualizarBaseInfo();
+  if(_intTimer) clearInterval(_intTimer);
+  _intTimer = setInterval(atualizarBaseInfo, 3000);
+  if(!myPos && !watchId) startGPS();
+  document.getElementById('intSair').onclick = () => {
+    if(_intTimer){ clearInterval(_intTimer); _intTimer = null; }
+    document.getElementById('intencaoOnline').style.display = 'none';
+    if(watchId) navigator.geolocation.clearWatch(watchId);
+    clearMe(); location.reload();
+  };
+}
+let _intTimer = null;
+
+function atualizarBaseInfo(){
+  const div = document.getElementById('intBaseInfo');
+  if(!div) return;
+  if(!myPos){
+    div.style.borderColor = '#fbbf24';
+    div.style.color = '#fbbf24';
+    div.innerHTML = '⏳ Aguardando GPS...';
+    return;
+  }
+  // Procura base no raio
+  const baseAchada = Object.values(bases).find(b => {
+    if(!b.lat || !b.lng) return false;
+    return haversine(myPos, { lat: b.lat, lng: b.lng }) <= ARRIVED_THRESHOLD_M;
+  });
+  if(baseAchada){
+    div.style.borderColor = '#16a34a';
+    div.style.background = 'rgba(22,163,74,0.08)';
+    div.style.color = '#16a34a';
+    div.innerHTML = `✓ Você está em <strong>${esc(baseAchada.nome)}</strong> · pronto pra iniciar turno`;
+  } else {
+    // Calcula a base mais próxima
+    let maisProxima = null, distMP = Infinity;
+    Object.values(bases).forEach(b => {
+      if(!b.lat || !b.lng) return;
+      const d = haversine(myPos, { lat: b.lat, lng: b.lng });
+      if(d < distMP){ distMP = d; maisProxima = b; }
+    });
+    div.style.borderColor = '#dc2626';
+    div.style.background = 'rgba(220,38,38,0.06)';
+    div.style.color = '#fca5a5';
+    div.innerHTML = maisProxima
+      ? `⚠ Fora de base · Mais próxima: <strong>${esc(maisProxima.nome)}</strong> a ${(distMP/1000).toFixed(1)}km`
+      : `⚠ Fora de base · Nenhuma base cadastrada por perto`;
+  }
+}
+
+async function confirmarIntencaoOnline(){
+  if(_intTimer){ clearInterval(_intTimer); _intTimer = null; }
+  // Re-checa proximidade da base
+  if(!myPos){
+    alert('⚠ Sem GPS. Aguarde o sinal estabilizar e tente de novo.');
+    abrirTelaIntencao(); // reabre
+    return;
+  }
+  const baseAchada = Object.values(bases).find(b => {
+    if(!b.lat || !b.lng) return false;
+    return haversine(myPos, { lat: b.lat, lng: b.lng }) <= ARRIVED_THRESHOLD_M;
+  });
+  if(!baseAchada){
+    alert('⛔ Você precisa estar dentro de uma base Vammo (raio 100m) pra iniciar o turno.\n\nVá até a base e tente de novo.');
+    abrirTelaIntencao();
+    return;
+  }
+  // OK — abre check-in normal
+  document.getElementById('intencaoOnline').style.display = 'none';
+  // Anota a base de entrada pra registrar no turno
+  window._baseEntradaTurno = baseAchada.id;
+  await startCheckIn();
+  setupValidators();
+  renderWizStep();
 }
 
 document.getElementById('senhaform').addEventListener('submit', async (e) => {
