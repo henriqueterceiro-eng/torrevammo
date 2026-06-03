@@ -3973,7 +3973,52 @@ function driveToPreview(url){
   return url;
 }
 
-function abrirDocsModal(){
+async function abrirDocsModal(){
+  // Mostra o modal IMEDIATAMENTE pra dar feedback (mesmo enquanto carrega)
+  const modal = document.getElementById('docsModal');
+  if(!modal){ alert('Modal de documentos não disponível — app desatualizado, feche e abra o app'); return; }
+  modal.style.display = 'flex';
+  document.getElementById('docsTabs').innerHTML = '';
+  document.getElementById('docsBody').innerHTML = '<div style="text-align:center;color:var(--txt2);padding:40px">⏳ Carregando documentos…</div>';
+
+  // Se me.cnhDocUrl está faltando (login feito em versão antiga), busca fresh do Firebase
+  if(!me.cnhDocUrl && me.id){
+    try {
+      await ensureFb();
+      const snap = await firebase.database().ref('vammo/colaboradores/' + me.id).once('value');
+      const c = snap.val() || {};
+      // Reidrata os campos da CNH no me
+      Object.assign(me, {
+        cnhDocUrl: c.cnhDocUrl || null,
+        cnhNumero: c.cnhNumero || null,
+        cnhCat: c.cnhCat || null,
+        cnhValidade: c.cnhValidade || null,
+        cnhPrimeira: c.cnhPrimeira || null,
+        cnhUf: c.cnhUf || null,
+        cnhEar: c.cnhEar || null,
+        rg: c.rg || null,
+        dataNascimento: c.dataNascimento || null,
+        nomeMae: c.nomeMae || null,
+        cpf: me.cpf || c.cpf || null
+      });
+      saveMe(me);
+    } catch(e){ console.warn('Falha buscando colab fresh:', e); }
+  }
+  // Se algum veículo do turno não está em _turnoVeiculos (cache), busca também
+  if(turnoAtivo){
+    const idsBuscar = [];
+    if(turnoAtivo.veiculoId && !_turnoVeiculos[turnoAtivo.veiculoId]) idsBuscar.push(turnoAtivo.veiculoId);
+    if(turnoAtivo.carretaId && !_turnoVeiculos[turnoAtivo.carretaId]) idsBuscar.push(turnoAtivo.carretaId);
+    for(const vid of idsBuscar){
+      try {
+        await ensureFb();
+        const snap = await firebase.database().ref('vammo/veiculos/' + vid).once('value');
+        const v = snap.val();
+        if(v) _turnoVeiculos[vid] = v;
+      } catch(_){}
+    }
+  }
+
   // Lista dinâmica de tabs: CNH + Carro + Carreta (se houver)
   const tabs = [];
   tabs.push({
