@@ -703,7 +703,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = '2026-06-03.6';
+const APP_VERSION = '2026-06-03.7';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3973,52 +3973,58 @@ function driveToPreview(url){
   return url;
 }
 
-async function abrirDocsModal(){
-  // Mostra o modal IMEDIATAMENTE pra dar feedback (mesmo enquanto carrega)
+function abrirDocsModal(){
+  // ETAPA 1 — abre o modal IMEDIATAMENTE com o que tem em cache.
+  // Mesmo sem nenhum dado, garante feedback visual em qualquer cenário.
   const modal = document.getElementById('docsModal');
-  if(!modal){ alert('Modal de documentos não disponível — app desatualizado, feche e abra o app'); return; }
+  if(!modal){
+    alert('⚠ Modal de documentos não disponível — feche o app COMPLETAMENTE (tire da pilha de apps) e abra de novo pra atualizar.');
+    return;
+  }
   modal.style.display = 'flex';
-  document.getElementById('docsTabs').innerHTML = '';
-  document.getElementById('docsBody').innerHTML = '<div style="text-align:center;color:var(--txt2);padding:40px">⏳ Carregando documentos…</div>';
-
-  // Se me.cnhDocUrl está faltando (login feito em versão antiga), busca fresh do Firebase
-  if(!me.cnhDocUrl && me.id){
-    try {
-      await ensureFb();
-      const snap = await firebase.database().ref('vammo/colaboradores/' + me.id).once('value');
-      const c = snap.val() || {};
-      // Reidrata os campos da CNH no me
-      Object.assign(me, {
-        cnhDocUrl: c.cnhDocUrl || null,
-        cnhNumero: c.cnhNumero || null,
-        cnhCat: c.cnhCat || null,
-        cnhValidade: c.cnhValidade || null,
-        cnhPrimeira: c.cnhPrimeira || null,
-        cnhUf: c.cnhUf || null,
-        cnhEar: c.cnhEar || null,
-        rg: c.rg || null,
-        dataNascimento: c.dataNascimento || null,
-        nomeMae: c.nomeMae || null,
-        cpf: me.cpf || c.cpf || null
-      });
-      saveMe(me);
-    } catch(e){ console.warn('Falha buscando colab fresh:', e); }
+  console.log('[docs] abrindo modal · me=', me?.id, 'cnhDocUrl=', me?.cnhDocUrl, 'turno=', turnoAtivo?.veiculoId);
+  try {
+    montarDocsModalConteudo();
+  } catch(err){
+    console.error('[docs] erro montar:', err);
+    document.getElementById('docsBody').innerHTML = `<div style="background:rgba(220,38,38,0.15);border:1px solid #dc2626;color:#fca5a5;padding:16px;border-radius:10px;text-align:center">⚠ Erro carregando documentos:<br><small>${esc(err.message || String(err))}</small><br><br>Feche o app completamente e abra de novo.</div>`;
   }
-  // Se algum veículo do turno não está em _turnoVeiculos (cache), busca também
-  if(turnoAtivo){
-    const idsBuscar = [];
-    if(turnoAtivo.veiculoId && !_turnoVeiculos[turnoAtivo.veiculoId]) idsBuscar.push(turnoAtivo.veiculoId);
-    if(turnoAtivo.carretaId && !_turnoVeiculos[turnoAtivo.carretaId]) idsBuscar.push(turnoAtivo.carretaId);
-    for(const vid of idsBuscar){
-      try {
-        await ensureFb();
-        const snap = await firebase.database().ref('vammo/veiculos/' + vid).once('value');
-        const v = snap.val();
-        if(v) _turnoVeiculos[vid] = v;
-      } catch(_){}
+  // ETAPA 2 — em paralelo, busca dados frescos do Firebase pra atualizar se necessário
+  hidratarDocsDoFirebase();
+}
+
+async function hidratarDocsDoFirebase(){
+  try {
+    if(!me?.id) return;
+    if(typeof firebase === 'undefined' || !firebase.apps?.length) return;
+    const db = firebase.database();
+    // Sempre busca dados do colab — pode ter dados mais recentes
+    const colabSnap = await db.ref('vammo/colaboradores/' + me.id).once('value');
+    const c = colabSnap.val();
+    if(c){
+      let mudou = false;
+      const campos = ['cnhDocUrl','cnhNumero','cnhCat','cnhValidade','cnhPrimeira','cnhUf','cnhEar','rg','dataNascimento','nomeMae'];
+      campos.forEach(k => { if(c[k] && me[k] !== c[k]){ me[k] = c[k]; mudou = true; } });
+      if(c.cpf && !me.cpf){ me.cpf = c.cpf; mudou = true; }
+      if(mudou){ saveMe(me); }
     }
-  }
+    // Veículos do turno
+    if(turnoAtivo){
+      for(const vid of [turnoAtivo.veiculoId, turnoAtivo.carretaId]){
+        if(!vid) continue;
+        const s = await db.ref('vammo/veiculos/' + vid).once('value');
+        const v = s.val();
+        if(v){ _turnoVeiculos[vid] = v; }
+      }
+    }
+    // Re-renderiza com os dados frescos
+    if(document.getElementById('docsModal').style.display === 'flex'){
+      try { montarDocsModalConteudo(); } catch(_){}
+    }
+  } catch(e){ console.warn('[docs] hidratar:', e); }
+}
 
+function montarDocsModalConteudo(){
   // Lista dinâmica de tabs: CNH + Carro + Carreta (se houver)
   const tabs = [];
   tabs.push({
