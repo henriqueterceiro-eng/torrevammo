@@ -1,6 +1,6 @@
 // Service Worker do Vammo Colaborador
 // Faz cache dos assets pra abrir offline + sobreviver a quedas de rede
-const CACHE_VERSION = 'vammo-colab-v7';
+const CACHE_VERSION = 'vammo-colab-v8';
 const CORE_ASSETS = [
   '/',
   '/colab',
@@ -50,16 +50,26 @@ self.addEventListener('fetch', e => {
   const isHTML = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
 
   if(isHTML){
-    // Network-first: tenta a rede, atualiza o cache, e só usa o cache se estiver offline
-    e.respondWith(
-      fetch(req).then(resp => {
+    // Network-first COM TIMEOUT: tenta a rede por 3s (atualiza o cache), mas se demorar
+    // ou falhar cai pro cache na hora — evita "tela branca/travada" em sinal ruim no campo.
+    e.respondWith((async () => {
+      const cachedPromise = caches.match(req).then(c => c || caches.match('/colab'));
+      try {
+        const resp = await Promise.race([
+          fetch(req),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('net-timeout')), 3000))
+        ]);
         if(resp && resp.status === 200){
-          const clone = resp.clone();
-          caches.open(CACHE_VERSION).then(c => c.put(req, clone));
+          caches.open(CACHE_VERSION).then(c => c.put(req, resp.clone()));
+          return resp;
         }
-        return resp;
-      }).catch(() => caches.match(req).then(c => c || caches.match('/colab')))
-    );
+        return (await cachedPromise) || resp;
+      } catch(_){
+        const cached = await cachedPromise;
+        if(cached) return cached;
+        return fetch(req); // sem cache e sem rede: última tentativa sem timeout
+      }
+    })());
     return;
   }
 
