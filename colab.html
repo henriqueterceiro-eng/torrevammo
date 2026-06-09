@@ -170,7 +170,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #topbar .stbtn{padding:5px 8px;border-radius:12px;font-size:10px;font-weight:800;background:var(--on);color:#001823;letter-spacing:0.3px;flex:0 0 auto}
 #topbar .stbtn.busy{background:var(--busy)}
 #topbar .stbtn.off{background:var(--off);color:var(--txt)}
-#topbar .out{padding:4px 6px;border-radius:6px;background:transparent;color:var(--txt2);font-size:16px;flex:0 0 auto}
+#topbar .out{padding:5px 8px;border-radius:6px;background:transparent;border:1px solid var(--bdr);color:var(--txt2);font-size:11px;font-weight:700;flex:0 0 auto}
 #topbar .slotsbtn{padding:4px 8px;border-radius:10px;font-size:11px;font-weight:800;background:rgba(0,180,229,0.12);color:var(--acc);border:1px solid var(--acc);cursor:pointer;display:none;align-items:center;gap:3px;font-family:'IBM Plex Mono',monospace;flex:0 0 auto}
 #topbar .slotsbtn.show{display:flex}
 #topbar .slotsbtn.full{background:rgba(220,38,38,0.15);color:#fca5a5;border-color:#dc2626;animation:pulseFull 1.5s infinite}
@@ -343,7 +343,8 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 </div>
 
 <!-- Tela intermediária: confirmar intenção de ficar online após login -->
-<div id="intencaoOnline" style="display:none;flex-direction:column;height:100dvh;background:var(--bg);padding:24px;padding-top:max(24px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom))">
+<div id="intencaoOnline" style="display:none;flex-direction:column;height:100dvh;background:var(--bg);padding:24px;padding-top:max(24px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom));position:relative">
+  <button id="intSairTop" style="position:absolute;top:max(12px,env(safe-area-inset-top));right:16px;padding:5px 10px;border-radius:6px;background:transparent;border:1px solid var(--bdr);color:var(--txt2);font-size:11px;font-weight:700;z-index:2">Sair</button>
   <div style="text-align:center;margin-bottom:20px">
     <div style="font-size:48px">👋</div>
     <h1 style="font-size:24px;margin:8px 0 4px">Olá, <span id="intNomeColab">colaborador</span>!</h1>
@@ -379,7 +380,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   </div>
   <div id="wiz-body"></div>
   <div id="wiz-footer">
-    <button class="sair" id="wiz-sair">⏻</button>
+    <button class="sair" id="wiz-sair">Sair</button>
     <button class="voltar" id="wiz-voltar">← Voltar</button>
     <button class="next" id="wiz-next" disabled>Próximo →</button>
   </div>
@@ -395,7 +396,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     </div>
     <button class="slotsbtn" id="slotsbtn" title="Ver / descarregar motos em uma base">🏍 <span id="slotsbtnTxt">0/0</span></button>
     <button class="stbtn" id="ststatus">ONLINE</button>
-    <button class="out" id="btlogout" title="Sair">⏻</button>
+    <button class="out" id="btlogout" title="Sair">Sair</button>
   </div>
 
   <div id="map">
@@ -2939,7 +2940,8 @@ function bootApp(){
   document.getElementById('destinoCancelar').onclick = () => {
     if(!confirm('Cancelar destino e voltar a receber chamados normalmente?')) return;
     _aguardandoBaseCheckout = null; // cancela destino de checkout
-    if(typeof sairModoDescarga === 'function') sairModoDescarga(); // cancela modo descarga
+    if(turnoAtivo) delete turnoAtivo._checkoutDestino; // limpa flag pra não travar checkout depois
+    if(typeof sairModoDescarga === 'function') sairModoDescarga(); // cancela modo descarga (salva o turno)
     renderDestinoBanner();
     showToast('✓ Destino cancelado — voltando ao modo normal');
   };
@@ -3171,7 +3173,7 @@ function checkArrivedAtCheckoutBase(){
     vibrate([100, 50, 100, 50, 300]);
     playBeep();
     // Notificação grande pro colab saber que pode fazer checkout
-    showToast(`🎯 Chegou em ${baseChegou.nome} · clique no ⏻ pra encerrar o turno`);
+    showToast(`🎯 Chegou em ${baseChegou.nome} · clique em "Sair" pra encerrar o turno`);
     setTimeout(() => playBeep(), 250);
     // Mostra um banner persistente em vez de só um toast
     mostrarBannerChegouBase(baseChegou);
@@ -3278,6 +3280,11 @@ function setupWizFooter(){
   };
   document.getElementById('wiz-voltar').onclick = () => {
     if(wizStep > 0){ wizStep--; renderWizStep(); }
+    else if(wizMode === 'out'){
+      // Desistir do check-out no primeiro passo: volta pro app sem encerrar o turno
+      document.getElementById('turno').classList.remove('show');
+      document.getElementById('app').classList.add('show');
+    }
   };
   document.getElementById('wiz-next').onclick = () => {
     if(wizStep < wizSteps.length - 1){ wizStep++; renderWizStep(); }
@@ -3294,8 +3301,10 @@ function renderWizStep(){
     const cls = i < wizStep ? 'seg done' : i === wizStep ? 'seg curr' : 'seg';
     return `<div class="${cls}"></div>`;
   }).join('');
-  // Voltar disabled no primeiro
-  document.getElementById('wiz-voltar').style.visibility = wizStep === 0 ? 'hidden' : 'visible';
+  // Voltar: escondido no 1º passo do check-in; no check-out fica visível pra desistir e voltar pro app
+  document.getElementById('wiz-voltar').style.visibility = (wizStep === 0 && wizMode === 'in') ? 'hidden' : 'visible';
+  // Sair: no 1º passo do check-out o "Voltar" já desiste, então esconde o "Sair" pra não duplicar
+  document.getElementById('wiz-sair').style.display = (wizStep === 0 && wizMode === 'out') ? 'none' : '';
   // Botão de avançar
   const nextBtn = document.getElementById('wiz-next');
   nextBtn.textContent = wizStep === wizSteps.length - 1 ? (wizMode === 'in' ? '✓ Iniciar turno' : '✓ Encerrar turno') : 'Próximo →';
@@ -4610,12 +4619,14 @@ async function abrirTelaIntencao(){
   if(_intTimer) clearInterval(_intTimer);
   _intTimer = setInterval(atualizarBaseInfo, 3000);
   if(!myPos && !watchId) startGPS();
-  document.getElementById('intSair').onclick = () => {
+  const sairIntencao = () => {
     if(_intTimer){ clearInterval(_intTimer); _intTimer = null; }
     document.getElementById('intencaoOnline').style.display = 'none';
     if(watchId) navigator.geolocation.clearWatch(watchId);
     clearMe(); location.reload();
   };
+  document.getElementById('intSair').onclick = sairIntencao;
+  document.getElementById('intSairTop').onclick = sairIntencao;
 }
 let _intTimer = null;
 

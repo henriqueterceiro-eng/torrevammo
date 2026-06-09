@@ -1,6 +1,6 @@
 // Service Worker do Vammo Colaborador
 // Faz cache dos assets pra abrir offline + sobreviver a quedas de rede
-const CACHE_VERSION = 'vammo-colab-v6';
+const CACHE_VERSION = 'vammo-colab-v7';
 const CORE_ASSETS = [
   '/',
   '/colab',
@@ -28,7 +28,9 @@ self.addEventListener('activate', e => {
 
 // Strategy:
 // - Tiles (TomTom/CARTO/ESRI), Firebase, OSRM, TomTom API: SEMPRE rede direto (não cacheia — dados vivos)
-// - Assets do app (HTML, JS, CSS, ícones): cache-first (rápido, sobrevive a queda)
+// - HTML / navegação: NETWORK-FIRST (sempre pega a versão nova online; cai pro cache só offline)
+//   → evita o app ficar preso numa versão antiga do HTML após cada deploy
+// - Demais assets (JS, CSS, ícones): cache-first (rápido, sobrevive a queda)
 self.addEventListener('fetch', e => {
   const req = e.request;
   if(req.method !== 'GET') return;
@@ -45,6 +47,23 @@ self.addEventListener('fetch', e => {
   );
   if(isLiveData){ return; } // deixa o browser tratar normal
 
+  const isHTML = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
+
+  if(isHTML){
+    // Network-first: tenta a rede, atualiza o cache, e só usa o cache se estiver offline
+    e.respondWith(
+      fetch(req).then(resp => {
+        if(resp && resp.status === 200){
+          const clone = resp.clone();
+          caches.open(CACHE_VERSION).then(c => c.put(req, clone));
+        }
+        return resp;
+      }).catch(() => caches.match(req).then(c => c || caches.match('/colab')))
+    );
+    return;
+  }
+
+  // Demais assets: cache-first
   e.respondWith(
     caches.match(req).then(cached => {
       if(cached) return cached;
