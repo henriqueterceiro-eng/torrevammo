@@ -720,7 +720,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
-const MOTORISTA_TTL_MS = 120 * 1000;       // 120s sem update = visualmente "offline" (toleramos hiccups de rede e tela bloqueada)
+const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
@@ -1143,6 +1143,36 @@ function createSync(){
     }
   };
 }
+
+// ===== PRUNE do log vammo/events =====
+// O log é append-only e recebe um push de posição a cada ~15s POR colab — sem limpeza,
+// cresce sem parar e o sync em tempo real degrada (posições atrasam → flapping de offline
+// + km/h zoado). A torre (sempre aberta) faz a faxina: mantém só os últimos N e apaga o resto.
+// Todos os consumidores usam limitToLast(≤200) + filtro de 5min, então isso é seguro.
+const EVENTS_KEEP = 200;
+let _pruning = false;
+async function pruneEvents(){
+  if(_pruning) return;
+  if(typeof firebase === 'undefined' || !firebase.apps?.length) return;
+  _pruning = true;
+  try {
+    const ref = firebase.database().ref('vammo/events');
+    const snap = await ref.orderByKey().once('value');
+    const keys = [];
+    snap.forEach(ch => { keys.push(ch.key); });
+    if(keys.length > EVENTS_KEEP){
+      const toRemove = keys.slice(0, keys.length - EVENTS_KEEP);
+      const updates = {};
+      toRemove.forEach(k => { updates[k] = null; });
+      await ref.update(updates);
+      console.log('[torre] prune events: removidos', toRemove.length, '· mantidos', EVENTS_KEEP);
+    }
+  } catch(e){ console.warn('[torre] prune events fail:', e); }
+  finally { _pruning = false; }
+}
+// Primeira faxina ~20s após carregar (dá tempo do Firebase conectar) + a cada 2min
+setTimeout(pruneEvents, 20000);
+setInterval(pruneEvents, 120000);
 
 // Remove undefined recursivamente — Firebase joga erro sync se algum campo for undefined
 function cleanForFb(obj){
