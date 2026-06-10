@@ -469,7 +469,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
           <button id="cargaPlacaAdd" style="padding:8px 14px;background:var(--acc);color:#001823;border:none;border-radius:6px;font-weight:800">+ Adicionar</button>
         </div>
         <div id="cargaPegouList" style="display:flex;flex-direction:column;gap:4px"></div>
-        <div style="font-size:10px;color:var(--txt3);margin-top:4px">💡 Placa opcional · pode adicionar sem placa também</div>
+        <div id="cargaPlacaHint" style="font-size:10px;color:var(--txt3);margin-top:4px">💡 Placa opcional · pode adicionar sem placa também</div>
       </div>
 
       <div style="margin-bottom:14px;padding:10px;background:rgba(22,163,74,0.08);border:1px solid #16a34a;border-radius:8px">
@@ -723,6 +723,7 @@ const APP_VERSION = '2026-06-03.11';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
+const GPS_MAX_ACCURACY_M = 100;     // fix pior que isso é descartado (evita o pino "pular")
 const MARKER_TTL_MS = 30 * 1000;    // 30s sem update = fora do ar (para a torre)
 
 // ====================== STATE ======================
@@ -800,6 +801,11 @@ function createSync(){
 
   return {
     on(type, fn){ (handlers[type] = handlers[type] || []).push(fn); },
+    // Envio SÓ local (BroadcastChannel) — pra telemetria de alta frequência que NÃO deve
+    // inchar o log vammo/events. A parte Firebase vai pro nó vammo/motoristas/<id> (writeMotoristaNode).
+    sendLocal(type, data){
+      if(bc){ try { bc.postMessage({ type, data: cleanForFb(data), ts: Date.now(), _from: me?.id || 'anon' }); } catch(_){} }
+    },
     send(type, data){
       const clean = cleanForFb(data);
       const msg = { type, data: clean, ts: Date.now(), _from: me?.id || 'anon' };
@@ -1684,6 +1690,19 @@ function startGPS(){
 }
 
 function onGPSUpdate(pos){
+  // Filtro anti-jump: se já temos um bom fix, descarta leitura muito imprecisa ou "teleporte"
+  // (velocidade implícita absurda) — é o que faz o pino pular no mapa da torre.
+  // O 1º fix sempre passa (sem lastSentPos), e o interval de 15s segue mandando o último bom.
+  if(lastSentPos){
+    if(pos.accuracy != null && pos.accuracy > GPS_MAX_ACCURACY_M){
+      setGpsStatus('ok', `GPS impreciso (±${Math.round(pos.accuracy)}m) — mantendo último`);
+      return;
+    }
+    const _dt = (pos.ts - lastSentPos.ts) / 1000;
+    if(_dt > 0 && _dt < 30 && (haversine(lastSentPos, pos) / _dt) * 3.6 > 200){
+      return; // salto impossível (>200km/h) — fix ruim
+    }
+  }
   // Calcula velocidade: prefere pos.speed do GPS (mais preciso), senão calcula por delta
   let kmh = null;
   if(pos.speed != null){
@@ -1766,11 +1785,22 @@ function consumirPeca(key, qtd){
   return true;
 }
 
+// Telemetria ao vivo vai pra um nó last-write-wins (vammo/motoristas/<id>), NÃO pro log
+// append-only vammo/events — assim o log não incha e o sync fica em tempo real (sem flapping
+// + km/h consistente). O `ts` muda sempre → garante child_changed na torre mesmo parado.
+function writeMotoristaNode(extra){
+  try {
+    if(typeof firebase !== 'undefined' && firebase.apps?.length && me){
+      firebase.database().ref('vammo/motoristas/' + me.id).update({ ...cleanForFb(extra || {}), ts: Date.now() });
+    }
+  } catch(_){}
+}
+
 function sendPos(pos){
   if(!me) return;
   bufferLastPos(pos);
   rideTrackPos(pos);
-  sync.send('motorista:posicao', {
+  const payload = {
     id: me.id,
     nome: me.nome,
     placa: me.placa,
@@ -1782,7 +1812,9 @@ function sendPos(pos){
     kmh: pos.kmh,
     heading: pos.heading,
     ...slotsSnapshot()
-  });
+  };
+  sync.sendLocal('motorista:posicao', payload); // mesmo browser (tabs)
+  writeMotoristaNode(payload);                    // Firebase: nó dedicado (cross-device, sem inchar o log)
   lastSentPos = pos;
   lastSentAt = Date.now();
 }
@@ -1808,11 +1840,13 @@ function flushLastPos(){
     if(!p || p.lat == null) return;
     const ageMs = Date.now() - (p.ts||0);
     if(ageMs > 30000){
-      sync.send('motorista:posicao', {
+      const payload = {
         id: me.id, nome: me.nome, placa: me.placa, color: me.color, status: me.status,
         lat: p.lat, lng: p.lng, accuracy: p.accuracy, kmh: p.kmh, heading: p.heading,
         ...slotsSnapshot()
-      });
+      };
+      sync.sendLocal('motorista:posicao', payload);
+      writeMotoristaNode(payload);
       console.log('[colab] flush last pos: ', Math.round(ageMs/1000), 's antes');
     }
   } catch(_){}
@@ -2563,12 +2597,18 @@ function abrirModalCarga(chamado, onConfirm){
   _cargaPegouList = [];
   _cargaDeixou = 0;
   _cargaChamado = chamado; _cargaCallback = onConfirm;
-  document.getElementById('cargaPlacaInput').value = '';
   // Pré-popula com a placa do chamado se o motivo indica que vai PEGAR a moto.
-  // Aceita qualquer placa (inclusive XYZ de demo) — colab confere e pode remover.
   const motivo = (chamado.motivo || '').toLowerCase();
   const pegaMoto = /recolh|acidente|encaminh|guincho|reboque|busca|retirar|troca/.test(motivo);
   const placa = (chamado.placa || '').toUpperCase().trim();
+  // Input já vem com a placa do chamado (a única recolhível); hint avisa a trava
+  document.getElementById('cargaPlacaInput').value = placa || '';
+  const hint = document.getElementById('cargaPlacaHint');
+  if(hint){
+    hint.innerHTML = placa
+      ? `🔒 Só a moto do chamado (<strong style="color:var(--acc);font-family:'IBM Plex Mono',monospace">${esc(placa)}</strong>) pode ser recolhida`
+      : '💡 Placa opcional · pode adicionar sem placa também';
+  }
   if(pegaMoto && slotsTotalCount() > 0 && slotsCount() < slotsTotalCount()){
     _cargaPegouList.push({ placa: placa || '', _auto: true });
   }
@@ -2627,9 +2667,25 @@ function atualizaCargaUI(){
   document.getElementById('cargaDeixouMinus').disabled = _cargaDeixou <= 0;
 }
 
+// Normaliza placa pra comparação (ignora hífen/espaço/caixa)
+function normPlaca(p){ return String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
 function adicionarMotoNaCarga(){
   const inp = document.getElementById('cargaPlacaInput');
   let placa = inp.value.trim().toUpperCase();
+  // TRAVA: só pode recolher a moto DO chamado. Se o chamado tem placa cadastrada,
+  // a placa adicionada precisa bater com ela — não dá pra recolher outra moto.
+  const placaChamado = (_cargaChamado?.placa || '').trim();
+  if(placaChamado){
+    if(!placa){
+      showToast(`⚠ Digite a placa · só a moto do chamado (${placaChamado.toUpperCase()}) pode ser recolhida`, true);
+      return;
+    }
+    if(normPlaca(placa) !== normPlaca(placaChamado)){
+      alert(`⛔ Placa não confere.\n\nEsse chamado é da moto ${placaChamado.toUpperCase()}.\nVocê só pode recolher a moto do chamado — não dá pra recolher outra placa.\n\nSe a placa do chamado estiver errada, fale com a torre.`);
+      return;
+    }
+  }
   const slotsAtuais = slotsCount();
   const total = slotsTotalCount();
   if(slotsAtuais + _cargaPegouList.length - _cargaDeixou >= total){
@@ -2793,6 +2849,7 @@ function setStatus(s){
   saveMe(me);
   renderTopBar();
   sync.send('motorista:status', { id: me.id, status: s });
+  writeMotoristaNode({ status: s }); // reflete o status no nó da torre na hora
 }
 
 function showToast(msg, isError){
@@ -2942,7 +2999,11 @@ function bootApp(){
   // Heartbeat: re-anuncia a cada 15s pra torre saber que tá vivo
   setInterval(() => {
     if(myPos) sendPos(myPos);
-    else sync.send('motorista:heartbeat', { id: me.id, status: me.status });
+    else {
+      const hb = { id: me.id, nome: me.nome, placa: me.placa, color: me.color, status: me.status };
+      sync.sendLocal('motorista:heartbeat', hb);
+      writeMotoristaNode(hb); // mantém vivo no nó mesmo sem GPS (ts muda → torre vê)
+    }
   }, 15000);
 
   // Botões
@@ -3865,6 +3926,8 @@ async function finalizarCheckOut(){
   });
   // Logout + reload
   if(sync) sync.send('motorista:logout', { id: me.id });
+  // Remove o nó de telemetria pra sumir do mapa da torre na hora (não fica fantasma)
+  try { if(typeof firebase !== 'undefined' && firebase.apps?.length && me) firebase.database().ref('vammo/motoristas/' + me.id).remove(); } catch(_){}
   if(watchId) navigator.geolocation.clearWatch(watchId);
   if(wakeLock && !wakeLock.released){ try{ await wakeLock.release(); }catch(_){} }
   clearMe();

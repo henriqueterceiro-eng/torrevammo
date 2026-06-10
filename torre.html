@@ -1123,6 +1123,7 @@ function createSync(){
         }
         pendingMsgs = [];
         setSyncIndicator('ok', 'firebase + local');
+        if(typeof setupMotoristasNode === 'function') setupMotoristasNode(); // telemetria ao vivo via nó dedicado
       } catch(err){ console.warn('FB err', err); setSyncIndicator('err', 'erro firebase'); }
     });
   }
@@ -4718,75 +4719,9 @@ function setupSyncListeners(){
   });
 
   // Posição atualizada
-  sync.on('motorista:posicao', (data) => {
-    if(!motoristas[data.id]){
-      motoristas[data.id] = {
-        id: data.id,
-        nome: data.nome,
-        placa: data.placa,
-        color: data.color || '#00B4E5',
-        status: data.status || 'online',
-        activeCount: 0
-      };
-    }
-    const m = motoristas[data.id];
-    m.lat = data.lat;
-    m.lng = data.lng;
-    m.status = data.status || m.status;
-    m.lastSeen = Date.now();
-    // Velocidade — usa o kmh enviado pelo colab; se vier null e tiver prev pos, calcula
-    if(data.kmh != null){
-      m.kmh = data.kmh;
-    } else if(m._prevPos){
-      const dist = haversine(m._prevPos, {lat:data.lat,lng:data.lng});
-      const dt = (Date.now() - m._prevPos.ts) / 1000;
-      if(dt > 0.5 && dt < 60) m.kmh = Math.max(0, Math.round((dist/dt) * 3.6));
-    }
-    m._prevPos = { lat: data.lat, lng: data.lng, ts: Date.now() };
-    if(data.heading != null) m.heading = data.heading;
-    // Slots vêm dentro do motorista:posicao (slotsSnapshot do colab).
-    // PROTEÇÃO: se o turno no Firebase tem mais slots que o payload (caso do
-    // gestor ter adicionado moto via +moto e o colab ainda não saber), prefere
-    // o do turno. Evita sobrescrever pra menos.
-    if(data.slotsTotal != null) m.slotsTotal = data.slotsTotal;
-    const turnoSlots = turnos[data.id]?.slotsOcupados || null;
-    if(turnoSlots && turnoSlots.length > (data.slotsCount || 0)){
-      // Turno tem mais motos que o payload — colab desatualizado, usa turno como fonte
-      m.slotsCount = turnoSlots.length;
-      m.slotsDetalhe = turnoSlots;
-      m.isFull = m.slotsTotal > 0 && m.slotsCount >= m.slotsTotal;
-    } else {
-      if(data.slotsCount != null) m.slotsCount = data.slotsCount;
-      if(data.slotsDetalhe != null) m.slotsDetalhe = data.slotsDetalhe;
-      if(data.isFull != null) m.isFull = data.isFull;
-    }
-    if(data.modo != null) m.modo = data.modo;
-    if(data.appVersion != null) m.appVersion = data.appVersion;
-    if(data.estoque != null) m.estoque = data.estoque;
-    if(data.pecasUsadas != null) m.pecasUsadas = data.pecasUsadas;
-    // Reverse geocode DESLIGADO por causa de cota TomTom estourada.
-    // Esse era o maior consumidor (45s por colab) — descomente quando recarregar.
-    // if(TT.has()){
-    //   if(!m._lastReverse || Date.now() - m._lastReverse > 45000){
-    //     m._lastReverse = Date.now();
-    //     TT.reverse(data.lat, data.lng).then(addr => {
-    //       if(addr){
-    //         m.currentStreet = addr.streetName || addr.municipalitySubdivision || '';
-    //         m.currentArea = addr.municipalitySubdivision || addr.localName || '';
-    //         renderMot();
-    //       }
-    //     }).catch(() => {});
-    //   }
-    // }
-    // Trail GPS real
-    pushTrail(data.id, data.lat, data.lng);
-    renderTrail(data.id);
-    renderMotoristaMarkers();
-    renderMot();
-    renderLegend();
-    // Atualiza rota multi-stop OSRM do motorista (se tem fila)
-    updateRouteFor(data.id);
-  });
+  // Telemetria via BroadcastChannel (mesmo browser). Cross-device chega pelo nó
+  // vammo/motoristas (setupMotoristasNode). Ambos chamam applyMotoristaTelemetry.
+  sync.on('motorista:posicao', (data) => applyMotoristaTelemetry(data, { initial: false }));
 
   // Status mudou
   sync.on('motorista:status', (data) => {
@@ -5162,6 +5097,90 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ============== TTL CHECK ==============
+// Aplica telemetria (posição/heartbeat) ao motorista — chamada tanto pelo evento
+// BroadcastChannel quanto pelo listener do nó vammo/motoristas (cross-device).
+function applyMotoristaTelemetry(data, opts){
+  opts = opts || {};
+  if(!data || !data.id) return;
+  if(!motoristas[data.id]){
+    motoristas[data.id] = {
+      id: data.id, nome: data.nome, placa: data.placa,
+      color: data.color || '#00B4E5', status: data.status || 'online', activeCount: 0
+    };
+  }
+  const m = motoristas[data.id];
+  if(data.nome != null) m.nome = data.nome;
+  if(data.placa != null) m.placa = data.placa;
+  if(data.color != null) m.color = data.color;
+  const hasGeo = data.lat != null && data.lng != null;
+  if(hasGeo){ m.lat = data.lat; m.lng = data.lng; }
+  m.status = data.status || m.status;
+  // lastSeen: ao vivo = agora; no load inicial de nó já velho, usa o ts pra mostrar offline correto
+  if(opts.initial && data.ts && (Date.now() - data.ts > MOTORISTA_TTL_MS)){
+    m.lastSeen = data.ts;
+  } else {
+    m.lastSeen = Date.now();
+  }
+  if(data.kmh != null){
+    m.kmh = data.kmh;
+  } else if(hasGeo && m._prevPos){
+    const dist = haversine(m._prevPos, {lat:data.lat,lng:data.lng});
+    const dt = (Date.now() - m._prevPos.ts) / 1000;
+    if(dt > 0.5 && dt < 60) m.kmh = Math.max(0, Math.round((dist/dt) * 3.6));
+  }
+  if(hasGeo) m._prevPos = { lat: data.lat, lng: data.lng, ts: Date.now() };
+  if(data.heading != null) m.heading = data.heading;
+  // Slots — protege contra payload desatualizado (turno do Firebase manda mais)
+  if(data.slotsTotal != null) m.slotsTotal = data.slotsTotal;
+  const turnoSlots = turnos[data.id]?.slotsOcupados || null;
+  if(turnoSlots && turnoSlots.length > (data.slotsCount || 0)){
+    m.slotsCount = turnoSlots.length;
+    m.slotsDetalhe = turnoSlots;
+    m.isFull = m.slotsTotal > 0 && m.slotsCount >= m.slotsTotal;
+  } else {
+    if(data.slotsCount != null) m.slotsCount = data.slotsCount;
+    if(data.slotsDetalhe != null) m.slotsDetalhe = data.slotsDetalhe;
+    if(data.isFull != null) m.isFull = data.isFull;
+  }
+  if(data.modo != null) m.modo = data.modo;
+  if(data.appVersion != null) m.appVersion = data.appVersion;
+  if(data.estoque != null) m.estoque = data.estoque;
+  if(data.pecasUsadas != null) m.pecasUsadas = data.pecasUsadas;
+  if(hasGeo){ pushTrail(data.id, data.lat, data.lng); renderTrail(data.id); }
+  renderMotoristaMarkers();
+  renderMot();
+  renderLegend();
+  if(hasGeo) updateRouteFor(data.id);
+}
+
+// Remove um motorista do mapa/estado (ex: logout → nó removido)
+function removeMotorista(id){
+  if(!motoristas[id] && !motoristaMarkers[id]) return;
+  if(motoristaMarkers[id]){ map.removeLayer(motoristaMarkers[id]); delete motoristaMarkers[id]; }
+  if(trailLines[id]){ map.removeLayer(trailLines[id]); delete trailLines[id]; }
+  delete trails[id];
+  delete snappedTrails[id];
+  clearRoute(id);
+  delete motoristas[id];
+  recountMotoristas();
+  renderMotoristaMarkers();
+  renderMot();
+  renderLegend();
+}
+
+// Listener do nó dedicado de telemetria ao vivo (substitui o push de posição no log).
+let _motNodeReady = false;
+function setupMotoristasNode(){
+  if(_motNodeReady) return;
+  if(typeof firebase === 'undefined' || !firebase.apps?.length) return;
+  _motNodeReady = true;
+  const ref = firebase.database().ref('vammo/motoristas');
+  ref.on('child_added',   s => applyMotoristaTelemetry({ id: s.key, ...(s.val()||{}) }, { initial: true }));
+  ref.on('child_changed', s => applyMotoristaTelemetry({ id: s.key, ...(s.val()||{}) }, { initial: false }));
+  ref.on('child_removed', s => removeMotorista(s.key));
+  console.log('[torre] listener vammo/motoristas ativo');
+}
+
 function checkMotoristasTTL(){
   const now = Date.now();
   let changed = false;
