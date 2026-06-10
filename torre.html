@@ -1603,6 +1603,8 @@ function renderChamadoMarkers(){
       m.on('click', () => { selId = c.id; renderAll(); });
       chamadoMarkers[c.id] = m;
     }
+    // Concluído/cancelado fica bem transparente pra não poluir o mapa (mas continua clicável)
+    chamadoMarkers[c.id].setOpacity(c.status === 'concluido' || c.status === 'cancelado' ? 0.25 : 1);
   }
   for(const id in chamadoMarkers){
     if(!seen.has(id)){ map.removeLayer(chamadoMarkers[id]); delete chamadoMarkers[id]; }
@@ -1934,7 +1936,8 @@ function renderList(){
     const queueBadge = ord ? `<span class="b b-queue${ord.order===1?' first':''}" title="Posição ${ord.order} na fila de ${ord.total}">${ord.order}/${ord.total}</span>` : '';
     const motBadge = mot ? `<span class="b b-mot" style="background:${mot.color}">${esc(mot.nome.split(' ')[0])}</span>` : '';
     const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>`;
-    return `<div class="card${sel} ${al}" data-id="${c.id}">
+    const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : '';
+    return `<div class="card${sel} ${al}" data-id="${c.id}"${fadeStyle}>
       <div class="row1">
         <div class="nome">${esc(c.cliente||'?')}</div>
         <div class="ico">${ico(c.motivo)}</div>
