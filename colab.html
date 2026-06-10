@@ -719,7 +719,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v14 · 2026-06-10';
+const APP_VERSION = 'v15 · 2026-06-10';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2582,7 +2582,15 @@ document.getElementById('sigConfirmar').onclick = () => {
 };
 
 function _doShiftAndAfter(ativo){
-  fila.shift();
+  // Remove o chamado concluído PELA ID — não assume que é o fila[0]. A fila pode ter sido
+  // reconstruída/reordenada pelo snapshot do Firebase durante os modais (carga/assinatura);
+  // um shift() cego removeria o chamado errado e deixava um chamado "perdido" sem conclusão.
+  if(ativo && ativo.id){
+    const idx = fila.findIndex(c => c.id === ativo.id);
+    if(idx >= 0) fila.splice(idx, 1); else fila.shift();
+  } else {
+    fila.shift();
+  }
   if(fila.length === 0){
     setStatus('online');
     afterFilaChange('✓ Todos chamados concluídos!');
