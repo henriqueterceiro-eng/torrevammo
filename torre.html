@@ -5031,6 +5031,21 @@ function setupStoreListeners(){
       window._chamadosSeen = new Set(ids);
       window._initialSyncDone = true;
       chamados = byTs;
+      // Reconcilia FILAS: um chamado concluído/cancelado NÃO pode continuar na fila/rota
+      // de nenhum colab. Cobre o caso em que a conclusão chegou só pela escrita no nó
+      // vammo/chamados (sem o evento chamado:status, que era quem limpava a fila).
+      const _fechados = new Set(byTs.filter(c => c.status === 'concluido' || c.status === 'cancelado').map(c => c.id));
+      if(_fechados.size){
+        const _q = loadQueues();
+        let _qChanged = false;
+        for(const mid in _q){
+          const before = _q[mid].length;
+          _q[mid] = _q[mid].filter(id => !_fechados.has(id));
+          if(_q[mid].length !== before) _qChanged = true;
+          if(!_q[mid].length) delete _q[mid];
+        }
+        if(_qChanged){ saveQueues(_q); STORE.setAllQueues(_q); }
+      }
       // Sync caches locais
       saveDemoChamados(byTs);
       const sm = {}; const a = {};
