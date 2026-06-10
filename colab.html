@@ -1001,11 +1001,24 @@ function renderBaseMarkers(){
   }
 }
 
+// IDs de chamados que ESTE colab já concluiu — guarda local (sobrevive a reload) pra
+// garantir que um chamado finalizado NUNCA volte pra fila, mesmo se o nó do Firebase
+// estiver atrasado ou um evento antigo for reprocessado.
+let _concluidosIds = new Set();
+try { _concluidosIds = new Set(JSON.parse(localStorage.getItem('vammo_concluidos') || '[]')); } catch(_){}
+function marcarConcluidoLocal(id){
+  _concluidosIds.add(id);
+  let arr = [..._concluidosIds];
+  if(arr.length > 300) arr = arr.slice(arr.length - 300); // bound
+  _concluidosIds = new Set(arr);
+  try { localStorage.setItem('vammo_concluidos', JSON.stringify(arr)); } catch(_){}
+}
+
 function syncFilaFromSnapshot(data){
   if(!me) return;
-  // Chamados que SÃO meus e ainda abertos
+  // Chamados que SÃO meus e ainda abertos (e que ESTE colab não concluiu localmente)
   const meusAbertos = Object.entries(data)
-    .filter(([id, ch]) => ch && ch.motoristaId === me.id && ch.status !== 'concluido' && ch.status !== 'cancelado')
+    .filter(([id, ch]) => ch && ch.motoristaId === me.id && ch.status !== 'concluido' && ch.status !== 'cancelado' && !_concluidosIds.has(id))
     .map(([id, ch]) => ({ id, ...ch }));
 
   // Detecta novos (que não estavam na fila)
@@ -2389,6 +2402,15 @@ function continuarConclusao(ativo){
     payload.semMotoMotivo = ativo._semMotoMotivo;
   }
   sync.send('chamado:status', payload);
+  // Guarda local: esse chamado NUNCA mais reentra na fila desse colab
+  marcarConcluidoLocal(ativo.id);
+  // Marca concluído DIRETO no nó autoritativo — não depende da torre processar o evento.
+  // Sem isso, o syncFilaFromSnapshot pode re-injetar o chamado (nó ainda diz em_rota/meu).
+  try {
+    if(typeof firebase !== 'undefined' && firebase.apps?.length){
+      firebase.database().ref('vammo/chamados/' + ativo.id).update({ status: 'concluido', concluidoEm: Date.now() }).catch(()=>{});
+    }
+  } catch(_){}
   vibrate([50, 30, 50]);
   _doShiftAndAfter(ativo);
 }
