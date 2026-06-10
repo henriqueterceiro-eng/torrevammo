@@ -4615,12 +4615,24 @@ async function abrirTelaIntencao(){
       bases = snap.val() || {};
     } catch(e){ console.warn('Falha carregando bases:', e); }
   }
+  // Escuta liberação da torre pra iniciar fora da base (atualiza o status em tempo real)
+  try {
+    await ensureFb();
+    if(_foraBaseRef){ _foraBaseRef.off(); }
+    _foraBaseRef = firebase.database().ref('vammo/cmds/' + me.id + '/allowOffbase');
+    _foraBaseRef.on('value', snap => {
+      const cmd = snap.val();
+      _foraBaseLiberado = !!(cmd && cmd.ts && (Date.now() - cmd.ts) <= AUTORIZA_FORA_BASE_TTL_MS);
+      atualizarBaseInfo();
+    });
+  } catch(_){}
   atualizarBaseInfo();
   if(_intTimer) clearInterval(_intTimer);
   _intTimer = setInterval(atualizarBaseInfo, 3000);
   if(!myPos && !watchId) startGPS();
   const sairIntencao = () => {
     if(_intTimer){ clearInterval(_intTimer); _intTimer = null; }
+    if(_foraBaseRef){ _foraBaseRef.off(); _foraBaseRef = null; }
     document.getElementById('intencaoOnline').style.display = 'none';
     if(watchId) navigator.geolocation.clearWatch(watchId);
     clearMe(); location.reload();
@@ -4629,6 +4641,9 @@ async function abrirTelaIntencao(){
   document.getElementById('intSairTop').onclick = sairIntencao;
 }
 let _intTimer = null;
+let _foraBaseLiberado = false;   // torre liberou esse colab a iniciar fora da base?
+let _foraBaseRef = null;         // ref do listener Firebase da liberação
+const AUTORIZA_FORA_BASE_TTL_MS = 15 * 60 * 1000; // liberação vale por 15 min
 
 function atualizarBaseInfo(){
   const div = document.getElementById('intBaseInfo');
@@ -4657,13 +4672,37 @@ function atualizarBaseInfo(){
       const d = haversine(myPos, { lat: b.lat, lng: b.lng });
       if(d < distMP){ distMP = d; maisProxima = b; }
     });
-    div.style.borderColor = '#dc2626';
-    div.style.background = 'rgba(220,38,38,0.06)';
-    div.style.color = '#fca5a5';
-    div.innerHTML = maisProxima
-      ? `⚠ Fora de base · Mais próxima: <strong>${esc(maisProxima.nome)}</strong> a ${(distMP/1000).toFixed(1)}km`
-      : `⚠ Fora de base · Nenhuma base cadastrada por perto`;
+    if(_foraBaseLiberado){
+      // Torre liberou esse colab a iniciar fora da base
+      div.style.borderColor = '#16a34a';
+      div.style.background = 'rgba(22,163,74,0.08)';
+      div.style.color = '#16a34a';
+      div.innerHTML = `✓ Liberado pela torre pra iniciar fora da base · pode deslizar`;
+    } else {
+      div.style.borderColor = '#dc2626';
+      div.style.background = 'rgba(220,38,38,0.06)';
+      div.style.color = '#fca5a5';
+      div.innerHTML = maisProxima
+        ? `⚠ Fora de base · Mais próxima: <strong>${esc(maisProxima.nome)}</strong> a ${(distMP/1000).toFixed(1)}km`
+        : `⚠ Fora de base · Nenhuma base cadastrada por perto`;
+    }
   }
+}
+
+// Lê (1x) se a torre liberou esse colab a iniciar fora da base, dentro do TTL
+async function checkAutorizacaoForaBase(){
+  if(!me) return false;
+  try {
+    await ensureFb();
+    const snap = await firebase.database().ref('vammo/cmds/' + me.id + '/allowOffbase').once('value');
+    const cmd = snap.val();
+    return !!(cmd && cmd.ts && (Date.now() - cmd.ts) <= AUTORIZA_FORA_BASE_TTL_MS);
+  } catch(_){ return false; }
+}
+// Consome a liberação (uso único) — depois de iniciar fora da base
+async function consumirAutorizacaoForaBase(){
+  if(!me) return;
+  try { await firebase.database().ref('vammo/cmds/' + me.id + '/allowOffbase').remove(); } catch(_){}
 }
 
 async function confirmarIntencaoOnline(){
@@ -4678,15 +4717,23 @@ async function confirmarIntencaoOnline(){
     if(!b.lat || !b.lng) return false;
     return haversine(myPos, { lat: b.lat, lng: b.lng }) <= ARRIVED_THRESHOLD_M;
   });
+  let baseEntradaId = baseAchada ? baseAchada.id : null;
   if(!baseAchada){
-    alert('⛔ Você precisa estar dentro de uma base Vammo (raio 100m) pra iniciar o turno.\n\nVá até a base e tente de novo.');
-    abrirTelaIntencao();
-    return;
+    // Fora de base: só libera se a torre tiver autorizado esse colab
+    const liberado = await checkAutorizacaoForaBase();
+    if(!liberado){
+      alert('⛔ Você está fora de uma base Vammo (raio 100m).\n\nPeça pra torre liberar seu início fora da base:\nCadastros → seu nome → 📍 Liberar início fora da base.\n\nDepois é só deslizar de novo.');
+      abrirTelaIntencao();
+      return;
+    }
+    await consumirAutorizacaoForaBase(); // uso único
+    if(_foraBaseRef){ _foraBaseRef.off(); _foraBaseRef = null; }
+    showToast('✓ Início fora da base liberado pela torre');
   }
-  // OK — abre check-in normal
+  // OK — abre check-in
   document.getElementById('intencaoOnline').style.display = 'none';
-  // Anota a base de entrada pra registrar no turno
-  window._baseEntradaTurno = baseAchada.id;
+  // Anota a base de entrada pra registrar no turno (null = iniciou fora da base, autorizado)
+  window._baseEntradaTurno = baseEntradaId;
   await startCheckIn();
   setupValidators();
   renderWizStep();

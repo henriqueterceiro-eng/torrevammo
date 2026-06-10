@@ -2911,15 +2911,15 @@ function renderCad(){
 
   if(cadTab === 'colab'){
     $('#cadlist').innerHTML = `
-      <div class="cdrow hdr" style="grid-template-columns:1fr 130px 100px 90px 70px 80px 70px 80px">
-        <div>Nome / CPF</div><div>Email</div><div>Base</div><div>Turno</div><div style="text-align:center">CNH</div><div style="text-align:center">Senha</div><div style="text-align:center">Reset</div><div></div>
+      <div class="cdrow hdr" style="grid-template-columns:1fr 130px 100px 90px 70px 80px 70px 90px 80px">
+        <div>Nome / CPF</div><div>Email</div><div>Base</div><div>Turno</div><div style="text-align:center">CNH</div><div style="text-align:center">Senha</div><div style="text-align:center">Reset</div><div style="text-align:center">Início</div><div></div>
       </div>
       ${items.map(c => {
         const t = { manha:'☀ Manhã', tarde:'🌇 Tarde', noite:'🌙 Noite' }[c.turno] || c.turno || '—';
         const senhaSt = c.senhaHash
           ? `<span class="cd-pill" style="background:rgba(16,163,74,0.2);color:#16a34a">✓ ok</span>`
           : `<span class="cd-pill" style="background:rgba(245,158,11,0.2);color:#fbbf24">⏱ pendente</span>`;
-        return `<div class="cdrow" data-cid="${c.id}" style="grid-template-columns:1fr 130px 100px 90px 70px 80px 70px 80px">
+        return `<div class="cdrow" data-cid="${c.id}" style="grid-template-columns:1fr 130px 100px 90px 70px 80px 70px 90px 80px">
           <div><div class="cd-nm">${esc(c.nome || '?')}</div><div class="cd-sub">${esc(c.cpf || 'sem CPF')}${c.cnhNumero ? ' · CNH '+esc(c.cnhNumero) : ''}</div></div>
           <div style="font-size:11px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.email || '—')}</div>
           <div>${esc(c.base || '—')}</div>
@@ -2927,6 +2927,7 @@ function renderCad(){
           <div style="text-align:center">${c.cnhDocUrl ? `<a href="${esc(c.cnhDocUrl)}" target="_blank" rel="noopener" class="cd-doc" title="Abrir CNH" onclick="event.stopPropagation()">📄</a>` : '<span style="color:var(--txt3)">—</span>'}</div>
           <div style="text-align:center">${senhaSt}</div>
           <div style="text-align:center">${c.senhaHash ? `<button data-reset="${c.id}" style="padding:3px 6px;font-size:10px;background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#fbbf24" title="Forçar troca de senha no próximo login">🔄</button>` : '<span style="color:var(--txt3)">—</span>'}</div>
+          <div style="text-align:center"><button data-offbase="${c.id}" style="padding:3px 6px;font-size:10px;background:rgba(0,180,229,0.15);border-color:rgba(0,180,229,0.4);color:var(--acc)" title="Liberar esse colab a ficar online FORA da base (vale 15 min, uso único)">📍 liberar</button></div>
           <div style="text-align:right"><button data-edit="${c.id}" style="padding:4px 8px;font-size:10px">✏</button></div>
         </div>`;
       }).join('')}
@@ -2941,6 +2942,21 @@ function renderCad(){
       const updated = { ...c, senhaHash: null, senhaSalt: null, precisaResetSenha: true, senhaResetadaEm: Date.now() };
       STORE.saveColaborador(updated);
       showToast(`✓ Senha de ${c.nome} resetada — ele cria nova no próximo login`);
+    });
+    // Botões de liberar início fora da base
+    $$('#cadlist button[data-offbase]').forEach(b => b.onclick = (e) => {
+      e.stopPropagation();
+      const cid = b.dataset.offbase;
+      const c = colaboradores[cid];
+      if(!c) return;
+      if(!confirm(`Liberar ${c.nome} a ficar ONLINE fora da base?\n\nVale por 15 minutos e é uso único — assim que ele iniciar o turno, a liberação some.\n\nUse quando o GPS dele está impreciso ou ele precisa iniciar fora do HUB.`)) return;
+      try {
+        if(typeof firebase === 'undefined' || !firebase.apps?.length) throw new Error('Firebase desconectado');
+        firebase.database().ref('vammo/cmds/' + cid + '/allowOffbase').set({ ts: Date.now(), by: 'gestor' });
+        showToast(`✓ ${(c.nome||'').split(' ')[0]} liberado pra iniciar fora da base (15 min)`);
+      } catch(err){
+        alert('Falhou: ' + err.message);
+      }
     });
   } else if(cadTab === 'base'){
     $('#cadlist').innerHTML = `
