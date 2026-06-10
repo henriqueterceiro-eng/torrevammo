@@ -1689,21 +1689,21 @@ function startGPS(){
   );
 }
 
+let _gpsForceNext = false; // garante que nunca descartamos dois fixes seguidos (anti-congelamento)
 function onGPSUpdate(pos){
-  // Filtro anti-jump: se já temos um bom fix, descarta leitura muito imprecisa ou "teleporte"
-  // (velocidade implícita absurda) — é o que faz o pino pular no mapa da torre.
-  // O 1º fix sempre passa (sem lastSentPos), e o interval de 15s segue mandando o último bom.
-  if(lastSentPos){
-    if(pos.accuracy != null && pos.accuracy > GPS_MAX_ACCURACY_M){
-      setGpsStatus('ok', `GPS impreciso (±${Math.round(pos.accuracy)}m) — mantendo último`);
+  // Anti-jump LEVE: descarta só "teleporte" claramente impossível (>200km/h num passo curto)
+  // e NUNCA dois seguidos. SEM filtro por accuracy — isso congelava posição/velocidade em
+  // sinal ruim. Em GPS fraco é melhor mostrar a posição imprecisa do que travar tudo.
+  if(lastSentPos && !_gpsForceNext){
+    const _dt = (pos.ts - lastSentPos.ts) / 1000;
+    if(_dt > 0 && _dt < 20 && (haversine(lastSentPos, pos) / _dt) * 3.6 > 200){
+      _gpsForceNext = true; // o próximo passa
       return;
     }
-    const _dt = (pos.ts - lastSentPos.ts) / 1000;
-    if(_dt > 0 && _dt < 30 && (haversine(lastSentPos, pos) / _dt) * 3.6 > 200){
-      return; // salto impossível (>200km/h) — fix ruim
-    }
   }
-  // Calcula velocidade: prefere pos.speed do GPS (mais preciso), senão calcula por delta
+  _gpsForceNext = false;
+  // Velocidade: pos.speed do GPS, senão calcula por delta. SEMPRE vira número (default 0) —
+  // null era removido pelo cleanForFb e o km/h sumia na torre.
   let kmh = null;
   if(pos.speed != null){
     kmh = pos.speed * 3.6;
@@ -1712,12 +1712,10 @@ function onGPSUpdate(pos){
     const dt = (pos.ts - lastSentPos.ts) / 1000; // s
     if(dt > 0.5 && dt < 60){ kmh = (dist / dt) * 3.6; }
   }
-  // Se já temos histórico mas o cálculo não fechou (parado), considera 0
-  // (Firebase omite null, então 0 garante que apareça no torre como "🛑 parado")
-  if(kmh == null && lastSentPos){ kmh = 0; }
-  pos.kmh = kmh != null ? Math.max(0, Math.round(kmh)) : null;
+  if(kmh == null) kmh = 0;
+  pos.kmh = Math.max(0, Math.round(kmh));
   myPos = pos;
-  const spdTxt = pos.kmh != null ? ` · ${pos.kmh}km/h` : '';
+  const spdTxt = ` · ${pos.kmh}km/h`;
   setGpsStatus('ok', `GPS ±${Math.round(pos.accuracy)}m${spdTxt}`);
   updateMeMarker();
   if(!lastSentPos){ map.setView([pos.lat, pos.lng], 15); }
