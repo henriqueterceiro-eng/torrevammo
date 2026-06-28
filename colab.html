@@ -777,7 +777,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v24 · 2026-06-28';
+const APP_VERSION = 'v25 · 2026-06-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1827,10 +1827,24 @@ async function startGPSNative(){
       });
     });
     console.log('[gps] modo NATIVO (background) ativo');
+    _startGpsHeartbeat();   // mantém a torre viva mesmo parado (nativo só dispara ao mover)
   } catch(e){
     console.warn('[gps] nativo falhou, caindo pro web:', e);
     startGPSWeb();
   }
+}
+
+// Heartbeat compartilhado: reenvia a última posição a cada 20s (torre não dropa o pino quando
+// o colab está parado) e rebaixa o status só após um gap real de fix.
+function _startGpsHeartbeat(){
+  if(_gpsHeartbeat) clearInterval(_gpsHeartbeat);
+  _gpsHeartbeat = setInterval(() => {
+    const since = _lastFixTs ? (Date.now() - _lastFixTs) : Infinity;
+    if(since > 25000){
+      setGpsStatus('warn', `⚠ Procurando GPS… (${Math.round(since/1000)}s)`);
+    }
+    if(myPos && (Date.now() - lastSentAt) >= GPS_HEARTBEAT_MS){ sendPos(myPos); }
+  }, 10000);
 }
 
 function startGPSWeb(){
@@ -1855,20 +1869,11 @@ function startGPSWeb(){
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 }
     );
   }, 6000);
-  // HEARTBEAT: mantém a torre viva em quedas curtas (reenvia última posição boa) e rebaixa
-  // o status só após um gap real de fix.
-  if(_gpsHeartbeat) clearInterval(_gpsHeartbeat);
-  _gpsHeartbeat = setInterval(() => {
-    const since = _lastFixTs ? (Date.now() - _lastFixTs) : Infinity;
-    if(since > 25000){
-      setGpsStatus('warn', `⚠ Procurando GPS… (${Math.round(since/1000)}s)`);
-    }
-    if(myPos && (Date.now() - lastSentAt) >= GPS_HEARTBEAT_MS){ sendPos(myPos); }
-  }, 10000);
+  _startGpsHeartbeat();
 }
 function stopGPS(){
-  if(_bgWatcherId != null && window.Capacitor?.Plugins?.BackgroundGeolocation){
-    try { Capacitor.Plugins.BackgroundGeolocation.removeWatcher({ id: _bgWatcherId }); } catch(_){}
+  if(_bgWatcherId != null){
+    try { const BG = _getBG(); if(BG) BG.removeWatcher({ id: _bgWatcherId }); } catch(_){}
     _bgWatcherId = null;
   }
   if(watchId != null){ navigator.geolocation.clearWatch(watchId); watchId = null; }
