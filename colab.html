@@ -777,7 +777,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v25 · 2026-06-28';
+const APP_VERSION = 'v26 · 2026-06-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1797,11 +1797,13 @@ function _getBG(){
 }
 
 let _bgWatcherId = null;
+let _gpsNativeOn = false;
 async function startGPSNative(){
   try {
+    showToast('🔧 Iniciando GPS nativo…');
     const BG = _getBG();
-    if(!BG){ console.warn('[gps] plugin nativo ausente — usando web'); startGPSWeb(); return; }
-    setGpsStatus('', 'Iniciando GPS…');
+    if(!BG){ showToast('⚠ Plugin nativo NÃO encontrado — modo web', true); startGPSWeb(); return; }
+    setGpsStatus('', 'Iniciando GPS nativo…');
     _bgWatcherId = await BG.addWatcher({
       backgroundTitle: 'Vammo Colab',
       backgroundMessage: 'Rastreando sua localização para a torre',
@@ -1810,7 +1812,9 @@ async function startGPSNative(){
       distanceFilter: 5
     }, (location, error) => {
       if(error){
-        if(error.code === 'NOT_AUTHORIZED'){
+        const code = error.code || error.message || 'erro';
+        showToast('⚠ GPS nativo: ' + code, true);
+        if(code === 'NOT_AUTHORIZED'){
           setGpsStatus('err', 'Permita localização "o tempo todo" nas configurações');
         }
         return;
@@ -1826,9 +1830,12 @@ async function startGPSNative(){
         ts: location.time || Date.now()
       });
     });
-    console.log('[gps] modo NATIVO (background) ativo');
+    _gpsNativeOn = true;
+    console.log('[gps] modo NATIVO (background) ativo, watcher=', _bgWatcherId);
+    showToast('✓ GPS NATIVO ativo (background)');
     _startGpsHeartbeat();   // mantém a torre viva mesmo parado (nativo só dispara ao mover)
   } catch(e){
+    showToast('⚠ GPS nativo falhou: ' + (e && (e.message||e.code||JSON.stringify(e)) || 'erro') + ' → web', true);
     console.warn('[gps] nativo falhou, caindo pro web:', e);
     startGPSWeb();
   }
