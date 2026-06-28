@@ -104,6 +104,23 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 .km-box{margin-top:14px;padding:12px;background:var(--surf);border:1px solid var(--bdr);border-radius:10px}
 .km-box label{font-size:11px;color:var(--txt2);font-weight:700;display:block;margin-bottom:6px}
 .km-box input{width:100%;padding:14px;font-size:18px;font-weight:800;font-family:'IBM Plex Mono',monospace;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;text-align:center}
+/* KM lido pela IA (foto do painel) */
+.km-ia{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;border:1px solid var(--bdr);background:var(--surf)}
+.km-ia .t{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.km-ia .s{font-size:11px;color:var(--txt3);margin-top:2px;line-height:1.3}
+.km-ia .kmv{font-size:26px;font-weight:800;margin-top:2px;font-family:'IBM Plex Mono',monospace}
+.km-ia.ok{border-color:var(--acc);background:rgba(0,180,229,.08)}
+.km-ia.ok .t{color:var(--acc)}
+.km-ia.edited{border-color:#fbbf24;background:rgba(245,158,11,.08)}
+.km-ia.edited .t{color:#fbbf24}
+.km-ia.empty{border-style:dashed;color:var(--txt2)}
+.km-ia.empty .ic{font-size:28px;opacity:.5}
+.km-ia.loading{border-color:var(--acc);background:rgba(0,180,229,.06)}
+.km-ia .spin{width:24px;height:24px;border:3px solid var(--surf2);border-top-color:var(--acc);border-radius:50%;flex:0 0 auto;animation:kmspin .8s linear infinite}
+@keyframes kmspin{to{transform:rotate(360deg)}}
+.km-ia .edlink{flex:0 0 auto;background:none;border:none;color:var(--txt3);font-size:11px;text-decoration:underline;cursor:pointer}
+.foto-slot.painel{border-color:var(--acc)}
+.foto-slot.painel.has{border-color:#16a34a}
 
 /* Fotos */
 .fotos-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
@@ -719,12 +736,18 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v15 · 2026-06-10';
-const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe)
-const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
+const APP_VERSION = 'v18 · 2026-06-28';
+const GPS_MIN_INTERVAL = 1500;     // ms entre updates (quando se mexe) — mais frequente p/ torre acompanhar
+const GPS_MIN_DELTA_M  = 3;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
 const GPS_MAX_ACCURACY_M = 100;     // fix pior que isso é descartado (evita o pino "pular")
 const MARKER_TTL_MS = 30 * 1000;    // 30s sem update = fora do ar (para a torre)
+
+// OCR do KM pela foto do painel (anti-fraude): o KM passa a vir da imagem, não da
+// digitação. Endpoint = Cloudflare Function que chama o Gemini. Abaixo do mínimo de
+// confiança (ou painel ilegível) cai em conferência manual COM flag pra torre.
+const KM_OCR_ENDPOINT = '/api/ler-km';
+const KM_OCR_MIN_CONF = 0.6;
 
 // ====================== STATE ======================
 let me = null;                      // {id, nome, placa, status}
@@ -732,12 +755,15 @@ let myPos = null;                   // {lat, lng, accuracy, ts}
 let lastSentPos = null;
 let watchId = null;
 let fila = [];                      // fila de chamados — primeiro é o ativo
+let queueOrder = [];                 // [chamadoId,...] — ordem definida pela torre (nó vammo/queues/<id>), fonte única da verdade
 let chamadoMarkers = {};            // {chamadoId: L.marker}
 let meMarker = null;
 let routeLine = null;
 let map = null;
 let sync = null;
 let lastSentAt = 0;
+let authEpoch = 0;                  // "logoff geral": vammo/config/authEpoch. Sessão com epoch
+                                    // menor é deslogada e o turno antigo não é restaurado.
 
 const STATUS_ORDER = ['online','busy','off'];
 const STATUS_LBL = {online:'ONLINE', busy:'EM ROTA', off:'PAUSA'};
@@ -906,6 +932,13 @@ function setupChamadosListener(){
   // ESCUTA o próprio turno: quando a torre adiciona/remove moto manualmente,
   // o colab precisa sincronizar pra refletir no slotsbtn + payload dos próximos heartbeats
   if(me){
+    // Ordem da fila definida pela torre — nó PERSISTENTE = fonte única da verdade da sequência.
+    // Sempre que muda (ou no load), reordena a fila local pra bater 100% com a torre.
+    firebase.database().ref('vammo/queues/' + me.id).on('value', snap => {
+      queueOrder = snap.val() || [];
+      console.log('[colab] ordem da fila sincronizada pela torre:', queueOrder.length, 'itens');
+      applyQueueOrder();
+    });
     firebase.database().ref('vammo/turnos/' + me.id).on('value', snap => {
       const remote = snap.val();
       if(!remote || !turnoAtivo) return;
@@ -1020,6 +1053,22 @@ function marcarConcluidoLocal(id){
   try { localStorage.setItem('vammo_concluidos', JSON.stringify(arr)); } catch(_){}
 }
 
+// Ordena a fila pela sequência que a torre definiu (queueOrder). Chamados que ainda não
+// estão na ordem da torre (recém-criados) caem no fim, mantendo a ordem relativa entre eles.
+// É o que garante que o colab NUNCA mostre uma sequência diferente da torre.
+function orderFila(arr){
+  if(!queueOrder.length) return arr.slice();
+  const pos = id => { const i = queueOrder.indexOf(id); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
+  return arr.map((c, i) => [c, i])
+            .sort((a, b) => (pos(a[0].id) - pos(b[0].id)) || (a[1] - b[1]))
+            .map(x => x[0]);
+}
+function applyQueueOrder(){
+  const before = fila.map(c => c.id).join(',');
+  fila = orderFila(fila);
+  if(fila.map(c => c.id).join(',') !== before) afterFilaChange();
+}
+
 function syncFilaFromSnapshot(data){
   if(!me) return;
   // Chamados que SÃO meus e ainda abertos (e que ESTE colab não concluiu localmente)
@@ -1059,7 +1108,7 @@ function syncFilaFromSnapshot(data){
       });
     }
     const wasEmpty = fila.length === 0;
-    fila = novaFila;
+    fila = orderFila(novaFila);   // respeita a sequência da torre, não a ordem de chave do Firebase
 
     // Notificações
     if(novos.length > 0){
@@ -1684,11 +1733,11 @@ function startGPS(){
   watchId = navigator.geolocation.watchPosition(
     _ingestGeo,
     (err) => { setGpsStatus('err', 'Erro GPS: ' + err.message); },
-    { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
   );
   // POLLING ATIVO: o watchPosition sozinho "congela" em muitos celulares (só dispara de vez
   // em quando → o pino fica parado e só pula quando o colab chega). Puxamos um fix FRESCO
-  // a cada 6s — é o que fazia o rastreio antigo funcionar bem.
+  // a cada 3s — fixes mais frequentes = torre acompanha o deslocamento de perto.
   if(_gpsPoll) clearInterval(_gpsPoll);
   _gpsPoll = setInterval(() => {
     navigator.geolocation.getCurrentPosition(
@@ -1696,7 +1745,7 @@ function startGPS(){
       () => {},
       { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
     );
-  }, 6000);
+  }, 3000);
 }
 function stopGPS(){
   if(watchId != null){ navigator.geolocation.clearWatch(watchId); watchId = null; }
@@ -2908,9 +2957,10 @@ function setupSyncListeners(){
       assignedAt: Date.now()
     };
     fila.push(ch);
+    fila = orderFila(fila);   // posiciona conforme a sequência da torre, não só no fim
     vibrate([100, 50, 100, 50, 200]);
     playBeep();
-    const pos = fila.length;
+    const pos = fila.findIndex(x => x.id === ch.id) + 1;
     if(pos === 1){
       showToast(`🔔 Novo chamado: ${data.cliente || ''}`);
     } else {
@@ -2934,14 +2984,10 @@ function setupSyncListeners(){
   // Torre reordenou a fila
   sync.on('chamado:reordenar', (data) => {
     if(!me || data.motoristaId !== me.id) return;
-    // data.order = [chamadoId1, chamadoId2, ...] na nova ordem
-    const map = {};
-    for(const c of fila) map[c.id] = c;
-    const newFila = [];
-    for(const id of data.order){ if(map[id]) newFila.push(map[id]); }
-    // Adiciona qualquer chamado que não estava na lista de ordem (segurança)
-    for(const c of fila){ if(!data.order.includes(c.id)) newFila.push(c); }
-    fila = newFila;
+    // Fast-path instantâneo: atualiza a MESMA fonte da verdade (queueOrder) e reordena.
+    // O nó persistente vammo/queues confirma logo em seguida — os dois nunca brigam.
+    queueOrder = (data.order || []).slice();
+    fila = orderFila(fila);
     showToast('Fila reordenada pela torre');
     afterFilaChange();
   });
@@ -3201,6 +3247,30 @@ async function loadTurnoExistente(colabId){
   const snap = await firebase.database().ref('vammo/turnos/' + colabId).once('value');
   return snap.val();
 }
+
+// "Logoff geral": lê o epoch de sessão definido pela torre. Sessão/turno anteriores
+// a esse epoch são invalidados → força re-login e novo check-in. Offline mantém 0 (não desloga).
+async function fetchAuthEpoch(){
+  try {
+    await ensureFb();
+    const snap = await firebase.database().ref('vammo/config/authEpoch').once('value');
+    authEpoch = snap.val() || 0;
+  } catch(_){ /* sem rede: não força logout */ }
+  return authEpoch;
+}
+
+// Invalida um turno anterior ao reset: libera o(s) veículo(s) e marca inativo, pra o
+// colab começar limpo e o carro não ficar travado "EM USO" pra ninguém.
+async function invalidarTurnoAntigo(t){
+  try {
+    await ensureFb();
+    const db = firebase.database();
+    if(t.veiculoId) await db.ref('vammo/veiculos/' + t.veiculoId).update({ atribuidoA: null, atribuidoEm: null });
+    if(t.carretaId) await db.ref('vammo/veiculos/' + t.carretaId).update({ atribuidoA: null, atribuidoEm: null });
+    await db.ref('vammo/turnos/' + me.id).update({ ativo: false, encerradoEm: Date.now(), encerradoPor: 'reset-checkin' });
+    try { await db.ref('vammo/motoristas/' + me.id).remove(); } catch(_){}
+  } catch(e){ console.warn('invalidarTurnoAntigo falhou:', e); }
+}
 function disponivelParaMim(v, meId){
   if(v.ativo === false) return false;
   return !v.atribuidoA || v.atribuidoA === meId;
@@ -3215,7 +3285,10 @@ async function startCheckIn(){
     veiculoId: null, carretaId: null, km: null,
     fotosVeiculo: { frente:null, lateral_d:null, traseira:null, lateral_e:null, painel:null },
     fotoCarreta: null,
-    assinaturaData: null
+    assinaturaData: null,
+    // OCR do KM (foto do painel): leitura da IA + auditoria
+    kmIA: null, kmEditado: false, kmLoading: false, kmLeituraFalhou: false,
+    kmConfianca: null, kmEhPainel: null, kmLegivel: null, kmObs: '', kmManualMotivo: ''
   };
   wizSteps = [renderStepKit, renderStepVeiculo, renderStepCarreta, renderStepResumo];
   setupValidators();
@@ -3357,6 +3430,9 @@ async function startCheckOut(){
     fotosVeiculo: { frente:null, lateral_d:null, traseira:null, lateral_e:null, painel:null },
     fotoCarreta: null, // compat
     fotosCarretaOut: { placa: null, lateral_d: null, lateral_e: null },
+    // OCR do KM (foto do painel): leitura da IA + auditoria
+    kmIA: null, kmEditado: false, kmLoading: false, kmLeituraFalhou: false,
+    kmConfianca: null, kmEhPainel: null, kmLegivel: null, kmObs: '', kmManualMotivo: '',
     assinaturaData: null
   };
   await loadVeiculosDisponiveis();
@@ -3494,9 +3570,9 @@ function renderStepVeiculo(){
     <div class="step-sub">Disponíveis em destaque. Os <strong>em uso</strong> ficam cinza.</div>
     <div class="vlist" id="vlist"></div>
     ${sel ? `
-      <div class="km-box">
-        <label>KM atual do veículo</label>
-        <input type="number" id="vw_km" min="0" placeholder="000000" inputmode="numeric" value="${wizData.km ?? (_turnoVeiculos[sel]?.ultimoKm ?? '')}">
+      <div style="margin-top:16px">
+        <label style="display:block;font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin-bottom:6px">KM atual do veículo</label>
+        <div id="km_wrap"></div>
         <div style="font-size:10px;color:var(--txt3);margin-top:6px">Último registrado: ${_turnoVeiculos[sel]?.ultimoKm != null ? _turnoVeiculos[sel].ultimoKm.toLocaleString('pt-BR')+' km' : '—'}</div>
       </div>
       <div style="margin-top:18px">
@@ -3521,24 +3597,29 @@ function renderStepVeiculo(){
   vlist.querySelectorAll('.vitem:not(.disabled)').forEach(it => {
     it.onclick = () => {
       wizData.veiculoId = it.dataset.vid;
-      wizData.km = _turnoVeiculos[it.dataset.vid]?.ultimoKm ?? null;
+      // Troca de veículo zera a leitura — o KM virá da foto do painel deste veículo
+      wizData.km = null; wizData.kmIA = null; wizData.kmEditado = false;
+      wizData.kmLeituraFalhou = false; wizData.kmLoading = false;
+      wizData.fotosVeiculo.painel = null;
       renderStepVeiculo();
       validateStep();
     };
   });
   if(sel){
-    document.getElementById('vw_km').oninput = (e) => {
-      wizData.km = +e.target.value || 0;
-      validateStep();
-    };
+    renderKmIaBox('km_wrap', 'km', null);
     renderFotosGrid('vw_fotos', wizData.fotosVeiculo, [
       ['frente','Frente'],['lateral_d','Lateral D'],['traseira','Traseira'],['lateral_e','Lateral E'],['painel','Painel ligado']
-    ]);
+    ], (k, dataUrl) => {
+      wizData.fotosVeiculo[k] = dataUrl;
+      if(k === 'painel') lerKmDoPainel(dataUrl, 'km', 'km_wrap', null);
+      validateStep();
+    });
   }
 }
 wizValidators[1] = () => {
   const f = wizData.fotosVeiculo;
-  return !!wizData.veiculoId && !!wizData.km && f.frente && f.lateral_d && f.traseira && f.lateral_e && f.painel;
+  return !!wizData.veiculoId && !!wizData.km && !wizData.kmLoading
+    && f.frente && f.lateral_d && f.traseira && f.lateral_e && f.painel;
 };
 
 // =========== STEP 3: CARRETA (opcional se carro) =============
@@ -3633,10 +3714,9 @@ function renderStepVeiculoOut(){
       <div class="meta" style="color:#fbbf24">⚠ Carreta engatada — devolva PRIMEIRO a carreta, depois o carro</div>
     </div>` : ''}
 
-    <div class="km-box">
-      <label>KM final do veículo</label>
-      <input type="number" id="vw_km" min="${turnoAtivo?.kmInicial || 0}" placeholder="000000" inputmode="numeric" value="${wizData.kmFinal ?? ''}">
-      <div style="font-size:10px;color:var(--txt3);margin-top:6px">Deve ser ≥ ${turnoAtivo?.kmInicial?.toLocaleString('pt-BR') || 0} km</div>
+    <div style="margin-top:16px">
+      <label style="display:block;font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin-bottom:6px">KM final do veículo</label>
+      <div id="km_wrap"></div>
     </div>
 
     <div style="margin-top:18px">
@@ -3649,13 +3729,15 @@ function renderStepVeiculoOut(){
       <div class="fotos-grid" id="ct_fotos"></div>
     </div>` : ''}
   `;
-  document.getElementById('vw_km').oninput = (e) => {
-    wizData.kmFinal = +e.target.value || 0;
-    validateStep();
-  };
+  const minKmOut = turnoAtivo?.kmInicial || 0;
+  renderKmIaBox('km_wrap', 'kmFinal', minKmOut);
   renderFotosGrid('vw_fotos', wizData.fotosVeiculo, [
     ['frente','Frente'],['lateral_d','Lateral D'],['traseira','Traseira'],['lateral_e','Lateral E'],['painel','Painel']
-  ]);
+  ], (k, dataUrl) => {
+    wizData.fotosVeiculo[k] = dataUrl;
+    if(k === 'painel') lerKmDoPainel(dataUrl, 'kmFinal', 'km_wrap', minKmOut);
+    validateStep();
+  });
   if(c){
     renderFotosGrid('ct_fotos', wizData.fotosCarretaOut, [
       ['placa','Placa'],['lateral_d','Lateral D'],['lateral_e','Lateral E']
@@ -3670,6 +3752,7 @@ function renderStepVeiculoOut(){
 // Validador depende do modo: TODAS as fotos obrigatórias (carro + carreta se houver)
 function validateStepOut1(){
   const f = wizData.fotosVeiculo;
+  if(wizData.kmLoading) return false;
   const carroOk = wizData.kmFinal >= (turnoAtivo?.kmInicial || 0) && f.frente && f.lateral_d && f.traseira && f.lateral_e && f.painel;
   if(!turnoAtivo?.carretaId) return carroOk;
   const fc = wizData.fotosCarretaOut || {};
@@ -3809,6 +3892,121 @@ async function compressToDataUrl(file, maxSize, quality){
   });
 }
 
+// ===================== OCR DO KM (foto do painel → Gemini) =====================
+// Renderiza a caixa de KM no wrapId. field = 'km' (check-in) ou 'kmFinal' (check-out).
+// Estados: vazio (sem foto), lendo (loading), lido pela IA, corrigido manualmente.
+function renderKmIaBox(wrapId, field, minKm){
+  const w = document.getElementById(wrapId);
+  if(!w) return;
+  if(wizData.kmLoading){
+    w.innerHTML = `<div class="km-ia loading"><div class="spin"></div>
+      <div><div class="t" style="color:var(--acc)">🤖 Lendo o KM no painel…</div>
+      <div class="s">Gemini analisando a foto do odômetro</div></div></div>`;
+    return;
+  }
+  const km = wizData[field];
+  // Fallback manual: a IA tentou e não conseguiu (sem rede, ilegível, não-painel, baixa confiança).
+  // Mostra o input já aberto e flagado — independente de já ter um valor digitado.
+  if(wizData.kmLeituraFalhou){
+    w.innerHTML = `<div class="km-ia edited"><div style="flex:1">
+      <div class="t">✏️ Leitura manual</div>
+      <div class="s" style="color:#fbbf24">${esc(wizData.kmManualMotivo || 'A IA não conseguiu ler — digite o KM. A torre é avisada.')}</div>
+      <input type="number" id="km_man_${field}" inputmode="numeric" placeholder="KM" value="${km ?? ''}"
+        style="margin-top:8px;width:100%;padding:12px;font-size:18px;font-weight:800;font-family:'IBM Plex Mono',monospace;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;text-align:center">
+      ${minKm ? `<div class="s">Deve ser ≥ ${minKm.toLocaleString('pt-BR')} km</div>` : ''}
+    </div></div>`;
+    const inp = document.getElementById('km_man_' + field);
+    inp.oninput = e => { wizData[field] = +e.target.value || 0; wizData.kmEditado = true; validateStep(); };
+    return;
+  }
+  if(wizData.kmIA == null){
+    // ainda sem leitura: instrui a tirar a foto do painel
+    w.innerHTML = `<div class="km-ia empty"><div class="ic">📊</div>
+      <div><div class="t">KM lido automaticamente</div>
+      <div class="s">Tire a foto do <strong>Painel</strong> aqui embaixo — o KM é extraído sozinho, sem digitar.</div></div></div>`;
+    return;
+  }
+  // Leitura da IA disponível (com ou sem correção manual posterior)
+  const edited = wizData.kmEditado;
+  w.innerHTML = `<div class="km-ia ${edited?'edited':'ok'}">
+    <div style="flex:1">
+      <div class="t">${edited?'✏️ KM corrigido manualmente':'🤖 KM lido pela IA'}</div>
+      <div class="kmv">${(km||0).toLocaleString('pt-BR')} <span style="font-size:13px;color:var(--txt2)">km</span></div>
+      ${edited
+        ? `<div class="s" style="color:#fbbf24">Leitura original da IA: ${wizData.kmIA.toLocaleString('pt-BR')} · divergência registrada p/ torre</div>`
+        : `<div class="s">Lido da foto do painel · confiança ${Math.round((wizData.kmConfianca||0)*100)}%</div>`}
+      ${minKm && (km||0) < minKm ? `<div class="s" style="color:#dc2626">⚠ Abaixo do KM inicial (${minKm.toLocaleString('pt-BR')}). Confira.</div>` : ''}
+    </div>
+    <button type="button" class="edlink" id="km_edit_${field}">✏️ corrigir</button>
+  </div><div id="km_edit_wrap_${field}"></div>`;
+  document.getElementById('km_edit_' + field).onclick = () => {
+    const ew = document.getElementById('km_edit_wrap_' + field);
+    ew.innerHTML = `<div style="margin-top:8px">
+      <input type="number" id="km_man_${field}" inputmode="numeric" placeholder="KM correto" value="${km ?? ''}"
+        style="width:100%;padding:12px;font-size:18px;font-weight:800;font-family:'IBM Plex Mono',monospace;background:var(--surf2);border:1px solid #fbbf24;color:var(--txt);border-radius:8px;text-align:center">
+      <div class="s" style="color:#fbbf24;margin-top:4px;text-align:center">⚠ Correção manual fica marcada e a torre é avisada da divergência.</div></div>`;
+    const inp = document.getElementById('km_man_' + field);
+    inp.focus();
+    inp.oninput = e => {
+      wizData[field] = +e.target.value || 0;
+      wizData.kmEditado = (wizData[field] !== wizData.kmIA);
+      renderKmIaBox(wrapId, field, minKm);
+      validateStep();
+    };
+  };
+}
+
+// Chamado quando a foto do PAINEL é tirada. Manda pro endpoint, preenche o KM.
+async function lerKmDoPainel(dataUrl, field, wrapId, minKm){
+  wizData.kmLoading = true;
+  wizData.kmManualMotivo = '';
+  renderKmIaBox(wrapId, field, minKm);
+  validateStep();
+  let r;
+  try {
+    const resp = await fetch(KM_OCR_ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl })
+    });
+    r = await resp.json();
+    if(!resp.ok || !r.ok) throw new Error(r && r.erro ? r.erro : 'falha na leitura');
+  } catch(err){
+    console.warn('[km-ocr] falhou:', err);
+    wizData.kmLoading = false;
+    wizData.kmIA = null;            // sem leitura → fallback manual flagado
+    wizData.kmLeituraFalhou = true;
+    wizData.kmManualMotivo = 'A IA não conseguiu ler (sem rede ou erro) — digite o KM. A torre é avisada.';
+    renderKmIaBox(wrapId, field, minKm);
+    validateStep();
+    return;
+  }
+  wizData.kmLoading = false;
+  wizData.kmConfianca = r.confianca || 0;
+  wizData.kmEhPainel = r.ehPainel !== false;
+  wizData.kmLegivel = r.legivel !== false;
+  wizData.kmObs = r.observacao || '';
+  // Painel inválido, ilegível, ou confiança baixa → fallback manual com flag
+  if(!wizData.kmEhPainel || !wizData.kmLegivel || (r.km || 0) <= 0 || wizData.kmConfianca < KM_OCR_MIN_CONF){
+    wizData.kmIA = null;
+    wizData.kmLeituraFalhou = true;
+    wizData.kmManualMotivo = !wizData.kmEhPainel
+      ? '⚠ Isso não parece um painel de veículo. Tire a foto do painel ligado — ou digite o KM (a torre é avisada).'
+      : 'A IA não leu com segurança — digite o KM. A torre é avisada.';
+    renderKmIaBox(wrapId, field, minKm);
+    validateStep();
+    return;
+  }
+  // Leitura boa
+  wizData.kmIA = Math.round(r.km);
+  wizData[field] = wizData.kmIA;
+  wizData.kmEditado = false;
+  wizData.kmLeituraFalhou = false;
+  renderKmIaBox(wrapId, field, minKm);
+  validateStep();
+  showToast('🤖 KM lido do painel: ' + wizData.kmIA.toLocaleString('pt-BR'));
+}
+
 // === Assinatura canvas ===
 function initSigCanvas(){
   const canvas = document.getElementById('sig-canvas');
@@ -3865,6 +4063,23 @@ async function finalizarWizard(){
   }
 }
 
+// Pacote de auditoria do KM pra torre cruzar (leitura da IA vs valor final usado).
+// field = 'km' no check-in, 'kmFinal' no check-out.
+function kmAuditoria(field){
+  const valor = wizData[field] ?? null;
+  return {
+    valor,                                       // KM efetivamente registrado
+    lidoIA: wizData.kmIA ?? null,                // o que o Gemini leu (null se falhou)
+    editadoManual: !!wizData.kmEditado,          // motorista corrigiu por cima da IA
+    leituraFalhou: !!wizData.kmLeituraFalhou,    // IA não leu → digitação manual
+    confianca: wizData.kmConfianca ?? null,
+    ehPainel: wizData.kmEhPainel ?? null,
+    legivel: wizData.kmLegivel ?? null,
+    obs: wizData.kmObs || '',
+    divergencia: (wizData.kmIA != null && valor != null) ? (valor - wizData.kmIA) : null
+  };
+}
+
 async function finalizarCheckIn(){
   const vId = wizData.veiculoId;
   const cId = wizData.carretaId;
@@ -3896,6 +4111,7 @@ async function finalizarCheckIn(){
     baseEntradaId: window._baseEntradaTurno || null,  // base onde fez check-in
     modo: 'normal',
     ativo: true,
+    kmInicialAuditoria: kmAuditoria('km'),  // leitura IA × valor usado (anti-fraude)
     checkIn: {
       kit: wizData.kit,
       fotosVeiculo: wizData.fotosVeiculo,
@@ -3936,6 +4152,7 @@ async function finalizarCheckOut(){
   await db.ref('vammo/turnos/' + me.id).update({
     ativo: false, encerradoEm: Date.now(),
     kmFinal: wizData.kmFinal,
+    kmFinalAuditoria: kmAuditoria('kmFinal'),  // leitura IA × valor usado (anti-fraude)
     checkOut: {
       kit: wizData.kit,
       fotosVeiculo: wizData.fotosVeiculo,
@@ -4684,8 +4901,13 @@ document.getElementById('loginform').addEventListener('submit', async (e) => {
 });
 
 async function goToTurnoOuApp(){
+  await fetchAuthEpoch();
+  me.authEpoch = authEpoch;   // carimba a sessão com o epoch vigente
+  saveMe(me);
   const t = await loadTurnoExistente(me.id);
-  if(t && t.ativo){
+  // Só restaura turno iniciado DEPOIS do último reset de check-in; senão força check-in novo
+  const turnoValido = t && t.ativo && (t.iniciadoEm || 0) >= authEpoch;
+  if(turnoValido){
     // Já tinha turno aberto — restaura direto (não pede intenção de novo)
     turnoAtivo = t;
     me.veiculoId = t.veiculoId;
@@ -4699,7 +4921,8 @@ async function goToTurnoOuApp(){
     if(!sync){ sync = createSync(); }
     bootApp();
   } else {
-    // Sem turno: mostra tela de intenção primeiro, depois abre check-in
+    // Turno anterior ao reset: libera o veículo e força novo check-in
+    if(t && t.ativo) await invalidarTurnoAntigo(t);
     abrirTelaIntencao();
   }
 }
@@ -4878,6 +5101,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   const saved = loadMe();
   if(saved && saved.email){
     try {
+      // "Logoff geral": se a torre bumpou o epoch, sessão antiga é deslogada → re-login
+      await fetchAuthEpoch();
+      if((saved.authEpoch || 0) < authEpoch){
+        clearMe();
+        showLogin();
+        return;
+      }
       const colab = await loadColabByEmail(saved.email);
       if(colab && colab.ativo !== false && !colab.precisaResetSenha){
         me = meFromColab(colab);
