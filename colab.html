@@ -777,7 +777,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v23 · 2026-06-28';
+const APP_VERSION = 'v24 · 2026-06-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1779,18 +1779,28 @@ function _ingestGeo(pos){
 // Dispatcher: no APK nativo usa background-geolocation (foreground service → rastreia
 // mesmo com o Waze na frente); no PWA cai pro watchPosition/poll do navegador.
 function startGPS(){
-  if(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()
-     && Capacitor.Plugins && Capacitor.Plugins.BackgroundGeolocation){
+  if(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()){
     startGPSNative();
     return;
   }
   startGPSWeb();
 }
 
+// O plugin NÃO fica em Capacitor.Plugins — precisa registrar via Capacitor.registerPlugin.
+function _getBG(){
+  try {
+    if(window.Capacitor && typeof Capacitor.registerPlugin === 'function'){
+      return Capacitor.registerPlugin('BackgroundGeolocation');
+    }
+  } catch(_){}
+  return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.BackgroundGeolocation) || null;
+}
+
 let _bgWatcherId = null;
 async function startGPSNative(){
   try {
-    const BG = Capacitor.Plugins.BackgroundGeolocation;
+    const BG = _getBG();
+    if(!BG){ console.warn('[gps] plugin nativo ausente — usando web'); startGPSWeb(); return; }
     setGpsStatus('', 'Iniciando GPS…');
     _bgWatcherId = await BG.addWatcher({
       backgroundTitle: 'Vammo Colab',
