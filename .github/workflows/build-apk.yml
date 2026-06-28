@@ -9,6 +9,9 @@ on:
       - 'native/**'
       - '.github/workflows/build-apk.yml'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -50,9 +53,23 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Upload APK (artefato)
         uses: actions/upload-artifact@v4
         with:
           name: vammo-colab-debug-apk
           path: native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # Publica num Release de tag fixa "apk-latest" → link direto, sem login, pro motorista
+      # instalar abrindo a URL no celular. Cada build atualiza esse mesmo release.
+      - name: Publicar Release (link direto)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: Vammo Colab — APK (última versão)
+          body: |
+            APK do app Vammo Colab com GPS em background.
+            Instale abrindo este link no celular Android e tocando em **app-debug.apk**.
+            Na 1ª abertura, em localização escolha **"Permitir o tempo todo"**.
+          files: native/android/app/build/outputs/apk/debug/app-debug.apk
+          make_latest: "true"
