@@ -777,7 +777,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v26 · 2026-06-28';
+const APP_VERSION = 'v27 · 2026-06-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1798,6 +1798,7 @@ function _getBG(){
 
 let _bgWatcherId = null;
 let _gpsNativeOn = false;
+let _bgSettingsOpened = false;
 async function startGPSNative(){
   try {
     showToast('🔧 Iniciando GPS nativo…');
@@ -1816,6 +1817,11 @@ async function startGPSNative(){
         showToast('⚠ GPS nativo: ' + code, true);
         if(code === 'NOT_AUTHORIZED'){
           setGpsStatus('err', 'Permita localização "o tempo todo" nas configurações');
+          // Abre a tela de config do app 1x pra o motorista conceder "o tempo todo"
+          if(!_bgSettingsOpened){
+            _bgSettingsOpened = true;
+            try { const b = _getBG(); if(b && b.openSettings) b.openSettings(); } catch(_){}
+          }
         }
         return;
       }
@@ -5368,7 +5374,9 @@ document.addEventListener('visibilitychange', () => {
     flushLastPos();
     if(myPos) sendPos(myPos);
     requestWakeLock();
-    if(gap > 60000){ // ficou bloqueado/em outro app > 1min
+    // Aviso "tela bloqueada pausa o GPS" só faz sentido no PWA. No app nativo o
+    // background-geolocation continua rastreando — não mostra (seria mentira/ruído).
+    if(gap > 60000 && !_gpsNativeOn){
       const tip = document.getElementById('screentip');
       if(tip) tip.classList.add('show');
       setTimeout(() => { if(tip) tip.classList.remove('show'); }, 10000);
