@@ -246,6 +246,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #gpsstatus .ind{width:8px;height:8px;border-radius:50%;background:var(--txt3)}
 #gpsstatus.ok .ind{background:var(--on);box-shadow:0 0 6px var(--on)}
 #gpsstatus.err .ind{background:var(--novo);box-shadow:0 0 6px var(--novo)}
+#gpsstatus.warn .ind{background:#fbbf24;box-shadow:0 0 6px #fbbf24}
 
 /* Recenter */
 #recenter{position:absolute;bottom:24px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid var(--bdr);box-shadow:0 4px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:22px;z-index:500;color:var(--acc)}
@@ -776,7 +777,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v21 · 2026-06-28';
+const APP_VERSION = 'v22 · 2026-06-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1754,6 +1755,17 @@ function checkArrived(){
 }
 
 let _gpsPoll = null;
+let _gpsHeartbeat = null;
+let _lastFixTs = 0;   // último fix recebido do SO (mesmo impreciso) — base do grace period
+// Erro de geolocalização. Timeout/posição-indisponível são COMUNS em movimento urbano e
+// costumam se recuperar sozinhos. Só rebaixa o status pra "procurando" se ficou MESMO sem
+// fix por um tempo — senão mantém o último status bom (acaba com o "perdeu sinal" piscando).
+function onGeoError(err){
+  const since = _lastFixTs ? (Date.now() - _lastFixTs) : Infinity;
+  if(since > 25000){
+    setGpsStatus('warn', '⚠ Sinal fraco — procurando GPS…');
+  }
+}
 function _ingestGeo(pos){
   onGPSUpdate({
     lat: pos.coords.latitude,
@@ -1772,35 +1784,57 @@ function startGPS(){
   setGpsStatus('', 'Buscando GPS…');
   watchId = navigator.geolocation.watchPosition(
     _ingestGeo,
-    (err) => { setGpsStatus('err', 'Erro GPS: ' + err.message); },
-    { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+    onGeoError,
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 }
   );
   // POLLING ATIVO: o watchPosition sozinho "congela" em muitos celulares (só dispara de vez
-  // em quando → o pino fica parado e só pula quando o colab chega). Puxamos um fix FRESCO
-  // a cada 6s — config estável; 3s sobrecarregava o GPS e ele parava de reportar.
+  // em quando → o pino fica parado e só pula quando o colab chega). Puxamos um fix a cada 6s.
+  // maximumAge:5000 aceita um fix recente do cache → bem menos timeout que forçar fix novo.
   if(_gpsPoll) clearInterval(_gpsPoll);
   _gpsPoll = setInterval(() => {
     navigator.geolocation.getCurrentPosition(
       _ingestGeo,
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
+      onGeoError,
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 }
     );
   }, 6000);
+  // HEARTBEAT: mantém a torre viva em quedas curtas (reenvia última posição boa) e rebaixa
+  // o status só após um gap real de fix.
+  if(_gpsHeartbeat) clearInterval(_gpsHeartbeat);
+  _gpsHeartbeat = setInterval(() => {
+    const since = _lastFixTs ? (Date.now() - _lastFixTs) : Infinity;
+    if(since > 25000){
+      setGpsStatus('warn', `⚠ Procurando GPS… (${Math.round(since/1000)}s)`);
+    }
+    if(myPos && (Date.now() - lastSentAt) >= GPS_HEARTBEAT_MS){ sendPos(myPos); }
+  }, 10000);
 }
 function stopGPS(){
   if(watchId != null){ navigator.geolocation.clearWatch(watchId); watchId = null; }
   if(_gpsPoll){ clearInterval(_gpsPoll); _gpsPoll = null; }
+  if(_gpsHeartbeat){ clearInterval(_gpsHeartbeat); _gpsHeartbeat = null; }
 }
 
 let _gpsForceNext = false; // garante que nunca descartamos dois fixes seguidos (anti-congelamento)
 function onGPSUpdate(pos){
+  _lastFixTs = Date.now();   // recebemos um fix do SO (mesmo impreciso) → zera o grace de "sem sinal"
   // Anti-jump LEVE: descarta só "teleporte" claramente impossível (>200km/h num passo curto)
-  // e NUNCA dois seguidos. SEM filtro por accuracy — isso congelava posição/velocidade em
-  // sinal ruim. Em GPS fraco é melhor mostrar a posição imprecisa do que travar tudo.
+  // e NUNCA dois seguidos. Em GPS fraco é melhor mostrar a posição imprecisa do que travar tudo.
   if(lastSentPos && !_gpsForceNext){
     const _dt = (pos.ts - lastSentPos.ts) / 1000;
     if(_dt > 0 && _dt < 20 && (haversine(lastSentPos, pos) / _dt) * 3.6 > 200){
       _gpsForceNext = true; // o próximo passa
+      return;
+    }
+  }
+  // Filtro de PRECISÃO (anti-"pulo"): se já temos uma posição boa recente (<12s) e este fix é
+  // bem pior, ignora — evita o pino saltar pra um fix impreciso. Nunca congela: sem posição
+  // recente, qualquer fix passa.
+  if(myPos && pos.accuracy != null && !_gpsForceNext){
+    const lastAcc = myPos.accuracy || 999;
+    const ageLast = pos.ts - (myPos.ts || 0);
+    if(pos.accuracy > 60 && pos.accuracy > lastAcc * 2.2 && ageLast < 12000){
+      _gpsForceNext = true; // garante que o próximo não é descartado também
       return;
     }
   }
