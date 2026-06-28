@@ -1,0 +1,10 @@
+{
+  "appId": "com.vammo.colab",
+  "appName": "Vammo Colab",
+  "webDir": "www",
+  "server": {
+    "url": "https://torrevammo.pages.dev/colab",
+    "androidScheme": "https",
+    "cleartext": false
+  }
+}
