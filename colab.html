@@ -473,6 +473,40 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   </div>
 </div>
 
+<!-- Modal: pós-conclusão — iniciar próximo chamado (input explícito) ou pausar -->
+<div id="proxModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:none;align-items:flex-end;justify-content:center;z-index:205">
+  <div style="background:var(--surf);border-radius:18px 18px 0 0;padding:22px;padding-bottom:max(22px,env(safe-area-inset-bottom));width:100%;max-width:480px">
+    <div style="font-size:46px;text-align:center">✅</div>
+    <div style="font-size:19px;font-weight:800;text-align:center;margin:4px 0">Chamado concluído!</div>
+    <div style="text-align:center;color:var(--txt2);font-size:12px;margin-bottom:14px">Confirme o início do próximo pra a torre e o cliente acompanharem.</div>
+    <div style="background:var(--surf2);border:1px solid var(--acc);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Próximo na fila <span id="proxPos" class="mono"></span></div>
+      <div id="proxCliente" style="font-size:16px;font-weight:800">—</div>
+      <div id="proxMotivo" style="font-size:12px;color:var(--txt2);margin-top:2px">—</div>
+      <div id="proxEndereco" style="font-size:11px;color:var(--txt3);margin-top:4px">—</div>
+    </div>
+    <button id="proxIniciar" style="width:100%;padding:15px;background:linear-gradient(135deg,var(--acc) 0%,#0099c4 100%);color:#001823;border:none;border-radius:12px;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.5px;box-shadow:0 4px 14px rgba(0,180,229,.3);margin-bottom:8px">▶ Iniciar atendimento</button>
+    <button id="proxPausar" style="width:100%;padding:12px;background:var(--surf2);color:var(--txt2);border:1px solid var(--bdr);border-radius:10px;font-weight:700;font-size:13px">⏸ Pausar por um motivo</button>
+
+    <!-- Sub-seção de motivo da pausa (revelada ao tocar em Pausar) -->
+    <div id="proxPausaBox" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--bdr)">
+      <label style="display:block;font-size:11px;color:var(--txt2);font-weight:700;margin-bottom:6px">Motivo da pausa</label>
+      <select id="proxPausaMotivo" style="width:100%;padding:11px;font-size:14px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;margin-bottom:8px">
+        <option value="">— selecione —</option>
+        <option value="almoco">🍽 Almoço / refeição</option>
+        <option value="banheiro">🚻 Banheiro / pausa rápida</option>
+        <option value="abastecer">⛽ Abastecer veículo</option>
+        <option value="base">🏠 Indo pra base (carga/peças)</option>
+        <option value="problema_veiculo">🔧 Problema no veículo</option>
+        <option value="pessoal">🙋 Questão pessoal</option>
+        <option value="outro">✏️ Outro</option>
+      </select>
+      <input id="proxPausaTxt" type="text" placeholder="Detalhe (opcional)" style="width:100%;padding:11px;font-size:13px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;margin-bottom:10px">
+      <button id="proxPausaConfirmar" style="width:100%;padding:13px;background:#fbbf24;color:#1a1207;border:none;border-radius:10px;font-weight:800;font-size:14px">Confirmar pausa</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: atualizar carga antes de concluir -->
 <div id="cargaModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:none;align-items:flex-end;justify-content:center;z-index:200">
   <div style="background:var(--surf);border-radius:14px 14px 0 0;width:100%;max-width:440px;max-height:92dvh;display:flex;flex-direction:column">
@@ -740,9 +774,9 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v19 · 2026-06-28';
-const GPS_MIN_INTERVAL = 1500;     // ms entre updates (quando se mexe) — mais frequente p/ torre acompanhar
-const GPS_MIN_DELTA_M  = 3;         // metros pra disparar update de movimento
+const APP_VERSION = 'v20 · 2026-06-28';
+const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
+const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
 const GPS_MAX_ACCURACY_M = 100;     // fix pior que isso é descartado (evita o pino "pular")
 const MARKER_TTL_MS = 30 * 1000;    // 30s sem update = fora do ar (para a torre)
@@ -1737,11 +1771,11 @@ function startGPS(){
   watchId = navigator.geolocation.watchPosition(
     _ingestGeo,
     (err) => { setGpsStatus('err', 'Erro GPS: ' + err.message); },
-    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
   );
   // POLLING ATIVO: o watchPosition sozinho "congela" em muitos celulares (só dispara de vez
   // em quando → o pino fica parado e só pula quando o colab chega). Puxamos um fix FRESCO
-  // a cada 3s — fixes mais frequentes = torre acompanha o deslocamento de perto.
+  // a cada 6s — config estável; 3s sobrecarregava o GPS e ele parava de reportar.
   if(_gpsPoll) clearInterval(_gpsPoll);
   _gpsPoll = setInterval(() => {
     navigator.geolocation.getCurrentPosition(
@@ -1749,7 +1783,7 @@ function startGPS(){
       () => {},
       { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
     );
-  }, 3000);
+  }, 6000);
 }
 function stopGPS(){
   if(watchId != null){ navigator.geolocation.clearWatch(watchId); watchId = null; }
@@ -2464,6 +2498,13 @@ function handleAction(act){
     vibrate(50);
     rideMarkEnRoute();
     sync.send('chamado:status', { chamadoId: ativo.id, status: 'em_rota', motoristaId: me.id });
+    // Nó autoritativo direto → torre + app do cliente veem na hora (não dependem do evento)
+    try {
+      if(typeof firebase !== 'undefined' && firebase.apps?.length){
+        firebase.database().ref('vammo/chamados/' + ativo.id)
+          .update({ status: 'em_rota', emRotaEm: Date.now(), motoristaId: me.id }).catch(()=>{});
+      }
+    } catch(_){}
     renderChamadoCard();
     updateChamadoMarkers();
     return;
@@ -2649,16 +2690,74 @@ function _doShiftAndAfter(ativo){
     afterFilaChange('✓ Todos chamados concluídos!');
   } else {
     const next = fila[0];
-    next.status = 'novo';
-    setStatus('busy');
+    next.status = 'novo';     // aguarda o input EXPLÍCITO de início (não entra em rota sozinho)
+    setStatus('online');      // colab decide no popup: iniciar o próximo ou pausar
     playBeep();
-    afterFilaChange(`✓ Concluído! Próximo: ${next.cliente}`);
+    afterFilaChange();
+    // Se encheu, o fluxo de descarga tem prioridade (o bloco isFull abaixo abre o seletor de base)
+    if(!(isFull() && (!turnoAtivo || turnoAtivo.modo !== 'descarregando'))){
+      abrirProxModal(next);
+    }
   }
   // Se ficou full, sugere ir pra base
   if(isFull() && (!turnoAtivo || turnoAtivo.modo !== 'descarregando')){
     setTimeout(() => abrirModalBase(), 400);
   }
 }
+
+// ====== POPUP pós-conclusão: iniciar próximo (input explícito) ou pausar ======
+function abrirProxModal(next){
+  if(!next) return;
+  document.getElementById('proxCliente').textContent = next.cliente || 'Cliente';
+  document.getElementById('proxMotivo').textContent = next.motivo || '';
+  document.getElementById('proxEndereco').textContent = next.endereco || '';
+  document.getElementById('proxPos').textContent = fila.length > 1 ? `· ${fila.length} na fila` : '';
+  document.getElementById('proxPausaBox').style.display = 'none';
+  document.getElementById('proxPausaMotivo').value = '';
+  document.getElementById('proxPausaTxt').value = '';
+  document.getElementById('proxModal').style.display = 'flex';
+  vibrate([60, 40, 60]);
+}
+function fecharProxModal(){ document.getElementById('proxModal').style.display = 'none'; }
+
+// Input explícito de "estou iniciando este atendimento" → em_rota.
+// Atualiza torre (evento) E o nó autoritativo vammo/chamados (app do cliente vê na hora).
+function iniciarProximoAtendimento(){
+  if(fila.length === 0){ fecharProxModal(); return; }
+  const ativo = fila[0];
+  ativo.status = 'em_rota';
+  setStatus('busy');
+  vibrate(50);
+  rideMarkEnRoute();
+  sync.send('chamado:status', { chamadoId: ativo.id, status: 'em_rota', motoristaId: me.id });
+  try {
+    if(typeof firebase !== 'undefined' && firebase.apps?.length){
+      firebase.database().ref('vammo/chamados/' + ativo.id)
+        .update({ status: 'em_rota', emRotaEm: Date.now(), motoristaId: me.id }).catch(()=>{});
+    }
+  } catch(_){}
+  fecharProxModal();
+  renderChamadoCard();
+  updateChamadoMarkers();
+  if(myPos) updateRoute();
+}
+
+function confirmarPausaProx(){
+  const motivo = document.getElementById('proxPausaMotivo').value;
+  if(!motivo){ alert('Selecione o motivo da pausa'); return; }
+  const detalhe = document.getElementById('proxPausaTxt').value.trim();
+  setStatus('off');   // PAUSA — torre mostra o colab pausado
+  sync.send('motorista:pausa', { id: me.id, nome: me.nome, motivo, detalhe, ts: Date.now() });
+  writeMotoristaNode({ status: 'off', pausaMotivo: motivo, pausaDetalhe: detalhe, pausaEm: Date.now() });
+  fecharProxModal();
+  showToast('⏸ Em pausa: ' + motivo + ' · toque em PAUSA pra voltar');
+}
+
+document.getElementById('proxIniciar').onclick = iniciarProximoAtendimento;
+document.getElementById('proxPausar').onclick = () => {
+  document.getElementById('proxPausaBox').style.display = 'block';
+};
+document.getElementById('proxPausaConfirmar').onclick = confirmarPausaProx;
 
 // ============== MODAL: atualizar carga ==============
 let _cargaPegouList = []; // [{placa: 'ABC1234'|''}]
