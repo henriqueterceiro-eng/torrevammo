@@ -777,7 +777,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v28 · 2026-06-28';
+const APP_VERSION = 'v29 · 2026-06-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2160,7 +2160,7 @@ let routeCoords = null;   // coordenadas da rota desenhada [[lat,lng], ...] pra 
 // Detecção de desvio + geofence
 const OFF_ROUTE_THRESHOLD_M = 100;       // distância pra considerar fora da rota
 const OFF_ROUTE_TIME_MS = 30 * 1000;     // tempo fora antes de alertar
-const ARRIVED_THRESHOLD_M = 100;         // distância pra considerar "chegou" (era 60m, aumentado pra tolerar GPS impreciso)
+const ARRIVED_THRESHOLD_M = 50;          // distância pra considerar "chegou" — 50m = realmente no local (GPS preciso ~4m)
 const ARRIVED_TIME_MS = 8 * 1000;        // tempo perto antes de marcar chegada
 const NEARING_THRESHOLD_M = 300;         // distância pra avisar "está chegando" (notif preview)
 let offRouteSince = null;

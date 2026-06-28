@@ -432,6 +432,7 @@ if(FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.apiKey){
         console.log('[track] chamado recebido:', c);
         dadosChamado = { ...(dadosChamado || {}), ...c };
         setChamado(dadosChamado);
+        if(dadosChamado.motoristaId) watchMotorista(dadosChamado.motoristaId);
       });
       // Listener 2: eventos em tempo real (motorista:posicao, status, etc.)
       // Janela de 1h pra capturar histórico recente se cliente abre depois
@@ -461,6 +462,30 @@ function recoverFromStorage(){
   } catch(_){}
 }
 
+// Posição ao vivo do colaborador: lê o nó dedicado vammo/motoristas/{id} (mesma fonte da
+// torre). A telemetria migrou do log vammo/events pra cá — sem isso o cliente não via o
+// colaborador se mover.
+let _watchedMotId = null, _motRef = null;
+function watchMotorista(motId){
+  if(!motId || motId === _watchedMotId) return;
+  if(_motRef){ try { _motRef.off(); } catch(_){} _motRef = null; }
+  _watchedMotId = motId;
+  try {
+    _motRef = firebase.database().ref('vammo/motoristas/' + motId);
+    _motRef.on('value', snap => {
+      const m = snap.val();
+      if(!m) return;
+      dadosMotorista = { ...dadosMotorista, ...m };
+      setDriver(dadosMotorista);
+      if(m.lat != null && m.lng != null) setVehiclePos(m.lat, m.lng);
+    });
+  } catch(e){ console.warn('[track] watchMotorista err:', e); }
+}
+function unwatchMotorista(){
+  if(_motRef){ try { _motRef.off(); } catch(_){} _motRef = null; }
+  _watchedMotId = null;
+}
+
 function handleEvent(msg){
   if(!msg || !msg.type) return;
   if(msg.type === 'motorista:posicao'){
@@ -481,6 +506,7 @@ function handleEvent(msg){
       dadosChamado.motoristaId = msg.data.motoristaId;
       dadosChamado.status = 'em_rota';
       setChamado(dadosChamado);
+      if(dadosChamado.motoristaId) watchMotorista(dadosChamado.motoristaId);
     }
   } else if(msg.type === 'chamado:status' || msg.type === 'chamado:status_torre'){
     if(matchChamado(msg.data.chamadoId)){
@@ -495,6 +521,7 @@ function handleEvent(msg){
   } else if(msg.type === 'chamado:desatribuir'){
     if(matchChamado(msg.data.chamadoId)){
       dadosChamado.motoristaId = null;
+      unwatchMotorista();
       setDriver(null);
       if(vehMarker){ map.removeLayer(vehMarker); vehMarker = null; }
       if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
