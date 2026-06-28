@@ -777,7 +777,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v27 · 2026-06-28';
+const APP_VERSION = 'v28 · 2026-06-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2003,9 +2003,20 @@ function consumirPeca(key, qtd){
 // append-only vammo/events — assim o log não incha e o sync fica em tempo real (sem flapping
 // + km/h consistente). O `ts` muda sempre → garante child_changed na torre mesmo parado.
 function writeMotoristaNode(extra){
+  if(!me) return;
+  const data = { ...cleanForFb(extra || {}), ts: Date.now() };
+  // 1) SDK (WebSocket) — rápido em foreground
   try {
-    if(typeof firebase !== 'undefined' && firebase.apps?.length && me){
-      firebase.database().ref('vammo/motoristas/' + me.id).update({ ...cleanForFb(extra || {}), ts: Date.now() });
+    if(typeof firebase !== 'undefined' && firebase.apps?.length){
+      firebase.database().ref('vammo/motoristas/' + me.id).update(data);
+    }
+  } catch(_){}
+  // 2) REST direto (HTTP) com keepalive — NÃO depende do WebSocket do SDK, que o Android
+  // pausa em background. É o que faz a posição chegar na torre com o app atrás (Waze na frente).
+  try {
+    if(FIREBASE_CONFIG.databaseURL){
+      fetch(FIREBASE_CONFIG.databaseURL + '/vammo/motoristas/' + me.id + '.json',
+        { method: 'PATCH', body: JSON.stringify(data), keepalive: true });
     }
   } catch(_){}
 }
