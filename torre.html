@@ -393,6 +393,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         </svg>
       </div>
       <span class="sub">Torre</span>
+      <span id="torrever" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--txt3);background:rgba(255,255,255,0.06);padding:2px 7px;border-radius:6px;margin-left:8px;white-space:nowrap"></span>
     </div>
     <div class="pills" id="pills"></div>
     <div class="spacer"></div>
@@ -722,6 +723,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v1 · 2026-06-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1611,6 +1613,37 @@ function renderChamadoMarkers(){
   }
 }
 
+// Animação suave do pino do motorista: desliza da posição atual até a nova em vez de
+// teleportar (setLatLng cru = "salto"). A duração do glide acompanha o intervalo REAL
+// entre updates daquele motorista (clamp 600–2600ms) → movimento contínuo, sem engasgo.
+// Snap (sem animar) no 1º fix, em teleporte (>1.5km) ou movimento desprezível.
+const _markerAnim = {};   // id -> handle do requestAnimationFrame em curso
+const _markerTgt  = {};   // id -> {lat, lng, t} do último alvo aplicado
+function moveMarkerSmooth(id, marker, toLat, toLng){
+  const prev = _markerTgt[id];
+  // Render disparado por outro motivo (status/slots) sem mudar a posição → ignora
+  if(prev && Math.abs(prev.lat - toLat) < 1e-7 && Math.abs(prev.lng - toLng) < 1e-7) return;
+  const now = performance.now();
+  const cur = marker.getLatLng();
+  const d = haversine({lat:cur.lat, lng:cur.lng}, {lat:toLat, lng:toLng});
+  if(_markerAnim[id]){ cancelAnimationFrame(_markerAnim[id]); _markerAnim[id] = null; }
+  const dur = (prev && d <= 1500) ? Math.max(600, Math.min(2600, now - prev.t)) : 0;
+  _markerTgt[id] = { lat: toLat, lng: toLng, t: now };
+  if(dur === 0 || d < 0.5){ marker.setLatLng([toLat, toLng]); return; }
+  const fromLat = cur.lat, fromLng = cur.lng, start = now;
+  function step(t){
+    const k = Math.min(1, (t - start) / dur);
+    marker.setLatLng([fromLat + (toLat - fromLat) * k, fromLng + (toLng - fromLng) * k]);
+    _markerAnim[id] = (k < 1) ? requestAnimationFrame(step) : null;
+  }
+  _markerAnim[id] = requestAnimationFrame(step);
+}
+function _clearMarkerAnim(id){
+  if(_markerAnim[id]){ cancelAnimationFrame(_markerAnim[id]); }
+  delete _markerAnim[id];
+  delete _markerTgt[id];
+}
+
 function renderMotoristaMarkers(){
   const seen = new Set();
   const now = Date.now();
@@ -1665,7 +1698,7 @@ function renderMotoristaMarkers(){
     const tip = `<b>${esc(m.nome)}</b><br><small>${esc(m.placa||'sem placa')} · ${stTxt}${filaTxt}${ageTxt}</small>${motosTip}${spdTxt}${ruaTxt}`;
     if(motoristaMarkers[id]){
       motoristaMarkers[id].setIcon(icon);
-      motoristaMarkers[id].setLatLng([m.lat, m.lng]);
+      moveMarkerSmooth(id, motoristaMarkers[id], m.lat, m.lng);
       if(motoristaMarkers[id].getTooltip()) motoristaMarkers[id].setTooltipContent(tip);
     } else {
       const mk = L.marker([m.lat, m.lng], { icon, zIndexOffset: 500 }).addTo(map);
@@ -1675,7 +1708,7 @@ function renderMotoristaMarkers(){
     }
   }
   for(const id in motoristaMarkers){
-    if(!seen.has(id)){ map.removeLayer(motoristaMarkers[id]); delete motoristaMarkers[id]; }
+    if(!seen.has(id)){ map.removeLayer(motoristaMarkers[id]); delete motoristaMarkers[id]; _clearMarkerAnim(id); }
   }
 }
 
@@ -5169,6 +5202,7 @@ function applyMotoristaTelemetry(data, opts){
 function removeMotorista(id){
   if(!motoristas[id] && !motoristaMarkers[id]) return;
   if(motoristaMarkers[id]){ map.removeLayer(motoristaMarkers[id]); delete motoristaMarkers[id]; }
+  _clearMarkerAnim(id);
   if(trailLines[id]){ map.removeLayer(trailLines[id]); delete trailLines[id]; }
   delete trails[id];
   delete snappedTrails[id];
@@ -5269,6 +5303,8 @@ function init(){
   if(migrated) saveQueues(q);
 
   initMap();
+  const tv = document.getElementById('torrever');
+  if(tv) tv.textContent = TORRE_VERSION;
   sync = createSync();
   setupSyncListeners();
   setupStoreListeners();

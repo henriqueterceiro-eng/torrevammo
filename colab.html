@@ -52,7 +52,9 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #login button:hover{box-shadow:0 8px 32px rgba(0,180,229,0.45)}
 #login button:active{transform:scale(0.98)}
 #login .hint{margin-top:22px;font-size:11px;color:var(--txt3);text-align:center;line-height:1.6;position:relative;z-index:1;max-width:320px}
-#login .ver{position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:0;right:0;text-align:center;font-size:9px;color:var(--txt3);opacity:0.6;font-family:'IBM Plex Mono',monospace;letter-spacing:0.5px}
+#login .ver{position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:0;right:0;text-align:center;font-family:'IBM Plex Mono',monospace;letter-spacing:0.5px}
+#login .ver .vbig{font-size:15px;font-weight:800;color:var(--acc);letter-spacing:1px}
+#login .ver .vbuild{font-size:9px;color:var(--txt3);opacity:0.7;margin-top:2px}
 
 /* ===== WIZARD DE CHECK-IN / CHECK-OUT ===== */
 #turno{position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#0a1428 0%,#1e3050 100%);display:none;flex-direction:column;z-index:90}
@@ -240,7 +242,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 
 /* GPS Status overlay */
 #gpsstatus{position:absolute;top:12px;left:12px;background:rgba(10,20,40,0.9);padding:8px 12px;border-radius:8px;font-size:11px;color:var(--txt2);display:flex;align-items:center;gap:6px;z-index:500;backdrop-filter:blur(8px)}
-#appver{position:absolute;bottom:8px;left:8px;font-size:9px;color:rgba(255,255,255,0.35);font-family:'IBM Plex Mono',monospace;z-index:500;pointer-events:none}
+#appver{position:absolute;bottom:8px;left:8px;font-size:10px;color:rgba(255,255,255,0.6);font-family:'IBM Plex Mono',monospace;z-index:500;pointer-events:none;background:rgba(0,0,0,0.35);padding:1px 6px;border-radius:6px}
 #gpsstatus .ind{width:8px;height:8px;border-radius:50%;background:var(--txt3)}
 #gpsstatus.ok .ind{background:var(--on);box-shadow:0 0 6px var(--on)}
 #gpsstatus.err .ind{background:var(--novo);box-shadow:0 0 6px var(--novo)}
@@ -360,7 +362,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   <div class="hint" id="loginhint">
     Ao entrar, vamos compartilhar sua localização<br>com a torre de controle em tempo real.
   </div>
-  <div class="ver">build · 2026-05-30 · v4</div>
+  <div class="ver" id="loginver">—</div>
 </div>
 
 <!-- Tela intermediária: confirmar intenção de ficar online após login -->
@@ -774,7 +776,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v20 · 2026-06-28';
+const APP_VERSION = 'v21 · 2026-06-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -5213,6 +5215,13 @@ document.getElementById('logEsqueci').addEventListener('click', (e) => {
 
 // Auto-login se já tem sessão — revalida no Firebase
 window.addEventListener('DOMContentLoaded', async () => {
+  const lv = document.getElementById('loginver');
+  if(lv){
+    const parts = APP_VERSION.split('·').map(s => s.trim());
+    const ver = parts[0] || APP_VERSION;
+    const build = parts[1] ? ('build · ' + parts[1]) : '';
+    lv.innerHTML = `<div class="vbig">${esc(ver)}</div>` + (build ? `<div class="vbuild">${esc(build)}</div>` : '');
+  }
   const saved = loadMe();
   if(saved && saved.email){
     try {
