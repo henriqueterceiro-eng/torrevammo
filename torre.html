@@ -78,6 +78,10 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 .tab.active{background:var(--surf);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acc)}
 
 #listwrap{flex:1;overflow:auto;min-height:0;background:var(--bg)}
+#catfilter{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border-bottom:1px solid var(--bdr);background:var(--bg)}
+#catfilter .catchip{padding:5px 9px;border-radius:14px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background .15s,border-color .15s,color .15s}
+#catfilter .catchip .cn{background:var(--surf2);color:var(--txt2);padding:0 6px;border-radius:8px;font-size:10px;font-family:var(--mono)}
+#catfilter .catchip.clear{color:var(--txt3);border-style:dashed}
 .card{background:var(--surf);border-bottom:1px solid var(--bdr);padding:10px 12px;cursor:pointer;font-size:12px;position:relative;transition:background 0.1s}
 .card:hover{background:var(--surf2)}
 .card.sel{background:rgba(0,180,229,0.08);border-left:3px solid var(--acc);padding-left:9px}
@@ -414,6 +418,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         <div class="tab active" data-tab="chamados">Chamados <span id="tab1n">0</span></div>
         <div class="tab" data-tab="motoristas">Colaboradores <span id="tab2n">0</span></div>
       </div>
+      <div id="catfilter"></div>
       <div id="listwrap"></div>
       <div id="motwrap"></div>
     </div>
@@ -727,7 +732,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v3 · 2026-07-15';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v4 · 2026-07-16';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -905,6 +910,7 @@ const TT = (() => {
 let chamados = [];         // de Slack OU demo
 let motoristas = {};       // {id: {nome, placa, color, lat, lng, status, lastSeen}}
 let filtro = null;
+let catFiltro = new Set(); // filtro por CATEGORIA de chamado (escurece no mapa/lista; vazio = todos acesos)
 let selId = null;
 let tab = 'chamados';
 let addMode = false;
@@ -1610,7 +1616,7 @@ function renderChamadoMarkers(){
       chamadoMarkers[c.id] = m;
     }
     // Concluído/cancelado fica bem transparente pra não poluir o mapa (mas continua clicável)
-    chamadoMarkers[c.id].setOpacity(c.status === 'concluido' || c.status === 'cancelado' ? 0.25 : 1);
+    chamadoMarkers[c.id].setOpacity((c.status === 'concluido' || c.status === 'cancelado') ? 0.25 : (catDim(c) ? 0.3 : 1));
   }
   for(const id in chamadoMarkers){
     if(!seen.has(id)){ map.removeLayer(chamadoMarkers[id]); delete chamadoMarkers[id]; }
@@ -1935,6 +1941,43 @@ function filtered(){
   return chamados.filter(c => !filtro || c.status === filtro);
 }
 
+// ===== FILTRO POR CATEGORIA (escurece os não-selecionados; não remove) =====
+const CATS = [
+  { k:'socorro',      lbl:'Socorro',      e:'🔧', cor:'#00B4E5' },
+  { k:'recolhimento', lbl:'Recolhimento', e:'📦', cor:'#d97706' },
+  { k:'logistica',    lbl:'Logística',    e:'🚚', cor:'#8b5cf6' },
+  { k:'outros',       lbl:'Outros',       e:'📍', cor:'#6b7280' },
+];
+function categoriaDoMotivo(motivo){
+  const m = (motivo || '').toLowerCase();
+  if(/inadimpl|quebra de contrato|devolu|pátio|patio|congelamento/.test(m)) return 'recolhimento';
+  if(/deslocamento|movimenta|moto de vendas/.test(m)) return 'logistica';
+  if(/acidente|pneu|roda|bateria|freio|manete|não liga|nao liga|não anda|nao anda|erro|eletr|travad|chave|igni|retrovisor|paralama|caixa de dire|garfo|guid|pedal/.test(m)) return 'socorro';
+  return 'outros'; // inclui 'Outros' e 'Time de Pronta Resposta'
+}
+function catDim(c){ return catFiltro.size > 0 && !catFiltro.has(categoriaDoMotivo(c.motivo)); }
+function catCounts(){
+  const c = { socorro:0, recolhimento:0, logistica:0, outros:0 };
+  for(const x of chamados){ if(x.status === 'concluido' || x.status === 'cancelado') continue; c[categoriaDoMotivo(x.motivo)]++; }
+  return c;
+}
+function renderCatFilter(){
+  const el = document.getElementById('catfilter'); if(!el) return;
+  const cc = catCounts();
+  el.innerHTML = CATS.map(cat => {
+    const on = catFiltro.has(cat.k);
+    const st = on ? `border-color:${cat.cor};background:${cat.cor}22;color:${cat.cor}` : '';
+    return `<button class="catchip${on?' on':''}" data-cat="${cat.k}" style="${st}">${cat.e} ${cat.lbl} <span class="cn">${cc[cat.k]||0}</span></button>`;
+  }).join('') + (catFiltro.size ? `<button class="catchip clear" data-cat="__clear">✕ limpar</button>` : '');
+  el.querySelectorAll('.catchip').forEach(b => b.onclick = () => {
+    const k = b.dataset.cat;
+    if(k === '__clear') catFiltro.clear();
+    else if(catFiltro.has(k)) catFiltro.delete(k);
+    else catFiltro.add(k);
+    renderAll();
+  });
+}
+
 function renderList(){
   const items = filtered();
   $('#tab1n').textContent = '(' + items.length + ')';
@@ -1973,7 +2016,7 @@ function renderList(){
     const queueBadge = ord ? `<span class="b b-queue${ord.order===1?' first':''}" title="Posição ${ord.order} na fila de ${ord.total}">${ord.order}/${ord.total}</span>` : '';
     const motBadge = mot ? `<span class="b b-mot" style="background:${mot.color}">${esc(mot.nome.split(' ')[0])}</span>` : '';
     const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>`;
-    const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : '';
+    const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : (catDim(c) ? ' style="opacity:0.3"' : '');
     return `<div class="card${sel} ${al}" data-id="${c.id}"${fadeStyle}>
       <div class="row1">
         <div class="nome">${esc(c.cliente||'?')}</div>
@@ -4620,6 +4663,7 @@ function setTab(t){
   tab = t;
   $$('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
   $('#listwrap').style.display = t === 'chamados' ? 'block' : 'none';
+  { const cf = $('#catfilter'); if(cf) cf.style.display = t === 'chamados' ? 'flex' : 'none'; }
   $('#motwrap').classList.toggle('show', t === 'motoristas');
 }
 
@@ -5339,6 +5383,7 @@ function checkMotoristasTTL(){
 // ============== RENDER ==============
 function renderAll(){
   renderPills();
+  renderCatFilter();
   renderList();
   renderMot();
   renderChamadoMarkers();
