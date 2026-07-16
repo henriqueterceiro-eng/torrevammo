@@ -172,6 +172,20 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 .rot-step .rot-foto label input{position:absolute;top:0;left:0;right:0;bottom:0;opacity:0;cursor:pointer}
 .rot-step .rot-foto img{max-width:80px;max-height:80px;border-radius:6px;object-fit:cover;border:1px solid #16a34a}
 .rot-step .rot-tipo{display:inline-block;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;background:var(--surf2);color:var(--txt3);margin-left:auto}
+/* fluxo — passos de decisão (Sim/Não), barra de progresso e card moderno */
+.rotina-box .rot-prog{height:6px;background:var(--surf2);border-radius:5px;overflow:hidden;margin-bottom:12px}
+.rotina-box .rot-prog-bar{height:100%;background:linear-gradient(90deg,var(--acc),#22d3ee);border-radius:5px;transition:width .35s ease}
+.rot-step.flow .rot-q{font-size:13px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.rot-bool{display:flex;gap:8px}
+.rot-bool .bopt{flex:1;padding:12px;border-radius:9px;font-size:14px;font-weight:800;border:1.5px solid var(--bdr);background:var(--surf2);color:var(--txt2);cursor:pointer;transition:transform .12s,background .15s,border-color .15s}
+.rot-bool .bopt:active{transform:scale(.96)}
+.rot-bool .bopt.sim.on{background:var(--conc);border-color:var(--conc);color:#fff}
+.rot-bool .bopt.nao.on{background:var(--novo);border-color:var(--novo);color:#fff}
+#chamadocard .head .mtpill{display:inline-block;margin-top:5px;padding:3px 10px;border-radius:999px;background:rgba(0,180,229,0.12);border:1px solid rgba(0,180,229,0.35);font-size:11px;font-weight:700;color:var(--acc);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#chamadocard .icon{background:linear-gradient(135deg,rgba(0,180,229,0.28),rgba(0,180,229,0.06));border:1px solid rgba(0,180,229,0.3)}
+#chamadocard .extras a.wa{background:#25D366;color:#08131f;border-color:#25D366;font-weight:800}
+#chamadocard a.nav-primary{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;padding:14px;border-radius:10px;background:#4285F4;color:#fff;font-weight:800;font-size:14px;text-decoration:none;box-shadow:0 3px 10px rgba(66,133,244,.35)}
+#chamadocard a.nav-primary:active{transform:scale(.98)}
 
 /* Resumo */
 .res-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--bdr);font-size:12px}
@@ -777,7 +791,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v30 · 2026-07-15';
+const APP_VERSION = 'v31 · 2026-07-16';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1426,13 +1440,127 @@ const ROTINA_DEFAULT = [
   { id:'cliente',   label:'Cliente conferiu', tipo:'check' }
 ];
 
-function getRotina(motivo){
-  if(!motivo) return ROTINA_DEFAULT;
+// ===== FLUXO OFICIAL VAMMO (motivos reais) =====
+// Cada motivo cai num tipo de fluxo. O fluxo é montado dinamicamente conforme as
+// respostas (gate "cliente no local?", fork resolveu/recolher, prova de chave...).
+// (o objeto ROTINAS acima ficou legado — buildFlow() é a fonte da verdade agora)
+// motivo (substring, minúsculo) -> tipo de fluxo. Específico ANTES de genérico.
+const MOTIVO_FLUXO = [
+  ['roda traseira','pneu_tras'], ['roda dianteira','pneu_diant'],
+  ['acidente','acidente'],
+  ['recolhimento por inadimpl','inadimplencia'],
+  ['quebra de contrato','recolhimento'],
+  ['devolução a pedido','recolhimento'], ['devolucao a pedido','recolhimento'],
+  ['remoção de pátio','recolhimento'], ['remocao de patio','recolhimento'],
+  ['congelamento','recolhimento'],
+  ['deslocamento entre bases','logistica'],
+  ['moto de vendas com defeito','logistica'],
+  ['movimentação comercial','logistica'], ['movimentacao comercial','logistica'],
+  ['movimentação motos churn','logistica'], ['movimentacao motos churn','logistica'],
+  ['churn/manuten','logistica'],
+  ['moto liga','socorro'],
+  ['código de erro','socorro'], ['codigo de erro','socorro'],
+  ['não liga','socorro'], ['nao liga','socorro'],
+  ['paralama','socorro'], ['moto travada','socorro'], ['freio','socorro'],
+  ['bateria','socorro'], ['chave perdida','socorro'],
+  ['caixa de direção','socorro'], ['caixa de direcao','socorro'],
+  ['garfo','socorro'], ['guidão','socorro'], ['guidao','socorro'],
+  ['ignição','socorro'], ['ignicao','socorro'],
+  ['pedal de descanso','socorro'], ['manete','socorro'], ['retrovisor','socorro'],
+  ['pronta resposta','socorro'], ['pneu','socorro'],
+];
+function fluxoDoMotivo(motivo){
+  if(!motivo) return 'socorro';
   const m = motivo.toLowerCase();
-  for(const k in ROTINAS){
-    if(m.includes(k)) return ROTINAS[k];
+  for(const par of MOTIVO_FLUXO){ if(m.includes(par[0])) return par[1]; }
+  return 'socorro'; // 'Outros' e desconhecidos = socorro (tem gate de cliente)
+}
+function fluxoEhServico(fx){ return fx==='socorro'||fx==='pneu_tras'||fx==='pneu_diant'||fx==='acidente'; }
+
+// Monta a lista ORDENADA de passos conforme as respostas atuais (progressive disclosure)
+function buildFlow(c){
+  const fx = fluxoDoMotivo(c.motivo);
+  const S = c.rotinaSteps || {};
+  const steps = [];
+  const recolhimento = () => {
+    // prova de vida da chave — todo recolhimento, com ou sem cliente
+    steps.push({ id:'q_chave', label:'A moto possui chave?', tipo:'bool' });
+    if(S.q_chave === true) steps.push({ id:'foto_chave', label:'Foto da chave', tipo:'foto' });
+    steps.push({ id:'moto_recolhida', label:'Moto recolhida', tipo:'check' });
+    steps.push({ id:'foto_embarcada', label:'Foto da moto embarcada', tipo:'foto' });
+  };
+  const forkResolveu = () => {
+    steps.push({ id:'resolveu', label:'Conseguiu resolver no local?', tipo:'bool' });
+    if(S.resolveu === undefined) return;
+    if(S.resolveu === true){
+      steps.push({ id:'foto_reparada', label:'Foto da moto reparada', tipo:'foto' });
+      steps.push({ id:'foto_placa',    label:'Foto da placa', tipo:'foto' });
+    } else recolhimento();
+  };
+
+  // LOGÍSTICA: sem cliente
+  if(fx === 'logistica'){ recolhimento(); return steps; }
+
+  // GATE do cliente — primeiro em TODO atendimento
+  steps.push({ id:'cliente_local', label:'Cliente está no local?', tipo:'bool' });
+  if(S.cliente_local === undefined) return steps;
+  const presente = S.cliente_local === true;
+
+  if(fx === 'acidente'){
+    // acidente: verificar estado da MOTO sempre (mesmo cliente ausente)
+    if(presente) steps.push({ id:'acid_cliente', label:'Verificar estado do cliente', tipo:'check' });
+    steps.push({ id:'acid_moto', label:'Verificar estado da moto', tipo:'check' });
+    steps.push({ id:'foto_danos', label:'Foto geral dos danos', tipo:'foto' });
+    if(!presente){ recolhimento(); return steps; }
+    forkResolveu(); return steps;
   }
-  return ROTINA_DEFAULT;
+  if(fx === 'recolhimento'){ recolhimento(); return steps; }
+  if(fx === 'inadimplencia'){
+    if(!presente){ recolhimento(); return steps; }
+    steps.push({ id:'quitou', label:'Cliente irá quitar o débito?', tipo:'bool' });
+    if(S.quitou === undefined) return steps;
+    if(S.quitou === true) steps.push({ id:'foto_comprovante', label:'Foto do comprovante de pagamento', tipo:'foto' });
+    else recolhimento();
+    return steps;
+  }
+  if(fx === 'pneu_tras' || fx === 'pneu_diant'){
+    if(!presente){ recolhimento(); return steps; }
+    const rodaKey = fx === 'pneu_tras' ? 'roda_traseira' : 'roda_dianteira';
+    steps.push({ id:'furou', label:'Identificou pneu furado?', tipo:'bool' });
+    if(S.furou === undefined) return steps;
+    steps.push({ id:'trocou_roda', label:'Substituiu a roda?', tipo:'peca', pecaKey: rodaKey });
+    if(S.trocou_roda === undefined) return steps;
+    forkResolveu(); return steps;
+  }
+  // SOCORRO genérico + 'Outros'
+  if(!presente){ recolhimento(); return steps; }
+  steps.push({ id:'servico', label:'Descreva o serviço / diagnóstico realizado', tipo:'obs', placeholder:'O que foi feito na moto' });
+  forkResolveu();
+  return steps;
+}
+
+function stepDone(s, S){
+  const v = S[s.id];
+  if(s.tipo === 'bool' || s.tipo === 'peca') return v === true || v === false;
+  if(s.tipo === 'check') return v === true;
+  if(s.tipo === 'obs')   return typeof v === 'string' && v.trim().length > 0;
+  if(s.tipo === 'foto')  return typeof v === 'string' && v.startsWith('data:');
+  return true;
+}
+// desfecho pra torre: reparado | recolhido | pago_no_local | movimentado | concluido
+function desfechoAtendimento(c){
+  const fx = fluxoDoMotivo(c.motivo);
+  const S = c.rotinaSteps || {};
+  if(fx === 'logistica') return 'movimentado';
+  if(fx === 'inadimplencia' && S.cliente_local === true && S.quitou === true) return 'pago_no_local';
+  if(S.moto_recolhida === true) return 'recolhido';
+  if(S.resolveu === true) return 'reparado';
+  return 'concluido';
+}
+// assinatura só quando o cliente está presente (nunca em logística nem ausente)
+function precisaAssinatura(c){
+  if(fluxoDoMotivo(c.motivo) === 'logistica') return false;
+  return (c.rotinaSteps || {}).cliente_local === true;
 }
 
 // ============== MODAL "INICIAR ATENDIMENTO" + SLIDE ==============
@@ -1592,28 +1720,34 @@ function setupSlideConfirm(container, onConfirm){
 }
 
 function rotinaCompleta(chamado){
-  const rot = getRotina(chamado.motivo);
-  const steps = chamado.rotinaSteps || {};
-  return rot.every(s => {
-    const v = steps[s.id];
-    if(!v) return false;
-    if(s.tipo === 'check') return v === true;
-    if(s.tipo === 'obs') return typeof v === 'string' && v.trim().length > 0;
-    if(s.tipo === 'foto') return typeof v === 'string' && v.startsWith('data:');
-    return false;
-  });
+  const steps = buildFlow(chamado);
+  const S = chamado.rotinaSteps || {};
+  return steps.length > 0 && steps.every(s => stepDone(s, S));
 }
 
 function iconFromMotivo(motivo){
   if(!motivo) return '🔧';
   const m = motivo.toLowerCase();
   if(m.includes('acidente')) return '🚨';
-  if(m.includes('não liga') || m.includes('nao liga')) return '🔌';
-  if(m.includes('pneu')) return '🛞';
-  if(m.includes('bateria')) return '🔋';
-  if(m.includes('freio')) return '🛑';
-  if(m.includes('travada') || m.includes('travado')) return '🔒';
+  if(m.includes('inadimpl')) return '💸';
+  if(m.includes('quebra de contrato')) return '📄';
   if(m.includes('devolu')) return '📦';
+  if(m.includes('pátio') || m.includes('patio')) return '🅿️';
+  if(m.includes('congelamento')) return '❄️';
+  if(m.includes('pneu') || m.includes('roda')) return '🛞';
+  if(m.includes('bateria')) return '🔋';
+  if(m.includes('não liga') || m.includes('nao liga') || m.includes('não anda') || m.includes('nao anda')) return '🔌';
+  if(m.includes('erro') || m.includes('eletr')) return '💡';
+  if(m.includes('freio') || m.includes('manete')) return '🛑';
+  if(m.includes('travada') || m.includes('travado')) return '🔒';
+  if(m.includes('chave') || m.includes('ignição') || m.includes('ignicao')) return '🔑';
+  if(m.includes('retrovisor')) return '🪞';
+  if(m.includes('caixa de direção') || m.includes('caixa de direcao') || m.includes('garfo') || m.includes('guidão') || m.includes('guidao')) return '🛞';
+  if(m.includes('pedal')) return '🦶';
+  if(m.includes('paralama')) return '🛠️';
+  if(m.includes('deslocamento') || m.includes('movimenta')) return '🚚';
+  if(m.includes('vendas')) return '🏷️';
+  if(m.includes('pronta resposta')) return '⚡';
   return '🔧';
 }
 
@@ -2345,7 +2479,10 @@ function renderChamadoCard(){
   // Apenas o destino atual — próximos só são revelados ao concluir
   const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${dest}${origin?'&origin='+origin:''}&travelmode=driving&dir_action=navigate`;
   const waze = c.lat && c.lng ? `https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes` : (c.endereco ? `https://waze.com/ul?q=${encodeURIComponent(c.endereco)}&navigate=yes` : '');
-  const tel = c.telefone ? `tel:${c.telefone.replace(/\D/g,'')}` : '';
+  const _digits = (c.telefone || '').replace(/\D/g,'');
+  const _wanum = _digits ? (_digits.length <= 11 ? '55' + _digits : _digits) : '';
+  const wa = _wanum ? `https://wa.me/${_wanum}` : '';
+  const tel = _digits ? `tel:${_digits}` : '';
 
   // Info de rota — só até o ATIVO (próximos ainda não revelados)
   let routeBlock = '';
@@ -2422,10 +2559,10 @@ function renderChamadoCard(){
     ${arrivedBanner}
     ${inicioSlide}
     <div class="head">
-      <div class="icon">${c.icon || '🔧'}</div>
+      <div class="icon">${c.icon || iconFromMotivo(c.motivo)}</div>
       <div class="ti">
         <div class="cli">${esc(c.cliente || 'Cliente')}</div>
-        <div class="mt">${esc(c.motivo || 'Chamado')}</div>
+        <div class="mtpill">${esc(c.motivo || 'Chamado')}</div>
       </div>
       ${statusLbl}
     </div>
@@ -2433,9 +2570,10 @@ function renderChamadoCard(){
     ${c.placa ? `<div class="row"><div class="lbl">🏍</div><div class="val">${esc(c.placa)}</div></div>` : ''}
     ${c.comentario ? `<div class="row"><div class="lbl">💬</div><div class="val">${esc(c.comentario)}</div></div>` : ''}
     ${routeBlock}
-    <div class="extras">
-      <a href="${gmaps}" target="_blank" rel="noopener" style="background:#4285F4;color:#fff;border-color:#4285F4">🗺 Navegar Google Maps</a>
+    <a class="nav-primary" href="${gmaps}" target="_blank" rel="noopener">🧭 Navegar até o cliente (GPS)</a>
+    <div class="extras" style="margin-top:8px">
       ${waze ? `<a href="${waze}" target="_blank" rel="noopener">🚗 Waze</a>` : ''}
+      ${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}
       ${tel ? `<a href="${tel}">📞 Ligar</a>` : ''}
     </div>
     ${c.iniciadoEm ? renderRotinaHtml(c) : ''}
@@ -2461,45 +2599,56 @@ function renderChamadoCard(){
 }
 
 function renderRotinaHtml(c){
-  const rot = getRotina(c.motivo);
-  const steps = c.rotinaSteps = c.rotinaSteps || {};
-  const done = rot.filter(s => {
-    const v = steps[s.id];
-    if(!v) return false;
-    if(s.tipo === 'check') return v === true;
-    if(s.tipo === 'obs') return typeof v === 'string' && v.trim().length > 0;
-    if(s.tipo === 'foto') return typeof v === 'string' && v.startsWith('data:');
-    return false;
-  }).length;
+  const steps = buildFlow(c);
+  const S = c.rotinaSteps = c.rotinaSteps || {};
+  const done = steps.filter(s => stepDone(s, S)).length;
+  const pct = steps.length ? Math.round(done / steps.length * 100) : 0;
+  const fx = fluxoDoMotivo(c.motivo);
+  const titulo = fx === 'logistica' ? '🚚 Movimentação da moto'
+    : (S.cliente_local === false ? '📦 Recolhimento da moto' : '🔧 Rotina do atendimento');
   return `<div class="rotina-box">
-    <div class="rot-tit">🔧 Rotina do atendimento <span class="ct">${done}/${rot.length}</span></div>
-    ${rot.map(s => {
-      const v = steps[s.id];
-      const isDone = (s.tipo === 'check' && v === true)
-        || (s.tipo === 'obs' && typeof v === 'string' && v.trim())
-        || (s.tipo === 'foto' && typeof v === 'string' && v.startsWith('data:'));
-      const tipoLbl = s.tipo === 'check' ? '✓' : s.tipo === 'obs' ? '✏' : '📷';
-      return `<div class="rot-step ${isDone?'done':''}" data-stepid="${s.id}" data-tipo="${s.tipo}">
-        <label class="rot-lbl">
-          ${s.tipo === 'check' ? `<input type="checkbox" ${v===true?'checked':''}>` : ''}
-          <span>${esc(s.label)}</span>
-          <span class="rot-tipo">${tipoLbl}</span>
-        </label>
-        ${s.tipo === 'obs' ? `<textarea placeholder="${esc(s.placeholder || 'Digite aqui')}">${esc(v || '')}</textarea>` : ''}
-        ${s.tipo === 'foto' ? `<div class="rot-foto">
-          <label>${v ? '🔄 Trocar foto' : '📸 Tirar foto'}<input type="file" accept="image/*" capture="environment"></label>
-          ${v ? `<img src="${v}" alt="foto">` : ''}
-        </div>` : ''}
-      </div>`;
-    }).join('')}
+    <div class="rot-tit">${titulo}<span class="ct">${done}/${steps.length}</span></div>
+    <div class="rot-prog"><div class="rot-prog-bar" style="width:${pct}%"></div></div>
+    ${steps.map(s => renderStepHtml(s, S)).join('')}
+  </div>`;
+}
+
+function renderStepHtml(s, S){
+  const v = S[s.id];
+  const isDone = stepDone(s, S);
+  if(s.tipo === 'bool' || s.tipo === 'peca'){
+    const sim = v === true, nao = v === false;
+    return `<div class="rot-step flow ${isDone?'done':''}" data-stepid="${s.id}" data-tipo="${s.tipo}"${s.pecaKey?` data-peca="${s.pecaKey}"`:''}>
+      <div class="rot-q">${esc(s.label)}</div>
+      <div class="rot-bool">
+        <button type="button" class="bopt sim ${sim?'on':''}" data-val="sim">Sim</button>
+        <button type="button" class="bopt nao ${nao?'on':''}" data-val="nao">Não</button>
+      </div>
+    </div>`;
+  }
+  const tipoLbl = s.tipo === 'check' ? '✓' : s.tipo === 'obs' ? '✏' : '📷';
+  return `<div class="rot-step ${isDone?'done':''}" data-stepid="${s.id}" data-tipo="${s.tipo}">
+    <label class="rot-lbl">
+      ${s.tipo === 'check' ? `<input type="checkbox" ${v===true?'checked':''}>` : ''}
+      <span>${esc(s.label)}</span>
+      <span class="rot-tipo">${tipoLbl}</span>
+    </label>
+    ${s.tipo === 'obs' ? `<textarea placeholder="${esc(s.placeholder || 'Digite aqui')}">${esc(v || '')}</textarea>` : ''}
+    ${s.tipo === 'foto' ? `<div class="rot-foto">
+      <label>${v ? '🔄 Trocar foto' : '📸 Tirar foto'}<input type="file" accept="image/*" capture="environment"></label>
+      ${v ? `<img src="${v}" alt="foto">` : ''}
+    </div>` : ''}
   </div>`;
 }
 
 // Caixa de "peças usadas neste atendimento" — colab marca aqui o que consumiu.
 // Decrementa estoque e (se aplicável) gera peça usada pra descartar na base.
 function renderPecasUsoHtml(c){
-  // Lista só peças que estão no estoque atual (qtd > 0) — não polui com itens que ele não tem
-  const disponiveis = KIT_CONSUMIVEIS.filter(p => estoqueAtual(p.key) > 0);
+  // Só faz sentido em serviço com cliente presente; as RODAS são consumidas pelo passo
+  // guiado do pneu ("Substituiu a roda?"), então saem desta lista pra não duplicar.
+  const fx = fluxoDoMotivo(c.motivo);
+  if(!(fluxoEhServico(fx) && (c.rotinaSteps || {}).cliente_local === true)) return '';
+  const disponiveis = KIT_CONSUMIVEIS.filter(p => estoqueAtual(p.key) > 0 && p.key !== 'roda_traseira' && p.key !== 'roda_dianteira');
   // Lista as peças que ele já marcou neste chamado (pra mostrar contador)
   const usadasNoChamado = (c._pecasUsadasNoChamado || []);
   const cntUsadas = usadasNoChamado.length;
@@ -2564,7 +2713,29 @@ function bindRotinaInputs(c){
   el.querySelectorAll('.rot-step').forEach(step => {
     const id = step.dataset.stepid;
     const tipo = step.dataset.tipo;
-    if(tipo === 'check'){
+    if(tipo === 'bool' || tipo === 'peca'){
+      step.querySelectorAll('.bopt').forEach(btn => {
+        btn.onclick = () => {
+          const val = btn.dataset.val === 'sim';
+          if(tipo === 'peca' && val === true){
+            const key = step.dataset.peca;
+            const meta = KIT_CONSUMIVEIS.find(p => p.key === key);
+            const cur = estoqueAtual(key);
+            if(cur <= 0){ alert('⚠ Sem ' + (meta?.label || 'roda') + ' no seu estoque.\n\nMarque "Não" e siga pro recolhimento, ou reabasteça na base.'); return; }
+            if(!confirm('Confirmar uso de 1× ' + (meta?.label || 'roda') + '?\n\nEstoque atual: ' + cur + '\n⚠ A roda usada (substituída) fica com você pra DESCARREGAR na base no checkout.')) return;
+            consumirPeca(key, 1);
+            c._pecasUsadasNoChamado = c._pecasUsadasNoChamado || [];
+            c._pecasUsadasNoChamado.push({ key, label: meta?.label, ts: Date.now() });
+            steps._pecasUsadas = c._pecasUsadasNoChamado;
+            showToast('✓ ' + (meta?.label || 'Roda') + ' usada — resíduo pra descarregar na base');
+          }
+          steps[id] = val;
+          persistRotina(c);
+          vibrate(30);
+          renderChamadoCard();
+        };
+      });
+    } else if(tipo === 'check'){
       const cb = step.querySelector('input[type=checkbox]');
       cb.onchange = () => {
         steps[id] = cb.checked;
@@ -2637,8 +2808,17 @@ function handleAction(act){
   }
 
   if(act === 'concluido'){
-    // Fluxo: carga (se tem slots) → assinatura → concluido
-    const finalizar = () => abrirModalAssinatura(ativo, () => continuarConclusao(ativo));
+    // Fluxo: carga (se tem slots) → assinatura (só se cliente presente) → concluido
+    const finalizar = () => {
+      if(precisaAssinatura(ativo)){
+        abrirModalAssinatura(ativo, () => continuarConclusao(ativo));
+      } else {
+        // logística ou cliente ausente → conclui SEM assinatura
+        ativo._clienteAusente = true;
+        ativo._ausenteMotivo = fluxoDoMotivo(ativo.motivo) === 'logistica' ? 'movimentacao_interna' : 'cliente_nao_estava';
+        continuarConclusao(ativo);
+      }
+    };
     if(turnoAtivo && slotsTotalCount() > 0){
       abrirModalCarga(ativo, finalizar);
       return;
@@ -2650,12 +2830,15 @@ function handleAction(act){
 
 function continuarConclusao(ativo){
   rideFinalize('concluido');
-  // Anexa assinatura/ausência ao status enviado pra torre
+  const desfecho = desfechoAtendimento(ativo);
+  // Anexa assinatura/ausência + desfecho ao status enviado pra torre
   const payload = {
     chamadoId: ativo.id,
     status: 'concluido',
-    motoristaId: me.id
+    motoristaId: me.id,
+    desfecho
   };
+  if(desfecho === 'pago_no_local') payload.pagamentoNoLocal = true;
   if(ativo._assinatura){
     payload.assinatura = ativo._assinatura;
     payload.assinaturaNome = ativo._assinaturaNome || '';
@@ -2674,7 +2857,7 @@ function continuarConclusao(ativo){
   // Sem isso, o syncFilaFromSnapshot pode re-injetar o chamado (nó ainda diz em_rota/meu).
   try {
     if(typeof firebase !== 'undefined' && firebase.apps?.length){
-      firebase.database().ref('vammo/chamados/' + ativo.id).update({ status: 'concluido', concluidoEm: Date.now() }).catch(()=>{});
+      firebase.database().ref('vammo/chamados/' + ativo.id).update({ status: 'concluido', concluidoEm: Date.now(), desfecho, pagamentoNoLocal: desfecho === 'pago_no_local' }).catch(()=>{});
     }
   } catch(_){}
   vibrate([50, 30, 50]);
@@ -2688,8 +2871,15 @@ function abrirModalAssinatura(chamado, onDone){
   _sigChamado = chamado;
   _sigOnDone = onDone;
   _sigHasInk = false;
-  document.getElementById('sigSub').innerHTML = `Atendimento de <strong style="color:var(--acc)">${esc(chamado.cliente || 'cliente')}</strong> — coleta de assinatura obrigatória.`;
+  const _pago = desfechoAtendimento(chamado) === 'pago_no_local';
+  document.getElementById('sigSub').innerHTML = _pago
+    ? `Pagamento no local de <strong style="color:var(--acc)">${esc(chamado.cliente || 'cliente')}</strong> — cliente assina confirmando o pagamento.`
+    : `Atendimento de <strong style="color:var(--acc)">${esc(chamado.cliente || 'cliente')}</strong> — assinatura do cliente.`;
   document.getElementById('sigNome').value = '';
+  // presença já foi decidida no fluxo → esconde o toggle "cliente não está no local"
+  const _aw = document.getElementById('sigAusenteWrap'); if(_aw) _aw.style.display = 'none';
+  document.getElementById('sigCanvasBox').style.opacity = '1';
+  document.getElementById('sigNomeBox').style.opacity = '1';
   document.getElementById('sigAusente').checked = false;
   document.getElementById('sigAusenteMotivo').style.display = 'none';
   document.getElementById('sigMotivo').value = '';
