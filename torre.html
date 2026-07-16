@@ -727,7 +727,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v2 · 2026-07-15';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v3 · 2026-07-15';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3273,6 +3273,15 @@ function openCadForm(tab, id){
   $('#cadDelBtn').style.display = isEdit ? 'inline-block' : 'none';
   $('#cadDelBtn').onclick = () => {
     const nome = isColab ? item.nome : isBase ? item.nome : item.placa;
+    // Não deixa excluir veículo preso em turno ATIVO (foi o que gerou o turno órfão do colab)
+    if(!isColab && !isBase){
+      const preso = Object.entries(turnos).find(([cid,t]) => t && t.ativo !== false && (t.veiculoId === id || t.carretaId === id));
+      if(preso){
+        const nc = colaboradores[preso[0]]?.nome || preso[0];
+        alert('⛔ Não dá pra excluir "'+nome+'": está num turno ATIVO de '+nc+'.\n\nEncerre o turno dele primeiro (ele finaliza no app, ou você encerra pela torre) e só então exclua/recadastre o veículo.');
+        return;
+      }
+    }
     if(!confirm(`Excluir ${tipoLbl} "${nome}"?`)) return;
     if(isColab) STORE.deleteColaborador(id);
     else if(isBase) STORE.deleteBase(id);
@@ -3344,6 +3353,13 @@ function openCadForm(tab, id){
     } else {
       const placa = $('#f_placa').value.trim().toUpperCase();
       if(!placa){ showToast('⚠ Placa é obrigatória', true); return; }
+      // Só na CRIAÇÃO: bloqueia recadastrar como NOVO veículo uma placa que já existe (ignora
+      // hífen/espaço) — foi isso que orfanou o turno ("CVS-9F59" vs "CVS9F59"). Edição não trava.
+      if(!id){
+        const placaNorm = placa.replace(/[^A-Z0-9]/g,'');
+        const dupV = Object.values(veiculos).find(x => ((x.placa||'').toUpperCase().replace(/[^A-Z0-9]/g,'')) === placaNorm);
+        if(dupV){ showToast('⚠ Placa já cadastrada ('+dupV.placa+'). Edite aquele veículo em vez de criar outro.', true); return; }
+      }
       const km = +$('#f_km').value || 0;
       const slots = Math.max(0, +$('#f_slots').value || 0);
       const data = {

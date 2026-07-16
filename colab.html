@@ -777,7 +777,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v29 · 2026-06-28';
+const APP_VERSION = 'v30 · 2026-07-15';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3930,6 +3930,19 @@ function renderStepVeiculoOut(){
   const body = document.getElementById('wiz-body');
   const v = _turnoVeiculos[turnoAtivo?.veiculoId];
   const c = turnoAtivo?.carretaId ? _turnoVeiculos[turnoAtivo.carretaId] : null;
+  // BUG do turno órfão: se o VEÍCULO do turno foi recadastrado/excluído, ele não existe mais
+  // em _turnoVeiculos e não dá pra tirar as fotos de devolução dele → oferece encerrar direto.
+  // (Carreta órfã com carro vivo NÃO cai aqui: o checkout normal segue e ignora a carreta morta.)
+  const veicOrfao = turnoAtivo?.veiculoId && !v;
+  if(veicOrfao){
+    body.innerHTML = `
+      <div class="step-tit">⚠ Veículo fora do sistema</div>
+      <div class="step-sub">O veículo deste turno (placa <b>${esc(turnoAtivo.veiculoPlaca || '?')}</b>) não está mais cadastrado — provavelmente foi recadastrado na torre. Não dá pra tirar as fotos de devolução dele. Encerre este turno pra liberar; depois é só fazer um novo check-in no veículo atual.</div>
+      <button id="btnEncerrarOrfao" style="margin-top:20px;width:100%;padding:16px;border:none;border-radius:12px;background:#dc2626;color:#fff;font-size:16px;font-weight:700;cursor:pointer">Encerrar turno e liberar</button>`;
+    const b = document.getElementById('btnEncerrarOrfao');
+    b.onclick = async () => { b.disabled = true; b.textContent = '⏳ Encerrando…'; await encerrarTurnoOrfao(); };
+    return;
+  }
   // Inicializa fotos da carreta como objeto (igual no check-in) se ainda não foi
   if(c && (!wizData.fotosCarretaOut || typeof wizData.fotosCarretaOut !== 'object')){
     wizData.fotosCarretaOut = { placa: null, lateral_d: null, lateral_e: null };
@@ -3995,7 +4008,9 @@ function validateStepOut1(){
   const f = wizData.fotosVeiculo;
   if(wizData.kmLoading) return false;
   const carroOk = wizData.kmFinal >= (turnoAtivo?.kmInicial || 0) && f.frente && f.lateral_d && f.traseira && f.lateral_e && f.painel;
-  if(!turnoAtivo?.carretaId) return carroOk;
+  // Carreta só exige fotos se ainda existe no cadastro — veículo recadastrado/excluído
+  // não pode travar o checkout (bug do turno órfão).
+  if(!turnoAtivo?.carretaId || !_turnoVeiculos[turnoAtivo.carretaId]) return carroOk;
   const fc = wizData.fotosCarretaOut || {};
   const carretaOk = fc.placa && fc.lateral_d && fc.lateral_e;
   return carroOk && carretaOk;
@@ -4380,13 +4395,14 @@ async function finalizarCheckOut(){
   await ensureFb();
   const db = firebase.database();
   // Libera veículos
-  if(turnoAtivo?.veiculoId){
+  // só zera a atribuição de ids que AINDA existem no cadastro (não recria nó-fantasma de veículo órfão)
+  if(turnoAtivo?.veiculoId && _turnoVeiculos[turnoAtivo.veiculoId]){
     await db.ref('vammo/veiculos/' + turnoAtivo.veiculoId).update({
       atribuidoA: null, atribuidoEm: null,
       ultimoKm: wizData.kmFinal, ultimoKmTs: Date.now()
     });
   }
-  if(turnoAtivo?.carretaId){
+  if(turnoAtivo?.carretaId && _turnoVeiculos[turnoAtivo.carretaId]){
     await db.ref('vammo/veiculos/' + turnoAtivo.carretaId).update({ atribuidoA: null, atribuidoEm: null });
   }
   // Marca turno encerrado
@@ -4985,14 +5001,14 @@ async function encerrarTurno(){
     if(t){
       // SEQUÊNCIA OBRIGATÓRIA: carreta primeiro, carro depois (regra do negócio:
       // não dá pra liberar o carro deixando a carreta engatada no Firebase).
-      if(t.carretaId){
+      if(t.carretaId && _turnoVeiculos[t.carretaId]){
         await db.ref('vammo/veiculos/' + t.carretaId).update({
           atribuidoA: null, atribuidoEm: null,
           ultimoKm: wizData?.kmFinal || null,
           ultimoKmTs: Date.now()
         });
       }
-      if(t.veiculoId){
+      if(t.veiculoId && _turnoVeiculos[t.veiculoId]){
         await db.ref('vammo/veiculos/' + t.veiculoId).update({
           atribuidoA: null, atribuidoEm: null,
           ultimoKm: wizData?.kmFinal || null,
@@ -5014,6 +5030,19 @@ async function encerrarTurno(){
       });
     }
   } catch(err){ console.warn('encerrarTurno fail:', err); }
+}
+
+// Encerra turno órfão (veículo/carreta recadastrado sumiu do cadastro): usa o encerrarTurno()
+// à prova de órfão + faz o mesmo logout/reload do checkout normal. Dá saída sem depender da torre.
+async function encerrarTurnoOrfao(){
+  try { await encerrarTurno(); } catch(err){ console.warn('encerrarTurnoOrfao:', err); }
+  try { if(sync) sync.send('motorista:logout', { id: me.id }); } catch(_){}
+  try { if(typeof firebase !== 'undefined' && firebase.apps?.length && me) firebase.database().ref('vammo/motoristas/' + me.id).remove(); } catch(_){}
+  try { if(watchId) navigator.geolocation.clearWatch(watchId); } catch(_){}
+  try { if(wakeLock && !wakeLock.released){ await wakeLock.release(); } } catch(_){}
+  clearMe();
+  showToast('✓ Turno encerrado');
+  setTimeout(() => location.reload(), 800);
 }
 
 // ============== AUTH (login com email + senha do cadastro) ==============
