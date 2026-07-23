@@ -264,6 +264,24 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #layerswitch button.ttg{border-top:2px solid var(--bdr)}
 #layerswitch button.ttg.active{background:#d97706;color:#fff}
 #layerswitch button[data-t="heatmap"].active{background:linear-gradient(135deg,#fbbf24,#dc2626);color:#fff}
+#iotbtn.active{background:var(--acc)!important;color:#001823!important}
+#iotpanel{position:absolute;right:12px;bottom:40px;width:300px;max-height:56%;overflow:auto;background:var(--surf);border:1px solid var(--acc);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.6);z-index:600;display:none}
+#iotpanel.show{display:block}
+#iotpanel .iohd{position:sticky;top:0;background:linear-gradient(135deg,#00B4E5,#0099c4);color:#001823;padding:10px 12px;font-weight:800;font-size:12px;display:flex;align-items:center;gap:8px;z-index:1}
+#iotpanel .iohd .cls{margin-left:auto;cursor:pointer;font-size:18px;line-height:1;color:#001823}
+#iotpanel .iobody{padding:8px}
+#iotpanel .iorow{padding:8px 10px;border:1px solid var(--bdr);border-radius:8px;margin-bottom:6px;cursor:pointer;background:var(--bg)}
+#iotpanel .iorow:hover{border-color:var(--acc)}
+#iotpanel .iorow .l1{display:flex;align-items:center;gap:6px;font-weight:700;font-size:12px}
+#iotpanel .iorow .plc{font-family:var(--mono);font-size:10px;color:var(--txt2);margin-left:auto}
+#iotpanel .iorow .l2{font-size:10px;margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--txt3)}
+#iotpanel .iotag{padding:2px 7px;border-radius:10px;font-size:9px;font-weight:800}
+#iotpanel .io-on{background:rgba(22,163,74,0.18);color:#4ade80}
+#iotpanel .io-off{background:rgba(220,38,38,0.18);color:#fca5a5}
+#iotpanel .io-here{background:rgba(22,163,74,0.18);color:#4ade80}
+#iotpanel .io-far{background:rgba(217,119,6,0.22);color:#fbbf24}
+#iotpanel .io-empty{padding:20px;text-align:center;color:var(--txt2);font-size:11px}
+.moto-ping-icon{display:flex;align-items:center;justify-content:center;font-size:20px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))}
 
 /* Legenda do heatmap (canto inferior direito) */
 #heatlegend{position:absolute;bottom:50px;right:12px;background:rgba(21,35,57,0.92);color:var(--txt);padding:8px 10px;font-size:10px;border:1px solid var(--bdr);border-radius:8px;backdrop-filter:blur(8px);z-index:500;display:none;min-width:140px}
@@ -432,7 +450,9 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         <button data-t="traffic" class="ttg" title="Trânsito em tempo real (TomTom)"><span class="ic">🚦</span><span>Trânsito</span></button>
         <button data-t="incidents" class="ttg" title="Acidentes / obras / engarrafamentos"><span class="ic">⚠️</span><span>Incid.</span></button>
         <button data-t="heatmap" class="ttg" title="Mapa de calor de chamados — vermelho onde tem mais chamados e/ou mais antigos"><span class="ic">🔥</span><span>Calor</span></button>
+        <button id="iotbtn" class="ttg" title="IoT Ping — onde a moto de cada chamado está pingando de verdade (no endereço ou em outro lugar?)"><span class="ic">📡</span><span>IoT</span></button>
       </div>
+      <div id="iotpanel"></div>
       <div id="detail"></div>
       <div id="legend"></div>
       <div id="heatlegend">
@@ -732,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v4 · 2026-07-16';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v5 · 2026-07-23';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1238,11 +1258,16 @@ function ico(motivo){
   if(!motivo) return '🔧';
   const m = motivo.toLowerCase();
   if(m.includes('acidente')) return '🚨';
+  if(m.includes('contrato')) return '📄';
   if(m.includes('não liga') || m.includes('nao liga')) return '🔌';
   if(m.includes('não anda') || m.includes('nao anda')) return '⛔';
   if(m.includes('freio')) return '🛑';
   if(m.includes('devoluç') || m.includes('devoluc')) return '📦';
-  if(m.includes('pneu')) return '🛞';
+  if(m.includes('pneu') || m.includes('roda')) return '🛞';
+  if(m.includes('deslocamento')) return '🔀';
+  if((m.includes('erro') && m.includes('eletr')) || m.includes('eletrôn') || m.includes('eletron')) return '⚡';
+  if(m.includes('caixa de dire') || m.includes('garfo') || m.includes('guidão') || m.includes('guidao')) return '🔩';
+  if(m.includes('serviços internos') || m.includes('servicos internos') || m.includes('operaç') || m.includes('operac')) return '🛠️';
   if(m.includes('travada') || m.includes('travado')) return '🔒';
   if(m.includes('inadimpl')) return '💸';
   if(m.includes('recolhimento')) return '🚛';
@@ -2316,6 +2341,14 @@ function renderDetail(){
     </div>
     ${gmaps ? `<div class="links"><a href="${gmaps}" target="_blank" rel="noopener">🗺 Google Maps</a>${c.lat && c.lng ? `<a href="https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes" target="_blank">🚗 Waze</a>` : ''}${c.backofficeUrl ? `<a href="${esc(c.backofficeUrl)}" target="_blank">🔗 Backoffice</a>`:''}<a href="#" id="trackcopy" style="background:linear-gradient(135deg,#00B4E5,#0099c4);color:#fff;border:none;font-weight:700">📤 Link p/ cliente</a></div>`:''}
     ${(() => {
+      // Contato do cliente (WhatsApp) + evidências (fotos/vídeo do CX no Slack)
+      const dg = (c.telefone||'').replace(/\D/g,'');
+      const wn = dg ? (dg.length<=11?'55'+dg:dg) : '';
+      const ev = Array.isArray(c.evidencias) ? c.evidencias : (c.evidencias ? String(c.evidencias).split(',').map(s=>s.trim()).filter(Boolean) : []);
+      if(!wn && !ev.length) return '';
+      return `<div class="links" style="margin-top:6px">${wn?`<a href="https://wa.me/${wn}" target="_blank" rel="noopener" style="background:#25D366;color:#08131f;border-color:#25D366;font-weight:700">💬 WhatsApp${c.telefone?' · '+esc(c.telefone):''}</a>`:''}${ev.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener">📎 Evidência${ev.length>1?' '+(i+1):''}</a>`).join('')}</div>`;
+    })()}
+    ${(() => {
       // Card de NOTA da corrida (se chamado já foi finalizado)
       const ride = corridas[c.id];
       if(!ride || !ride.nota) return '';
@@ -2646,16 +2679,19 @@ const DEMO_BAIRROS = [
   {n:'Santana', lat:-23.5024, lng:-46.6286},
   {n:'Vila Madalena', lat:-23.5559, lng:-46.6911}
 ];
+// Motivos OFICIAIS do CX (fluxo do Slack → planilha). t = pré-marca "travada" no add manual.
 const DEMO_MOTIVOS = [
+  {m:'Quebra de Contrato', t:true},
+  {m:'Acidente', t:false},
+  {m:'Pneu/Roda', t:false},
   {m:'Moto não liga', t:false},
-  {m:'Pneu furado', t:false},
-  {m:'Acidente leve', t:false},
-  {m:'Bateria descarregada', t:false},
-  {m:'Devolução de moto', t:false},
-  {m:'Vazamento de óleo', t:false},
-  {m:'Recolhimento por inadimplência', t:true},
-  {m:'Freio sem resposta', t:false},
-  {m:'Moto travada no Tracksolution', t:true}
+  {m:'Freio', t:false},
+  {m:'Moto liga, mas não anda', t:false},
+  {m:'Deslocamento entre bases', t:false},
+  {m:'Código de erro eletrônico', t:false},
+  {m:'Caixa de direção/Garfo/Guidão', t:false},
+  {m:'Serviços internos ou de Operações', t:false},
+  {m:'Outros', t:false}
 ];
 const DEMO_NOMES = ['João Silva','Maria Santos','Pedro Oliveira','Ana Costa','Carlos Souza','Júlia Lima','Rafael Pereira','Beatriz Ferreira','Lucas Almeida','Fernanda Martins'];
 
@@ -5381,6 +5417,95 @@ function checkMotoristasTTL(){
 }
 
 // ============== RENDER ==============
+// ===== IoT PING (onde a moto de cada chamado está pingando de verdade) =====
+// Query real = iot.hb_full (endpoint /iot_status). Por placa: último ping (lat/lon) + se pingou ≤120min.
+// A torre compara o ping com o ENDEREÇO do chamado: a moto está no local ou em outro lugar?
+let iotOn = false;
+let iotData = {};              // PLACA(upper) -> { online, lat, lon, lp }
+let motoPingMarkers = {};      // chamadoId -> L.marker
+let motoPingLines = {};        // chamadoId -> L.polyline
+const IOT_RAIO_M = 300;        // ≤300m do endereço = "no local"
+const IOT_ONLINE_MIN = 120;    // pingou ≤120min = online
+
+function chamadosAtivos(){ return chamados.filter(c => c.status === 'novo' || c.status === 'em_rota'); }
+
+async function toggleIot(){
+  iotOn = !iotOn;
+  const btn = document.getElementById('iotbtn');
+  if(btn) btn.classList.toggle('active', iotOn);
+  if(!iotOn){ limparIotMapa(); const p = document.getElementById('iotpanel'); if(p) p.classList.remove('show'); return; }
+  await carregarIotPing();
+}
+async function carregarIotPing(){
+  const placas = [...new Set(chamadosAtivos().filter(c => c.placa).map(c => (c.placa||'').toUpperCase()))];
+  const painel = document.getElementById('iotpanel');
+  if(painel){ painel.classList.add('show'); painel.innerHTML = `<div class="iohd">📡 IoT Ping das motos <span class="cls" onclick="toggleIot()">×</span></div><div class="io-empty">Consultando pings…</div>`; }
+  iotData = {};
+  try {
+    const r = await fetch('/iot_status?placas=' + encodeURIComponent(placas.join(',')));
+    if(r.ok){ const j = await r.json(); iotData = j.pings || j || {}; }
+  } catch(e){ /* offline / endpoint ainda não publicado */ }
+  renderIotPanel();
+  renderMotoPingMarkers();
+}
+function pingDoChamado(c){
+  const p = iotData[(c.placa||'').toUpperCase()];
+  if(!p) return null;
+  const online = p.online === true || (p.lp && (Date.now() - p.lp) <= IOT_ONLINE_MIN*60000);
+  const temGps = (p.lat != null && p.lon != null && !(p.lat === 0 && p.lon === 0));
+  let dist = null;
+  if(temGps && c.lat != null && c.lng != null) dist = haversine({lat:c.lat,lng:c.lng}, {lat:p.lat,lng:p.lon});
+  return { online, temGps, dist, lat:p.lat, lon:p.lon, lp:p.lp };
+}
+function _distLbl(d){ return d == null ? '?' : (d >= 1000 ? (d/1000).toFixed(1)+'km' : Math.round(d)+'m'); }
+function renderIotPanel(){
+  const painel = document.getElementById('iotpanel'); if(!painel) return;
+  const ativos = chamadosAtivos().filter(c => c.placa);
+  const rows = ativos.map(c => {
+    const pg = pingDoChamado(c);
+    let tags;
+    if(!pg || !pg.online) tags = `<span class="iotag io-off">⚫ sem ping</span>`;
+    else if(!pg.temGps) tags = `<span class="iotag io-on">📡 online</span><span class="iotag io-far">sem GPS</span>`;
+    else if(pg.dist != null && pg.dist <= IOT_RAIO_M) tags = `<span class="iotag io-on">📡 online</span><span class="iotag io-here">✓ no local</span>`;
+    else tags = `<span class="iotag io-on">📡 online</span><span class="iotag io-far">⚠ a ${_distLbl(pg.dist)} do endereço</span>`;
+    const ago = (pg && pg.lp) ? fmtElapsed(pg.lp) : '—';
+    return `<div class="iorow" data-id="${c.id}">
+      <div class="l1">${ico(c.motivo)} ${esc(c.cliente||'?')}<span class="plc">${esc(c.placa||'—')}</span></div>
+      <div class="l2">${tags}<span>último ping ${ago}</span></div>
+    </div>`;
+  }).join('');
+  painel.innerHTML = `<div class="iohd">📡 IoT Ping das motos <span class="cls" onclick="toggleIot()">×</span></div>
+    <div class="iobody">${rows || '<div class="io-empty">Nenhum chamado ativo com placa.</div>'}</div>`;
+  painel.querySelectorAll('.iorow').forEach(el => el.onclick = () => {
+    selId = el.dataset.id;
+    const c = chamados.find(x => x.id === selId);
+    if(c && c.lat) map.setView([c.lat, c.lng], 15);
+    renderAll();
+  });
+}
+function limparIotMapa(){
+  for(const id in motoPingMarkers){ try{ map.removeLayer(motoPingMarkers[id]); }catch(_){} }
+  for(const id in motoPingLines){ try{ map.removeLayer(motoPingLines[id]); }catch(_){} }
+  motoPingMarkers = {}; motoPingLines = {};
+}
+function renderMotoPingMarkers(){
+  limparIotMapa();
+  if(!iotOn) return;
+  for(const c of chamadosAtivos()){
+    if(!c.placa) continue;
+    const pg = pingDoChamado(c);
+    if(!pg || !pg.temGps) continue;
+    const longe = pg.dist != null && pg.dist > IOT_RAIO_M;
+    const icon = L.divIcon({ className:'moto-ping-icon', html:'🛵', iconSize:[26,26], iconAnchor:[13,13] });
+    const mk = L.marker([pg.lat, pg.lon], { icon, zIndexOffset: 400 }).addTo(map);
+    mk.bindPopup(`<b>${esc(c.cliente||'?')}</b> · ${esc(c.placa)}<br>🛵 moto ${pg.online?'online':'offline'}` + (longe ? `<br>⚠ a ${_distLbl(pg.dist)} do endereço do chamado` : `<br>✓ no endereço do chamado`));
+    motoPingMarkers[c.id] = mk;
+    if(longe && c.lat != null && c.lng != null){
+      motoPingLines[c.id] = L.polyline([[c.lat, c.lng],[pg.lat, pg.lon]], { color:'#fbbf24', weight:2, dashArray:'6 5', opacity:0.85 }).addTo(map);
+    }
+  }
+}
+
 function renderAll(){
   renderPills();
   renderCatFilter();
@@ -5390,6 +5515,7 @@ function renderAll(){
   renderMotoristaMarkers();
   renderLegend();
   renderDetail();
+  if(iotOn){ renderMotoPingMarkers(); renderIotPanel(); }
 }
 
 // ============== INIT ==============
@@ -5437,6 +5563,7 @@ function init(){
 
   // Tabs
   $$('.tab').forEach(el => el.onclick = () => setTab(el.dataset.tab));
+  { const ib = document.getElementById('iotbtn'); if(ib) ib.onclick = toggleIot; }
 
   // Demo panel
   $('#demobtn').onclick = () => {
