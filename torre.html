@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v7 · 2026-07-23';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v8 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1802,12 +1802,18 @@ function haversine(a, b){
 }
 
 async function fetchMultiRoute(from, stops){
-  // OSRM primário (gratuito) — TomTom desligado por causa de cota.
-  // Pra religar (trânsito ao vivo): descomente o bloco abaixo (precisa creditos).
-  // if(TT.has()){
-  //   try { return await TT.route(from, stops); }
-  //   catch(e){ console.warn('TT route falhou, fallback OSRM:', e.message); }
-  // }
+  // 1) Google Directions COM TRÂNSITO via /route (a empresa banca). Cai no OSRM se falhar/estourar.
+  try {
+    const stopsStr = stops.map(s => `${s.lat},${s.lng}`).join('|');
+    const gr = await fetch(`/route?from=${from.lat},${from.lng}&stops=${encodeURIComponent(stopsStr)}`);
+    if(gr.ok){
+      const gd = await gr.json();
+      if(gd && !gd.error && gd.coords && gd.coords.length){
+        return { coords: gd.coords, distance: gd.distance, duration: gd.duration, trafficDelay: gd.trafficDelay || 0, legs: gd.legs || [], provider: 'google' };
+      }
+    }
+  } catch(e){ console.warn('route google falhou, fallback OSRM:', e.message); }
+  // 2) OSRM (fallback gratuito)
   const all = [from, ...stops];
   const coordStr = all.map(p => `${p.lng},${p.lat}`).join(';');
   const url = `${OSRM_URL}/${coordStr}?overview=full&geometries=geojson&steps=false`;
@@ -1821,7 +1827,8 @@ async function fetchMultiRoute(from, stops){
     distance: route.distance,
     duration: route.duration,
     trafficDelay: 0,
-    legs: (route.legs || []).map(l => ({ distance: l.distance, duration: l.duration, trafficDelay: 0 }))
+    legs: (route.legs || []).map(l => ({ distance: l.distance, duration: l.duration, trafficDelay: 0 })),
+    provider: 'osrm'
   };
 }
 
@@ -1875,6 +1882,7 @@ async function updateRouteFor(motoristaId){
     line._distance = route.distance;
     line._duration = route.duration;
     line._trafficDelay = route.trafficDelay || 0;
+    line._provider = route.provider || 'osrm';
     line._legs = route.legs;
     line._hash = hashKey;
     line._motoristaId = motoristaId;
@@ -2390,7 +2398,7 @@ function renderDetail(){
       const km = (r._distance/1000).toFixed(1);
       const min = Math.round(r._duration/60);
       const delayMin = Math.round((r._trafficDelay||0)/60);
-      const provider = TT.has() && r._trafficDelay != null ? 'TomTom c/ trânsito' : 'OSM';
+      const provider = r._provider === 'google' ? 'Google · c/ trânsito' : (TT.has() && r._trafficDelay ? 'TomTom c/ trânsito' : 'OSM');
       const modoLbl = { fastest:'🚀 mais rápido', shortest:'📏 menor distância', eco:'💰 econômico' }[cfg.routeType] || cfg.routeType;
       const veicLbl = cfg.travelMode === 'truck' ? ' · 🚛 modo guincho' : '';
       const avoidLbl = cfg.routeAvoid.length ? ' · evita ' + cfg.routeAvoid.length + ' restrição(ões)' : '';
