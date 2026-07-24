@@ -641,7 +641,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 <div id="addch" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;z-index:10000">
   <div style="background:var(--surf);border:1px solid var(--bdr2);padding:24px;border-radius:12px;width:480px;max-width:92vw">
     <h2 style="font-size:18px;margin-bottom:4px">✍ Novo chamado por endereço</h2>
-    <div style="font-size:12px;color:var(--txt2);margin-bottom:16px">Digite o endereço e a gente geocodifica via TomTom</div>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:16px">Digite o endereço e a gente geocodifica via Google (endereço → mapa)</div>
 
     <label style="display:block;font-size:11px;color:var(--txt2);margin-top:8px;margin-bottom:4px;font-weight:600">Endereço completo</label>
     <input type="text" id="addrEndereco" placeholder="Ex: Av. Paulista, 1578, São Paulo">
@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v10 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v11 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2710,16 +2710,33 @@ const DEMO_BAIRROS = [
 ];
 // Motivos OFICIAIS do CX (fluxo do Slack → planilha). t = pré-marca "travada" no add manual.
 const DEMO_MOTIVOS = [
-  {m:'Quebra de Contrato', t:true},
+  {m:'Troca de pneu - roda traseira', t:false},
+  {m:'Troca de pneu - roda dianteira', t:false},
+  {m:'Moto não liga - VAMMO', t:false},
+  {m:'Moto liga, mas não anda - VAMMO', t:false},
+  {m:'Código de erro eletrônico - VAMMO', t:false},
+  {m:'Paralama - VAMMO', t:false},
   {m:'Acidente', t:false},
-  {m:'Pneu/Roda', t:false},
-  {m:'Moto não liga', t:false},
+  {m:'Moto travada no P', t:true},
   {m:'Freio', t:false},
-  {m:'Moto liga, mas não anda', t:false},
-  {m:'Deslocamento entre bases', t:false},
-  {m:'Código de erro eletrônico', t:false},
+  {m:'Socorro de Bateria', t:false},
+  {m:'Chave perdida', t:false},
   {m:'Caixa de direção/Garfo/Guidão', t:false},
-  {m:'Serviços internos ou de Operações', t:false},
+  {m:'Troca da Ignição', t:false},
+  {m:'Problema no pedal de descanso', t:false},
+  {m:'Manete de freio com defeito', t:false},
+  {m:'Retrovisor com defeito', t:false},
+  {m:'Quebra de Contrato', t:false},
+  {m:'Recolhimento por inadimplência', t:false},
+  {m:'Devolução a pedido do cliente', t:false},
+  {m:'Remoção de pátio cobrar', t:false},
+  {m:'Remoção de pátio n cobrar', t:false},
+  {m:'Solicitação de congelamento', t:false},
+  {m:'Deslocamento entre bases', t:false},
+  {m:'Moto de vendas com defeito', t:false},
+  {m:'Movimentação Comercial - Fleet', t:false},
+  {m:'Movimentação motos churn/manutenção — Live Ops', t:false},
+  {m:'Time de Pronta Resposta', t:false},
   {m:'Outros', t:false}
 ];
 const DEMO_NOMES = ['João Silva','Maria Santos','Pedro Oliveira','Ana Costa','Carlos Souza','Júlia Lima','Rafael Pereira','Beatriz Ferreira','Lucas Almeida','Fernanda Martins'];
@@ -4626,7 +4643,9 @@ function openAddCh(){
   $('#addrEndereco').value = '';
   $('#addrCliente').value = '';
   $('#addrPlaca').value = '';
-  $('#addrMotivo').value = 'Moto não liga';
+  // motivos OFICIAIS (mesmos do CX) + opção de digitar
+  $('#addrMotivo').innerHTML = DEMO_MOTIVOS.map(o => `<option value="${esc(o.m)}">${esc(o.m)}</option>`).join('') + '<option value="__custom">✏ Outro (digitar)</option>';
+  $('#addrMotivo').value = DEMO_MOTIVOS[0].m;
   $('#addrMotivoCustom').style.display = 'none';
   $('#addrMotivoCustom').value = '';
   $('#addrResult').style.display = 'none';
@@ -4654,11 +4673,23 @@ async function submitAddCh(){
 
   try {
     let lat = null, lng = null, enderecoOficial = endereco;
-    if(TT.has()){
+    // 1) Google /geocode (a empresa banca) — funciona sem TomTom
+    try {
+      const gr = await fetch('/geocode?addr=' + encodeURIComponent(endereco));
+      if(gr.ok){
+        const gd = await gr.json();
+        if(gd && !gd.error && gd.lat != null){
+          lat = gd.lat; lng = gd.lng; enderecoOficial = gd.formatted || endereco;
+          $('#addrResult').style.display = 'block';
+          $('#addrResult').innerHTML = `✓ Encontrado: <strong style="color:var(--acc)">${esc(enderecoOficial)}</strong><br><small>${lat.toFixed(5)}, ${lng.toFixed(5)} · Google</small>`;
+        }
+      }
+    } catch(e){ /* cai no TomTom/erro abaixo */ }
+    // 2) TomTom (se ligado)
+    if((lat == null || lng == null) && TT.has()){
       const result = await TT.geocode(endereco, { center: { lat: -23.5505, lng: -46.6333 }, radius: 80000 });
       if(result){
-        lat = result.lat; lng = result.lng;
-        enderecoOficial = result.address;
+        lat = result.lat; lng = result.lng; enderecoOficial = result.address;
         $('#addrResult').style.display = 'block';
         $('#addrResult').innerHTML = `✓ Encontrado: <strong style="color:var(--acc)">${esc(enderecoOficial)}</strong><br><small>${lat.toFixed(5)}, ${lng.toFixed(5)} · score ${(result.score||0).toFixed(1)}</small>`;
       }
