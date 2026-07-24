@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v8 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v9 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5216,6 +5216,37 @@ function scheduleUpdateRoutes(){
   _updateRoutesTo = setTimeout(() => { _updateRoutesTo = null; updateAllRoutes(); }, 300);
 }
 
+// Geocodifica (Google via /geocode) chamados que chegaram só com endereço (sem lat/lng),
+// pra plotar no mapa. Cacheia por endereço e persiste a coord no chamado (geocoda 1x).
+let _geoCache = {};       // endereco(lower) -> {lat,lng} | false(=não achou)
+let _geoInflight = {};
+async function geocodeChamadosSemCoord(){
+  const pend = chamados.filter(c => c.endereco && (c.lat == null || c.lng == null));
+  for(const c of pend){
+    const key = c.endereco.trim().toLowerCase();
+    if(key in _geoCache){ const v = _geoCache[key]; if(v){ c.lat = v.lat; c.lng = v.lng; } continue; }
+    if(_geoInflight[key]) continue;
+    _geoInflight[key] = true;
+    try {
+      const r = await fetch('/geocode?addr=' + encodeURIComponent(c.endereco));
+      const g = r.ok ? await r.json() : null;
+      if(g && !g.error && g.lat != null){
+        _geoCache[key] = { lat: g.lat, lng: g.lng };
+        for(const x of chamados){
+          if(x.endereco && x.endereco.trim().toLowerCase() === key && (x.lat == null || x.lng == null)){
+            x.lat = g.lat; x.lng = g.lng;
+            try { STORE.updateChamado(x.id, { lat: g.lat, lng: g.lng }); } catch(_){}
+          }
+        }
+        renderAll();
+      } else {
+        _geoCache[key] = false; // não achou -> não fica reetentando toda hora
+      }
+    } catch(e){ /* transitório: não cacheia falha, tenta depois */ }
+    finally { delete _geoInflight[key]; }
+  }
+}
+
 function setupStoreListeners(){
   STORE.setHandlers({
     onChamadosSnapshot: (data) => {
@@ -5255,6 +5286,7 @@ function setupStoreListeners(){
       scheduleUpdateRoutes();
       refreshHeatmap();
       scheduleRender();
+      geocodeChamadosSemCoord();
     },
     onQueuesChanged: (newQueues) => {
       saveQueues(newQueues || {});
