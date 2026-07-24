@@ -791,7 +791,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v31 · 2026-07-16';
+const APP_VERSION = 'v32 · 2026-07-24';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2327,12 +2327,18 @@ async function fetchTomtomRoute(from, stops){
 }
 
 async function fetchOsrmRoute(from, stops){
-  // OSRM primário (gratuito) — TomTom desligado por causa de cota.
-  // Pra religar: descomente o bloco abaixo (precisa creditos na chave TomTom).
-  // if(TOMTOM_KEY){
-  //   try { return await fetchTomtomRoute(from, stops); }
-  //   catch(e){ console.warn('TT falhou, fallback OSRM:', e.message); }
-  // }
+  // 1) Google Directions COM TRÂNSITO via /route (a empresa banca). Cai no OSRM se falhar/estourar.
+  try {
+    const stopsStr = stops.map(s => `${s.lat},${s.lng}`).join('|');
+    const gr = await fetch(`/route?from=${from.lat},${from.lng}&stops=${encodeURIComponent(stopsStr)}`);
+    if(gr.ok){
+      const gd = await gr.json();
+      if(gd && !gd.error && gd.coords && gd.coords.length){
+        return { coords: gd.coords, distance: gd.distance, duration: gd.duration, trafficDelay: gd.trafficDelay || 0, legs: gd.legs || [] };
+      }
+    }
+  } catch(e){ console.warn('route google falhou, fallback OSRM:', e.message); }
+  // 2) OSRM (fallback gratuito)
   const all = [from, ...stops];
   const coordStr = all.map(p => `${p.lng},${p.lat}`).join(';');
   const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson&steps=false`;
