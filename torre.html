@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v5 · 2026-07-23';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v6 · 2026-07-23';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5384,6 +5384,9 @@ function setupMotoristasNode(){
   console.log('[torre] listener vammo/motoristas ativo');
 }
 
+// Estado pra detectar a VIRADA online->offline de cada colab e avisar a torre.
+let _motOnline = {};          // id -> bool: estava online no último check
+let _ttlPrimeiraVez = true;   // 1º run só semeia o estado (não alerta ao abrir a torre)
 function checkMotoristasTTL(){
   const now = Date.now();
   let changed = false;
@@ -5396,6 +5399,20 @@ function checkMotoristasTTL(){
     } else if(age > MOTORISTA_TTL_MS && m.status !== 'off'){
       changed = true;
     }
+    // --- Aviso de colab que ficou offline (virada online->offline) ---
+    const online = m.status !== 'off' && age <= MOTORISTA_TTL_MS;
+    if(!_ttlPrimeiraVez && _motOnline[id] === true && !online){
+      const mins = Math.max(1, Math.round(age/60000));
+      pushAlert({
+        id: 'off_' + id,
+        tipo: 'warn',
+        titulo: (m.nome || 'Colaborador') + ' ficou offline',
+        msg: (m.placa ? m.placa + ' · ' : '') + 'sem sinal há ' + mins + ' min',
+        motId: id
+      });
+    }
+    if(online) clearAlert('off_' + id); // voltou (ou nunca caiu) -> tira o card
+    _motOnline[id] = online;
   }
   // Remove fantasmas (>5min sem updates)
   for(const {id, nome} of toRemove){
@@ -5405,9 +5422,12 @@ function checkMotoristasTTL(){
     delete snappedTrails[id];
     clearRoute(id);
     delete motoristas[id];
+    delete _motOnline[id];       // limpa estado do aviso
+    clearAlert('off_' + id);     // saiu do mapa -> tira o card
     changed = true;
     console.log('[TTL] removido inativo:', nome, id);
   }
+  _ttlPrimeiraVez = false;
   if(changed){
     recountMotoristas();
     renderMotoristaMarkers();
