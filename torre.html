@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v11 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v12 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2846,16 +2846,33 @@ async function uploadFile(file, onProgress, docType){
   }
   if(onProgress) onProgress('lendo arquivo…');
   const base64 = await fileToBase64(file);
-  if(onProgress) onProgress('enviando ' + (file.size/1024).toFixed(0) + 'KB' + (docType ? ' + 🤖 lendo…' : '…'));
+  // PASSO 1: salva no Drive e responde NA HORA (sem OCR) — nunca mais "failed to fetch" por timeout
+  if(onProgress) onProgress('enviando ' + (file.size/1024).toFixed(0) + 'KB…');
   const r = await fetch(cfg.uploadUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // simple request — evita preflight CORS
-    body: JSON.stringify({ name: file.name, mimeType: file.type, base64, docType: docType || '' })
+    body: JSON.stringify({ name: file.name, mimeType: file.type, base64 })
   });
   if(!r.ok) throw new Error('HTTP ' + r.status);
   const data = await r.json();
   if(data.error) throw new Error(data.error);
-  return data; // { id, url, previewUrl, name, size, extracted? }
+  // PASSO 2: OCR do documento — separado e best-effort. Se demorar/falhar, o upload já está OK.
+  if(docType && data.id){
+    try {
+      if(onProgress) onProgress('🤖 lendo documento…');
+      const r2 = await fetch(cfg.uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'ocr', id: data.id, docType })
+      });
+      if(r2.ok){
+        const d2 = await r2.json();
+        if(d2 && d2.extracted) data.extracted = d2.extracted;
+        else if(d2 && d2.extractError) data.extractError = d2.extractError;
+      }
+    } catch(e){ data.extractError = 'OCR indisponível (upload OK): ' + e.message; }
+  }
+  return data; // { id, url, previewUrl, name, size, extracted?, extractError? }
 }
 
 // Mapeia o JSON estruturado retornado pelo Gemini pros campos do form de cadastro
