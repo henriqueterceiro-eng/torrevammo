@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v9 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v10 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2432,7 +2432,7 @@ function renderDetail(){
           <button id="daok" class="primary">${curMot?'Trocar':'Atribuir'}</button>
         </div>
         ${!curMot ? `
-          <button id="dasugest" style="width:100%;margin-top:6px;padding:8px;font-size:11px;background:rgba(0,180,229,0.12);color:var(--acc);border:1px solid var(--acc);font-weight:700;border-radius:6px">🎯 Sugerir colab mais próximo${TT.has()?' (c/ trânsito)':''}</button>
+          <button id="dasugest" style="width:100%;margin-top:6px;padding:8px;font-size:11px;background:rgba(0,180,229,0.12);color:var(--acc);border:1px solid var(--acc);font-weight:700;border-radius:6px">🎯 Sugerir colab mais próximo (c/ trânsito)</button>
           <div id="dasugresult"></div>
         ` : ''}
         ${curMot ? `<div class="curmot">
@@ -2490,31 +2490,52 @@ function renderDetail(){
   };
   const sug = $('#dasugest'); if(sug) sug.onclick = async () => {
     sug.disabled = true;
-    const showErr = (msg) => { $('#dasugresult').innerHTML = `<div style="margin-top:6px;padding:8px;background:rgba(220,38,38,0.15);border:1px solid var(--novo);border-radius:6px;font-size:10px;color:#fca5a5">${esc(msg)}</div>`; sug.disabled = false; sug.textContent = '🎯 Sugerir colab mais próximo' + (TT.has()?' (c/ trânsito)':''); };
+    const showErr = (msg) => { $('#dasugresult').innerHTML = `<div style="margin-top:6px;padding:8px;background:rgba(220,38,38,0.15);border:1px solid var(--novo);border-radius:6px;font-size:10px;color:#fca5a5">${esc(msg)}</div>`; sug.disabled = false; sug.textContent = '🎯 Sugerir colab mais próximo (c/ trânsito)'; };
     if(!c.lat || !c.lng){ showErr('⚠ Este chamado não tem coordenadas. Adicione um endereço/local antes.'); return; }
     const origins = onlineMots.map(id => motoristas[id]).filter(m => m.lat && m.lng).map(m => ({ id: m.id, lat: m.lat, lng: m.lng, nome: m.nome }));
     if(origins.length === 0){ showErr('⚠ Sem colaboradores online com GPS.'); return; }
     sug.textContent = '⏳ Calculando rotas para ' + origins.length + ' colab' + (origins.length>1?'s':'') + '…';
     try {
-      let ranked;
-      if(TT.has()){
-        const matrix = await TT.matrix(origins, [{lat:c.lat,lng:c.lng}]);
-        ranked = matrix.map(r => ({
-          mot: origins[r.originIndex],
-          time: r.routeSummary?.travelTimeInSeconds || 0,
-          dist: r.routeSummary?.lengthInMeters || 0,
-          delay: r.routeSummary?.trafficDelayInSeconds || 0
-        })).sort((a,b) => a.time - b.time);
-      } else {
-        // Fallback: distância em linha reta (~ tempo a 30km/h)
-        ranked = origins.map(mot => {
-          const dist = haversine({lat:mot.lat,lng:mot.lng}, {lat:c.lat,lng:c.lng});
-          return { mot, time: dist/8.33, dist, delay: 0 };
-        }).sort((a,b) => a.time - b.time);
+      let ranked = null, metodo = '(linha reta)';
+      // 1) Google Distance Matrix COM TRÂNSITO (a empresa banca) — despacha quem chega mais rápido de verdade
+      try {
+        const originsStr = origins.map(o => `${o.lat},${o.lng}`).join('|');
+        const mr = await fetch(`/matrix?origins=${encodeURIComponent(originsStr)}&dest=${c.lat},${c.lng}`);
+        if(mr.ok){
+          const md = await mr.json();
+          if(md && !md.error && md.elements){
+            const rk = md.elements.filter(e => e.ok).map(e => ({
+              mot: origins[e.i],
+              time: e.durationInTraffic || e.duration || 0,
+              dist: e.distance || 0,
+              delay: Math.max(0, (e.durationInTraffic || 0) - (e.duration || 0))
+            })).sort((a,b) => a.time - b.time);
+            if(rk.length){ ranked = rk; metodo = 'com trânsito (Google)'; }
+          }
+        }
+      } catch(e){ console.warn('matrix google falhou:', e.message); }
+      // 2) TomTom (se ligado) · 3) linha reta
+      if(!ranked){
+        if(TT.has()){
+          const matrix = await TT.matrix(origins, [{lat:c.lat,lng:c.lng}]);
+          ranked = matrix.map(r => ({
+            mot: origins[r.originIndex],
+            time: r.routeSummary?.travelTimeInSeconds || 0,
+            dist: r.routeSummary?.lengthInMeters || 0,
+            delay: r.routeSummary?.trafficDelayInSeconds || 0
+          })).sort((a,b) => a.time - b.time);
+          metodo = 'com trânsito';
+        } else {
+          ranked = origins.map(mot => {
+            const dist = haversine({lat:mot.lat,lng:mot.lng}, {lat:c.lat,lng:c.lng});
+            return { mot, time: dist/8.33, dist, delay: 0 };
+          }).sort((a,b) => a.time - b.time);
+          metodo = '(linha reta)';
+        }
       }
       $('#dasugresult').innerHTML = `
         <div style="margin-top:8px;padding:8px;background:var(--surf2);border-radius:6px;font-size:10px;border:1px solid var(--acc)">
-          <div style="color:var(--acc);font-weight:700;margin-bottom:6px">⚡ Ranking ${TT.has()?'com trânsito':'(linha reta)'}:</div>
+          <div style="color:var(--acc);font-weight:700;margin-bottom:6px">⚡ Ranking ${metodo}:</div>
           ${ranked.slice(0,5).map((r,i) => {
             const min = Math.round(r.time/60);
             const km = (r.dist/1000).toFixed(1);
