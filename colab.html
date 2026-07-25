@@ -791,7 +791,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v33 · 2026-07-24';
+const APP_VERSION = 'v34 · 2026-07-25';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1573,8 +1573,40 @@ let _iniDistTimer = null;
 let _aguardandoAutorizacao = null; // {chamadoId, motivo, ts}
 
 function distanciaAteChamado(c){
-  if(!myPos || !c || !c.lat) return Infinity;
-  return haversine(myPos, { lat: c.lat, lng: c.lng });
+  if(!myPos || !c) return Infinity;
+  let d = Infinity;
+  if(c.lat != null && c.lng != null) d = haversine(myPos, { lat: c.lat, lng: c.lng });
+  // a moto nem sempre está no endereço: libera iniciar perto da MOTO (IoT) também
+  if(c._motoLat != null && c._motoLng != null){
+    const dm = haversine(myPos, { lat: c._motoLat, lng: c._motoLng });
+    if(dm < d) d = dm;
+  }
+  return d;
+}
+
+// Busca onde a MOTO realmente está (IoT ping) pro chamado ativo, pra permitir iniciar
+// perto da moto e não só do endereço do chamado. Throttle 30s por chamado.
+let _motoPingCache = {};
+async function atualizarMotoPing(){
+  const ativo = fila[0];
+  if(!ativo || !ativo.placa || ativo.iniciadoEm) return;
+  const now = Date.now();
+  if(_motoPingCache[ativo.id] && now - _motoPingCache[ativo.id] < 30000) return;
+  _motoPingCache[ativo.id] = now;
+  const placa = (ativo.placa || '').toUpperCase();
+  try {
+    const r = await fetch('/iot_status?placas=' + encodeURIComponent(placa));
+    if(!r.ok) return;
+    const j = await r.json();
+    const p = (j.pings || {})[placa];
+    if(p && p.online && p.lat != null && p.lon != null && !(p.lat === 0 && p.lon === 0)){
+      const mudou = (ativo._motoLat !== p.lat || ativo._motoLng !== p.lon);
+      ativo._motoLat = p.lat; ativo._motoLng = p.lon; ativo._motoOnline = true;
+      if(mudou) renderChamadoCard();
+    } else {
+      ativo._motoOnline = false;
+    }
+  } catch(e){}
 }
 
 function abrirModalIniciar(chamado){
@@ -1848,10 +1880,13 @@ function checkOffRoute(){
 function checkArrived(){
   if(!myPos || fila.length === 0) return;
   const ativo = fila[0];
-  if(!ativo || !ativo.lat || !ativo.lng) return;
+  if(!ativo) return;
+  atualizarMotoPing(); // mantém a posição da moto (IoT) atualizada
+  const temAlvo = (ativo.lat != null && ativo.lng != null) || (ativo._motoLat != null && ativo._motoLng != null);
+  if(!temAlvo) return;
   if(ativo.arrived) return;
   if(ativo.status !== 'em_rota' && ativo.status !== 'novo') return;
-  const d = haversine(myPos, { lat: ativo.lat, lng: ativo.lng });
+  const d = distanciaAteChamado(ativo); // menor distância: endereço OU moto (IoT)
   // "Está chegando" — dispara uma vez quando entra no raio NEARING (300m).
   // Avisa a torre antes mesmo da chegada confirmada.
   if(d < NEARING_THRESHOLD_M && !ativo._nearingNotified){
@@ -2561,6 +2596,13 @@ function renderChamadoCard(){
 
   el.classList.toggle('arrived', !!c.arrived);
 
+  // Moto longe do endereço? (IoT) — mostra aviso + navegação até a moto
+  const _motoLoc = (c._motoLat != null && c._motoLng != null) ? { lat: c._motoLat, lng: c._motoLng } : null;
+  const _motoDistEnd = (_motoLoc && c.lat != null && c.lng != null) ? haversine({ lat: c.lat, lng: c.lng }, _motoLoc) : null;
+  const _motoLonge = _motoDistEnd != null && _motoDistEnd > 150;
+  const _distLblMoto = _motoDistEnd != null ? (_motoDistEnd >= 1000 ? (_motoDistEnd/1000).toFixed(1)+'km' : Math.round(_motoDistEnd)+'m') : '';
+  const _gmapsMoto = _motoLoc ? `https://www.google.com/maps/dir/?api=1&destination=${_motoLoc.lat},${_motoLoc.lng}&travelmode=driving&dir_action=navigate` : '';
+
   el.innerHTML = `
     ${queueHead}
     ${arrivedBanner}
@@ -2574,10 +2616,12 @@ function renderChamadoCard(){
       ${statusLbl}
     </div>
     ${c.endereco ? `<div class="row"><div class="lbl">📍</div><div class="val">${esc(c.endereco)}</div></div>` : ''}
+    ${_motoLonge ? `<div class="row"><div class="lbl">🛵</div><div class="val" style="color:#fbbf24"><b>Moto a ${_distLblMoto} do endereço</b> (IoT) — dá pra iniciar no endereço OU onde a moto está.</div></div>` : ''}
     ${c.placa ? `<div class="row"><div class="lbl">🏍</div><div class="val">${esc(c.placa)}</div></div>` : ''}
     ${c.comentario ? `<div class="row"><div class="lbl">💬</div><div class="val">${esc(c.comentario)}</div></div>` : ''}
     ${routeBlock}
     <a class="nav-primary" href="${gmaps}" target="_blank" rel="noopener">🧭 Navegar até o cliente (GPS)</a>
+    ${_motoLonge ? `<a class="nav-primary" href="${_gmapsMoto}" target="_blank" rel="noopener" style="background:#f59e0b;margin-top:8px">🛵 Navegar até a MOTO (${_distLblMoto})</a>` : ''}
     <div class="extras" style="margin-top:8px">
       ${waze ? `<a href="${waze}" target="_blank" rel="noopener">🚗 Waze</a>` : ''}
       ${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}
