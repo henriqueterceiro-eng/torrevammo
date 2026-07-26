@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v15 · 2026-07-26';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v16 · 2026-07-26';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2104,6 +2104,13 @@ function renderMot(){
     const stCls = isOff ? 'off' : m.status === 'busy' ? 'busy' : 'online';
     const stLbl = isOff ? 'offline' : m.modo === 'descarregando' ? '🔴 descarregando' : m.status === 'busy' ? 'em rota' : 'online';
     const ageLbl = isStale ? ` · <span style="color:#fbbf24;font-weight:700">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
+    // Etiqueta do modo de rastreamento (só aparece quando o colab já reporta — app v37+)
+    let gpsModeLbl = '';
+    if(!isOff && m.gpsMode === 'web'){
+      gpsModeLbl = ` · <span style="color:#fbbf24;font-weight:700" title="Modo WEB: o GPS congela quando o motorista abre o Waze ou apaga a tela. Só o APK nativo rastreia em 2º plano.">📡 web</span>`;
+    } else if(!isOff && m.gpsMode === 'nativo'){
+      gpsModeLbl = ` · <span style="color:#16a34a;font-weight:700" title="APK nativo: rastreia em background mesmo com Waze na frente/tela apagada.">🛰 nativo</span>`;
+    }
     const slotsLbl = (m.slotsTotal != null && m.slotsTotal > 0)
       ? (() => {
           const ocup = m.slotsCount || 0;
@@ -2175,7 +2182,7 @@ function renderMot(){
         <div class="info">
           <div class="nm">${esc(m.nome)}</div>
           <div class="pl">${esc(m.placa||'sem placa')}</div>
-          <div class="st">${stLbl} · ${filaStr}${slotsLbl} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}${m.kmh != null ? ` · <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : m.kmh+' km/h'}</span>` : ''}${ageLbl}</div>
+          <div class="st">${stLbl} · ${filaStr}${slotsLbl} ${hasGeo ? '· 📍' : '· ⚠ sem GPS'}${m.kmh != null ? ` · <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : m.kmh+' km/h'}</span>` : ''}${ageLbl}${gpsModeLbl}</div>
           ${m.currentStreet ? `<div class="st" style="color:var(--acc);font-size:9px;margin-top:2px">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</div>` : ''}
         </div>
         <button class="motinfo" data-act="info" title="Ver detalhes completos (atendimentos, slots, fila, etc)" style="background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);font-size:13px;padding:4px 9px;cursor:pointer;border-radius:6px;font-weight:700">ℹ</button>
