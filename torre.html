@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v14 · 2026-07-26';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v15 · 2026-07-26';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3639,6 +3639,14 @@ function renderMotDetail(){
   const isStale = !isOff && ageS > 60;
   const stCor = isOff ? '#6b7280' : isStale ? '#fbbf24' : m.status === 'busy' ? '#d97706' : '#16a34a';
   const stLbl = isOff ? 'offline' : isStale ? 'sem GPS' : m.status === 'busy' ? 'em rota' : 'online';
+  // Aviso: pino velho no modo WEB = app suspenso (Waze na frente / tela apagada), NÃO motorista parado.
+  let gpsWarn = '';
+  if(!isOff && m.gpsMode === 'web'){
+    const mins = ageS >= 60 ? Math.round(ageS/60) + 'min' : ageS + 's';
+    gpsWarn = isStale
+      ? `<div style="margin-top:4px;font-size:10px;background:rgba(245,158,11,0.15);color:#fbbf24;padding:3px 7px;border-radius:5px;line-height:1.35" title="O app do colab está em modo WEB e foi suspenso pelo celular (provável Waze na frente ou tela apagada). A posição na torre é a ÚLTIMA antes de suspender — o motorista provavelmente já se moveu. Só rastreia em background no APK nativo com permissão 'o tempo todo'.">⚠ posição há ${mins} · app em 2º plano (modo web, sem rastreio em background) — pode ter se movido</div>`
+      : `<div style="margin-top:4px;font-size:9px;color:var(--txt2)" title="Modo web: a posição para de atualizar quando o motorista abre o Waze ou apaga a tela. Só o APK nativo rastreia em background.">📡 GPS modo web (congela em 2º plano)</div>`;
+  }
 
   // Header — inclui versão do app do colab (badge amarelo se desatualizado)
   const appV = m.appVersion;
@@ -3664,6 +3672,7 @@ function renderMotDetail(){
         ${colab.base ? ` · 🏠 ${esc(colab.base)}` : ''}
         ${colab.turno ? ` · ${({manha:'☀ Manhã',tarde:'🌇 Tarde',noite:'🌙 Noite'})[colab.turno] || colab.turno}` : ''}
       </div>
+      ${gpsWarn}
     </div>
   `;
 
@@ -5465,6 +5474,8 @@ function applyMotoristaTelemetry(data, opts){
       clearAlert('desc_' + data.id);
     }
   }
+  if(data.gpsMode != null) m.gpsMode = data.gpsMode;   // 'nativo' (background) | 'web' (congela em 2º plano)
+  if(data.fixAge != null) m.fixAge = data.fixAge;
   if(data.appVersion != null) m.appVersion = data.appVersion;
   if(data.estoque != null) m.estoque = data.estoque;
   if(data.pecasUsadas != null) m.pecasUsadas = data.pecasUsadas;

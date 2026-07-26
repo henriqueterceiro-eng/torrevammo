@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Vammo Colab · PROTÓTIPO offline</title>
+<style>
+:root{
+  --bg:#0a1428; --surf:#152339; --surf2:#1e3050; --bdr:#2d3f55; --bdr2:#3d5575;
+  --txt:#e8eef8; --txt2:#9aa8bd; --txt3:#6b7a91;
+  --acc:#00B4E5; --conc:#16a34a; --warn:#fbbf24; --danger:#dc2626;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100dvh;margin:0;overflow:hidden;background:var(--bg);color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px}
+button{font-family:inherit;cursor:pointer;border:none;color:var(--txt);font-weight:600}
+input,select,textarea{font-family:inherit;font-size:16px;padding:14px;border:1px solid var(--bdr);
+  background:var(--surf);color:var(--txt);width:100%;border-radius:10px}
+input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transparent}
+.mono{font-family:'IBM Plex Mono','SFMono-Regular',Consolas,monospace}
+.screen{position:fixed;inset:0;display:none;flex-direction:column}
+.screen.show{display:flex}
+
+/* ===== LOGIN ===== */
+#login{background:radial-gradient(circle at 30% 20%,#0d2647 0%,#0a1428 60%,#050a18 100%);
+  align-items:center;justify-content:center;padding:24px;overflow:hidden;z-index:100}
+#login::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,180,229,0.15) 0%,transparent 60%);top:-200px;left:-200px;pointer-events:none}
+#login::after{content:'';position:absolute;width:400px;height:400px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,180,229,0.08) 0%,transparent 60%);bottom:-100px;right:-100px;pointer-events:none}
+#login .logo{height:54px;color:var(--acc);margin-bottom:14px;z-index:1}
+#login .logo svg{height:100%}
+#login .sub{color:var(--txt2);font-size:13px;letter-spacing:3px;text-transform:uppercase;margin-bottom:30px;z-index:1}
+#login .sub::before,#login .sub::after{content:'';display:inline-block;width:24px;height:1px;
+  background:var(--acc);vertical-align:middle;margin:0 12px;opacity:0.6}
+#login form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px;z-index:1}
+#login button[type=submit]{padding:16px;border-radius:10px;
+  background:linear-gradient(135deg,var(--acc) 0%,#0099c4 100%);color:#001823;font-size:16px;font-weight:800;
+  margin-top:8px;letter-spacing:0.5px;text-transform:uppercase;box-shadow:0 8px 24px rgba(0,180,229,0.3)}
+#login .hint{margin-top:22px;font-size:11px;color:var(--txt3);text-align:center;line-height:1.6;z-index:1;max-width:320px}
+#login .ver{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-size:9px;color:var(--txt3);opacity:0.6}
+.link{color:var(--txt3);font-size:11px;text-decoration:underline;background:none;text-align:center;padding:4px}
+
+/* ===== INTENÇÃO ===== */
+#intencao{background:var(--bg);padding:24px;z-index:90}
+#intencao h1{font-size:24px;margin:8px 0 4px}
+.card{background:var(--surf);border-radius:14px;padding:18px;border:1px solid var(--bdr)}
+.card.warn{background:rgba(0,180,229,0.06);border-color:var(--acc)}
+
+/* ===== SLIDE CONFIRM ===== */
+.slide{position:relative;height:64px;background:var(--surf2);border-radius:32px;overflow:hidden;
+  user-select:none;touch-action:none;border:2px solid var(--acc)}
+.slide .fill{position:absolute;top:0;left:0;height:100%;width:0;border-radius:32px;
+  background:linear-gradient(90deg,var(--acc) 0%,#16a34a 100%);transition:width .25s cubic-bezier(.4,0,.2,1)}
+.slide .txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--txt2);
+  font-weight:800;text-transform:uppercase;letter-spacing:2px;font-size:12px;pointer-events:none}
+.slide .thumb{position:absolute;top:4px;left:4px;width:52px;height:52px;background:#fff;color:#001823;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 2px 8px rgba(0,0,0,.4);
+  touch-action:none;transition:left .25s cubic-bezier(.4,0,.2,1)}
+.slide .thumb.dragging{transition:none}
+.slide.armed .thumb{background:#16a34a;color:#fff}
+
+/* ===== WIZARD ===== */
+#turno{background:linear-gradient(135deg,#0a1428 0%,#1e3050 100%);z-index:80}
+#wiz-header{flex:0 0 auto;padding:16px 20px;background:rgba(10,20,40,.95);border-bottom:1px solid var(--bdr)}
+#wiz-header .titrow{display:flex;align-items:center;gap:10px}
+#wiz-header .ic{font-size:24px}
+#wiz-header h1{font-size:18px;margin:0;flex:1}
+#wiz-header .ctr{font-size:11px;color:var(--txt2);font-weight:700}
+#wiz-prog{display:flex;gap:4px;margin-top:12px}
+#wiz-prog .seg{flex:1;height:4px;background:var(--surf2);border-radius:2px;transition:background .3s}
+#wiz-prog .seg.done{background:#16a34a}
+#wiz-prog .seg.curr{background:var(--acc)}
+#wiz-body{flex:1 1 auto;overflow-y:auto;padding:20px}
+.step-tit{font-size:20px;font-weight:800;margin-bottom:4px}
+.step-sub{font-size:12px;color:var(--txt2);margin-bottom:18px;line-height:1.4}
+#wiz-footer{flex:0 0 auto;padding:14px 18px;background:rgba(10,20,40,.95);border-top:1px solid var(--bdr);display:flex;gap:10px}
+#wiz-footer .sair{background:transparent;color:var(--txt3);flex:0 0 64px;font-weight:500}
+#wiz-footer .voltar{background:var(--surf2);color:var(--txt2);flex:0 0 96px;border-radius:10px}
+#wiz-footer .next{flex:1;padding:14px;border-radius:10px;background:linear-gradient(135deg,var(--acc) 0%,#0099c4 100%);
+  color:#001823;text-transform:uppercase;font-weight:800;box-shadow:0 4px 14px rgba(0,180,229,.3)}
+#wiz-footer .next:disabled{opacity:.5;background:var(--surf2);color:var(--txt3);box-shadow:none}
+
+/* kit */
+.kit-section{margin-bottom:18px}
+.kit-section h3{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--acc);margin:0 0 10px}
+.kit-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf);border:1px solid var(--bdr);border-radius:8px;margin-bottom:6px}
+.kit-item .lbl{flex:1;font-size:13px}
+.kit-item input{width:64px;padding:6px;text-align:center;font-weight:700;font-size:16px}
+.kit-check{display:flex;align-items:center;gap:10px;padding:10px;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;margin-bottom:4px;cursor:pointer}
+.kit-check input{width:20px;height:20px;accent-color:var(--acc);flex:0 0 20px;padding:0}
+.kit-check.checked{background:rgba(22,163,74,.1);border-color:#16a34a}
+.ciencia{padding:14px;background:rgba(0,180,229,.08);border:1px solid var(--acc);border-radius:10px;margin-top:14px;display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.ciencia input{width:22px;height:22px;accent-color:var(--acc);flex:0 0 22px;margin-top:2px;padding:0}
+.ciencia .txt{font-size:12px;line-height:1.4}
+
+/* veiculo */
+.vlist{display:flex;flex-direction:column;gap:10px}
+.vitem{padding:14px;background:var(--surf);border:2px solid var(--bdr);border-radius:10px;cursor:pointer;transition:all .15s}
+.vitem.disabled{background:var(--bg);opacity:.55;filter:grayscale(.7);cursor:not-allowed}
+.vitem.disabled .lock{display:inline-block;background:#dc2626;color:#fff;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:800;margin-left:6px}
+.vitem.selected{border-color:var(--acc);background:rgba(0,180,229,.08);box-shadow:0 4px 12px rgba(0,180,229,.2)}
+.vitem .placa{font-weight:800;font-size:15px;letter-spacing:.5px}
+.vitem .modelo{font-size:12px;color:var(--txt2);margin-top:2px}
+.vitem .meta{font-size:10px;color:var(--txt3);margin-top:4px}
+.km-box{margin-top:16px}
+.km-box label{display:block;font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;font-weight:700}
+.km-box input{font-size:18px;font-weight:800;text-align:center}
+/* KM lido pela IA */
+.km-ia{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;border:1px solid var(--bdr);background:var(--surf)}
+.km-ia .t{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.km-ia .s{font-size:11px;color:var(--txt3);margin-top:2px}
+.km-ia .km{font-size:26px;font-weight:800;margin-top:2px}
+.km-ia.ok{border-color:var(--acc);background:rgba(0,180,229,.08)}
+.km-ia.ok .t{color:var(--acc)}
+.km-ia.edited{border-color:var(--warn);background:rgba(245,158,11,.08)}
+.km-ia.edited .t{color:var(--warn)}
+.km-ia.empty{border-style:dashed;color:var(--txt2)}
+.km-ia.empty .ic{font-size:28px;opacity:.5}
+.km-ia.loading{border-color:var(--acc);background:rgba(0,180,229,.06)}
+.km-ia .spin{width:24px;height:24px;border:3px solid var(--surf2);border-top-color:var(--acc);border-radius:50%;flex:0 0 auto;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.foto-slot.painel{border-color:var(--acc)}
+.foto-slot.painel.has{border-color:#16a34a}
+
+/* fotos */
+.fotos-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.foto-slot{aspect-ratio:1/1;background:var(--surf);border:2px dashed var(--bdr);border-radius:10px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;cursor:pointer;overflow:hidden}
+.foto-slot.has{border-style:solid;border-color:#16a34a}
+.foto-slot .lbl{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.7);color:#fff;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;text-transform:uppercase;z-index:2}
+.foto-slot .ic{font-size:32px;opacity:.4}
+.foto-slot .hint{font-size:10px;color:var(--txt3);margin-top:6px}
+.foto-slot .fake{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;background:linear-gradient(135deg,#1e3050,#0a1428)}
+.foto-slot .chk{position:absolute;bottom:6px;right:6px;background:#16a34a;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px}
+
+/* resumo + assinatura */
+.res-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--bdr);font-size:13px}
+.res-row .k{color:var(--txt2)}
+.res-row .v{font-weight:700}
+.sigbox{position:relative;border:2px dashed var(--bdr2);border-radius:10px;background:#fff;margin:10px 0;touch-action:none}
+.sigbox canvas{display:block;width:100%;height:160px;border-radius:8px}
+.sigph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;pointer-events:none}
+
+/* ===== APP ===== */
+#app{background:var(--bg);z-index:50}
+#topbar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surf);border-bottom:1px solid var(--bdr)}
+#topbar .av{width:38px;height:38px;border-radius:50%;background:var(--acc);color:#001823;display:flex;align-items:center;justify-content:center;font-weight:800;flex:0 0 auto}
+#topbar .info{flex:1;min-width:0}
+#topbar .nm{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#topbar .pl{font-size:11px;color:var(--txt2);display:flex;align-items:center;gap:5px}
+#topbar .dot{width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 6px #16a34a}
+#topbar .stbtn{padding:6px 10px;border-radius:8px;background:rgba(22,163,74,.15);color:#86efac;border:1px solid #16a34a;font-size:11px;font-weight:800}
+#topbar .out{padding:6px 10px;background:transparent;color:var(--txt3);font-size:11px}
+#map{flex:1 1 auto;position:relative;background:
+  repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(45,63,85,.4) 40px),
+  repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(45,63,85,.4) 40px),
+  radial-gradient(circle at 50% 45%,#11203a,#0a1428)}
+#map .me{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);font-size:34px;filter:drop-shadow(0 0 10px rgba(0,180,229,.8))}
+#map .basepin{position:absolute;top:28%;left:32%;font-size:26px}
+#map .empty{position:absolute;bottom:90px;left:0;right:0;text-align:center;color:var(--txt3)}
+#map .empty .eic{font-size:40px;opacity:.5}
+.fab{position:absolute;right:16px;width:52px;height:52px;border-radius:50%;background:var(--surf);
+  border:1px solid var(--acc);box-shadow:0 4px 12px rgba(0,180,229,.4);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--acc)}
+.bigbtn{position:absolute;left:16px;right:16px;bottom:24px;padding:16px;border-radius:14px;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.5px}
+.bigbtn.devolver{background:linear-gradient(135deg,#16a34a,#0e7a37);color:#fff;box-shadow:0 6px 20px rgba(22,163,74,.4)}
+
+/* ===== TOAST ===== */
+#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:#000;color:#fff;
+  padding:12px 18px;border-radius:24px;font-size:13px;font-weight:600;z-index:500;opacity:0;transition:all .25s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{background:#7f1d1d}
+
+/* ===== MODAL genérico bottom-sheet ===== */
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:flex-end;justify-content:center;z-index:200}
+.sheet.show{display:flex}
+.sheet .inner{background:var(--surf);border-radius:18px 18px 0 0;padding:22px;width:100%;max-width:480px}
+
+/* ===== DEV PANEL ===== */
+#dev{position:fixed;top:8px;right:8px;z-index:9000;font-size:11px}
+#devToggle{background:#7c2d12;color:#fff;border-radius:8px;padding:6px 10px;font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+#devBody{display:none;margin-top:6px;background:#1a1207;border:1px solid #7c2d12;border-radius:10px;padding:10px;width:200px}
+#devBody.show{display:block}
+#devBody .dlbl{color:#fbbf24;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px}
+#devBody button{display:block;width:100%;text-align:left;background:#2a1c0c;color:#fde68a;border:1px solid #5b3a12;border-radius:6px;padding:7px 9px;margin-bottom:4px;font-size:11px}
+#devBody button.on{background:#16a34a;color:#fff;border-color:#16a34a}
+</style>
+</head>
+<body>
+
+<!-- ============ DEV PANEL ============ -->
+<div id="dev">
+  <button id="devToggle">🛠 DEV</button>
+  <div id="devBody">
+    <div class="dlbl">GPS simulado</div>
+    <button id="devGps" class="on">📍 Estou NA base</button>
+    <div class="dlbl">Pular pra</div>
+    <button data-go="login">1 · Login</button>
+    <button data-go="intencao">2 · Pegar carro (intenção)</button>
+    <button data-go="checkin">3 · Check-in (wizard)</button>
+    <button data-go="app">4 · App rodando</button>
+    <button data-go="checkout">5 · Devolver carro</button>
+    <div class="dlbl">Reset</div>
+    <button id="devReset">⟲ Reiniciar do zero</button>
+  </div>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="login" class="screen show">
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo">
+      <path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/>
+      <path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/>
+      <path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/>
+      <path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/>
+    </svg>
+  </div>
+  <div class="sub">Colaborador</div>
+  <form id="loginform">
+    <input type="email" id="logemail" placeholder="Seu email" value="motorista@vammo.com" autocomplete="email">
+    <input type="password" id="logsenha" placeholder="Sua senha" value="123456" autocomplete="current-password">
+    <button type="submit">Entrar</button>
+    <button type="button" class="link" id="logEsqueci">Esqueci a senha</button>
+  </form>
+  <div class="hint">Ao entrar, vamos compartilhar sua localização<br>com a torre de controle em tempo real.</div>
+  <div class="ver mono">PROTÓTIPO offline · sem backend</div>
+</div>
+
+<!-- ============ INTENÇÃO (PEGAR CARRO) ============ -->
+<div id="intencao" class="screen">
+  <button class="link" id="intSairTop" style="position:absolute;top:14px;right:16px;border:1px solid var(--bdr);border-radius:6px;padding:5px 10px">Sair</button>
+  <div style="text-align:center;margin:20px 0">
+    <div style="font-size:48px">👋</div>
+    <h1>Olá, <span id="intNome">colaborador</span>!</h1>
+    <div style="color:var(--txt2);font-size:13px">Bem-vindo de volta. Deseja iniciar seu turno agora?</div>
+  </div>
+  <div class="card warn" style="margin-bottom:16px">
+    <div style="font-size:11px;font-weight:800;color:var(--acc);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">⚠ Importante</div>
+    <ul style="font-size:12px;line-height:1.5;padding-left:20px;margin:0">
+      <li>Pra ficar online, precisa estar dentro de uma <strong style="color:var(--acc)">base Vammo</strong></li>
+      <li>Ao confirmar, abre o <strong>check-in</strong>: kit, fotos do carro, KM inicial e assinatura</li>
+      <li>Pode pausar/ficar offline a qualquer momento</li>
+    </ul>
+  </div>
+  <div id="intBase" class="card" style="text-align:center;padding:12px;margin-bottom:14px;font-size:12px">Detectando GPS…</div>
+  <div style="flex:1"></div>
+  <div class="slide" id="intSlide">
+    <div class="fill"></div><div class="txt">→ deslize p/ ficar online →</div><div class="thumb">▶</div>
+  </div>
+  <button class="link" id="intSair" style="margin-top:12px">Sair (cancelar)</button>
+</div>
+
+<!-- ============ WIZARD (check-in / check-out) ============ -->
+<div id="turno" class="screen">
+  <div id="wiz-header">
+    <div class="titrow">
+      <div class="ic" id="wiz-ic">🛻</div>
+      <h1 id="wiz-tit">Check-in do turno</h1>
+      <div class="ctr" id="wiz-ctr">1 / 4</div>
+    </div>
+    <div id="wiz-prog"></div>
+  </div>
+  <div id="wiz-body"></div>
+  <div id="wiz-footer">
+    <button class="sair" id="wiz-sair">Sair</button>
+    <button class="voltar" id="wiz-voltar">← Voltar</button>
+    <button class="next" id="wiz-next" disabled>Próximo →</button>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="screen">
+  <div id="topbar">
+    <div class="av" id="tbav">M</div>
+    <div class="info">
+      <div class="nm" id="tbnome">Motorista</div>
+      <div class="pl"><span class="dot"></span><span id="tbplaca" class="mono">—</span></div>
+    </div>
+    <button class="stbtn">ONLINE</button>
+    <button class="out" id="btlogout">Sair</button>
+  </div>
+  <div id="map">
+    <div class="basepin">🏠</div>
+    <div class="me">🛵</div>
+    <div class="empty"><div class="eic">🛵</div><div>Aguardando chamado…</div>
+      <div style="font-size:10px;margin-top:4px;color:var(--txt3)">Você está visível para a torre</div></div>
+    <button class="fab" style="bottom:160px">📍</button>
+    <button class="fab" style="bottom:96px">🏠</button>
+    <button class="bigbtn devolver" id="btDevolver">🏁 Devolver carro / encerrar turno</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- esqueci senha sheet -->
+<div class="sheet" id="esqueciSheet">
+  <div class="inner">
+    <div style="font-size:40px;text-align:center">🔑</div>
+    <div style="font-size:18px;font-weight:800;text-align:center;margin:6px 0">Esqueci a senha</div>
+    <div style="color:var(--txt2);font-size:13px;text-align:center;line-height:1.5;margin-bottom:18px">
+      Hoje: você avisa a torre por WhatsApp, o gestor reseta no painel, e você volta aqui pra criar nova senha.
+      <br><br><strong style="color:var(--warn)">(É uma das dores: sem self-service.)</strong>
+    </div>
+    <button class="next" style="width:100%;padding:14px;border-radius:10px;background:var(--surf2);color:var(--txt2)" onclick="closeSheet('esqueciSheet')">Entendi</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ===================== ESTADO FAKE ===================== */
+const ME = { nome:'Carlos Pereira', email:'motorista@vammo.com' };
+const VEICULOS = [
+  { id:'v1', tipo:'carro', placa:'FQA2B34', modelo:'Fiat Strada · 2023', slots:4, ultimoKm:48210, emUso:false },
+  { id:'v2', tipo:'carro', placa:'GHT7C21', modelo:'VW Saveiro · 2022', slots:3, ultimoKm:91044, emUso:true },
+  { id:'v3', tipo:'caminhao', placa:'JKL9D88', modelo:'Iveco Daily · 2021', slots:8, ultimoKm:120500, emUso:false },
+];
+const KIT_CONSUMIVEIS = [
+  {key:'fusivel',label:'Fusíveis'},{key:'cabo',label:'Cabo chupeta'},
+  {key:'lampada',label:'Lâmpadas'},{key:'fita',label:'Fita isolante'},
+];
+const KIT_BOLSA = [
+  {key:'chaves',label:'Jogo de chaves'},{key:'multimetro',label:'Multímetro'},
+  {key:'capa',label:'Capa de chuva'},{key:'colete',label:'Colete refletivo'},
+];
+const FOTOS_IN = [['frente','Frente'],['lateral_d','Lateral D'],['traseira','Traseira'],['lateral_e','Lateral E'],['painel','Painel ligado']];
+
+let gpsNaBase = true;          // toggle DEV
+let wizMode = 'in';
+let wizStep = 0;
+let wizSteps = [];
+let wizValidators = [];
+let wiz = {};                  // dados do wizard
+
+/* ===================== HELPERS ===================== */
+const $ = id => document.getElementById(id);
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function show(scr){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show')); $(scr).classList.add('show'); }
+function toast(msg, err){ const t=$('toast'); t.textContent=msg; t.className='show'+(err?' err':''); clearTimeout(t._t); t._t=setTimeout(()=>t.className='',2200); }
+function openSheet(id){ $(id).classList.add('show'); }
+function closeSheet(id){ $(id).classList.remove('show'); }
+
+/* ===================== SLIDE-TO-CONFIRM ===================== */
+function setupSlide(el, onConfirm){
+  const thumb = el.querySelector('.thumb'), fill = el.querySelector('.fill');
+  let drag=false, startX=0, x=0;
+  const max = () => el.offsetWidth - thumb.offsetWidth - 8;
+  const reset = () => { x=0; thumb.style.left='4px'; fill.style.width='0'; el.classList.remove('armed'); };
+  reset();
+  const down = e => { drag=true; startX=(e.touches?e.touches[0].clientX:e.clientX)-x; thumb.classList.add('dragging'); };
+  const move = e => { if(!drag)return; const cx=(e.touches?e.touches[0].clientX:e.clientX); x=Math.max(0,Math.min(max(),cx-startX));
+    thumb.style.left=(x+4)+'px'; fill.style.width=(x+thumb.offsetWidth)+'px'; el.classList.toggle('armed',x>=max()-4); };
+  const up = () => { if(!drag)return; drag=false; thumb.classList.remove('dragging');
+    if(x>=max()-4){ onConfirm(); } reset(); };
+  thumb.addEventListener('mousedown',down); thumb.addEventListener('touchstart',down,{passive:true});
+  window.addEventListener('mousemove',move); window.addEventListener('touchmove',move,{passive:true});
+  window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
+  el._reset = reset;
+}
+
+/* ===================== LOGIN ===================== */
+$('loginform').addEventListener('submit', e => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.textContent='⏳ Entrando…'; btn.disabled=true;
+  setTimeout(()=>{ btn.textContent='Entrar'; btn.disabled=false; abrirIntencao(); }, 600);
+});
+$('logEsqueci').onclick = () => openSheet('esqueciSheet');
+
+/* ===================== INTENÇÃO (PEGAR CARRO) ===================== */
+function abrirIntencao(){
+  show('intencao');
+  $('intNome').textContent = ME.nome.split(' ')[0];
+  atualizarBaseInfo();
+  setupSlide($('intSlide'), () => {
+    if(!gpsNaBase){ toast('⛔ Você está fora de uma base Vammo (raio 100m). Peça liberação à torre.', true); return; }
+    startCheckIn();
+  });
+  $('intSair').onclick = $('intSairTop').onclick = () => { show('login'); };
+}
+function atualizarBaseInfo(){
+  const d = $('intBase');
+  if(gpsNaBase){ d.style.borderColor='#16a34a'; d.style.background='rgba(22,163,74,.08)'; d.style.color='#86efac';
+    d.innerHTML='✓ Você está na <strong>Base Mooca</strong> · pronto pra iniciar turno'; }
+  else { d.style.borderColor='#dc2626'; d.style.background='rgba(220,38,38,.06)'; d.style.color='#fca5a5';
+    d.innerHTML='⚠ Fora de base · Mais próxima: <strong>Base Mooca</strong> a 2.3km'; }
+}
+
+/* ===================== WIZARD ENGINE ===================== */
+function startCheckIn(){
+  wizMode='in'; wizStep=0;
+  wiz = { kit:{consumiveis:{},checklist:{},ciente:false}, veiculoId:null, km:null,
+          fotos:{}, assinatura:null };
+  wizSteps = [stepKit, stepVeiculo, stepResumo];
+  $('wiz-ic').textContent='🛻'; $('wiz-tit').textContent='Check-in · pegar carro';
+  show('turno'); renderWizStep();
+}
+function startCheckOut(){
+  if(!gpsNaBase){ toast('🏁 Você não está na base. (Aqui abriria o "deslize p/ ir pra base")', true); return; }
+  wizMode='out'; wizStep=0;
+  wiz = { kit:{consumiveis:{},checklist:{},ciente:false}, km:null, fotos:{}, assinatura:null };
+  wizSteps = [stepKit, stepVeiculoOut, stepResumo];
+  $('wiz-ic').textContent='🏁'; $('wiz-tit').textContent='Check-out · devolver carro';
+  show('turno'); renderWizStep();
+}
+function renderWizStep(){
+  const total = wizSteps.length;
+  $('wiz-ctr').textContent = `${wizStep+1} / ${total}`;
+  $('wiz-prog').innerHTML = wizSteps.map((_,i)=>`<div class="seg ${i<wizStep?'done':i===wizStep?'curr':''}"></div>`).join('');
+  $('wiz-voltar').style.visibility = (wizStep===0 && wizMode==='in') ? 'hidden':'visible';
+  $('wiz-next').textContent = wizStep===total-1 ? (wizMode==='in'?'✓ Iniciar turno':'✓ Encerrar turno') : 'Próximo →';
+  wizSteps[wizStep]();
+  validateStep();
+}
+function validateStep(){ $('wiz-next').disabled = !(wizValidators[wizStep] || (()=>true))(); }
+$('wiz-next').onclick = () => { if(wizStep<wizSteps.length-1){wizStep++;renderWizStep();} else finalizarWizard(); };
+$('wiz-voltar').onclick = () => { if(wizStep>0){wizStep--;renderWizStep();} else if(wizMode==='out'){show('app');} };
+$('wiz-sair').onclick = () => { if(confirm(wizMode==='in'?'Sair sem iniciar turno?':'Cancelar check-out?')){ show(wizMode==='in'?'login':'app'); } };
+
+/* --- STEP: KIT --- */
+function stepKit(){
+  const recount = wizMode==='out';
+  $('wiz-body').innerHTML = `
+    <div class="step-tit">📦 Kit de atendimento</div>
+    <div class="step-sub">${recount?'Reconfira o que sobrou antes de devolver o carro.':'Confira a quantidade de cada peça e a bolsa padrão antes de sair.'}</div>
+    <div class="kit-section"><h3>Peças (consumíveis)</h3>
+      ${KIT_CONSUMIVEIS.map(it=>`<div class="kit-item"><div class="lbl">${esc(it.label)}</div>
+        <input type="number" min="0" max="99" id="k_${it.key}" value="${wiz.kit.consumiveis[it.key]??0}" inputmode="numeric"></div>`).join('')}
+    </div>
+    <div class="kit-section"><h3>Checklist da bolsa padrão</h3>
+      ${KIT_BOLSA.map(it=>`<label class="kit-check ${wiz.kit.checklist[it.key]?'checked':''}" data-key="${it.key}">
+        <input type="checkbox" ${wiz.kit.checklist[it.key]?'checked':''}><div class="lbl">${esc(it.label)}</div></label>`).join('')}
+    </div>
+    <label class="ciencia"><input type="checkbox" id="k_ciente" ${wiz.kit.ciente?'checked':''}>
+      <div class="txt">Confirmo que estou <strong>ciente do kit</strong>. Em caso de divergência ao final, sou responsável pelos itens faltantes.</div></label>`;
+  KIT_CONSUMIVEIS.forEach(it=>$('k_'+it.key).oninput=e=>{wiz.kit.consumiveis[it.key]=Math.max(0,+e.target.value||0);});
+  document.querySelectorAll('.kit-check').forEach(lb=>{const cb=lb.querySelector('input');cb.onchange=()=>{wiz.kit.checklist[lb.dataset.key]=cb.checked;lb.classList.toggle('checked',cb.checked);};});
+  $('k_ciente').onchange=e=>{wiz.kit.ciente=e.target.checked;validateStep();};
+}
+wizValidators[0] = () => wiz.kit.ciente;
+
+/* --- STEP: VEÍCULO (check-in) --- */
+function stepVeiculo(){
+  const sel = wiz.veiculoId;
+  $('wiz-body').innerHTML = `
+    <div class="step-tit">🚗 Selecione o veículo</div>
+    <div class="step-sub">Disponíveis em destaque. Os <strong>em uso</strong> ficam cinza.</div>
+    <div class="vlist">${VEICULOS.map(v=>{
+      const tip={carro:'🚗',moto:'🏍',caminhao:'🚛'}[v.tipo]||'🚗';
+      const cls = v.emUso?'vitem disabled':(v.id===sel?'vitem selected':'vitem');
+      return `<div class="${cls}" data-vid="${v.id}" ${v.emUso?'':'data-ok=1'}>
+        <div class="placa mono">${tip} ${esc(v.placa)}${v.emUso?'<span class="lock">EM USO</span>':''}</div>
+        <div class="modelo">${esc(v.modelo)}</div>
+        <div class="meta mono">${v.slots} slots · último km: ${v.ultimoKm.toLocaleString('pt-BR')}</div></div>`;
+    }).join('')}</div>
+    ${sel?`<div id="km_wrap" style="margin-top:16px"></div>
+      <div style="margin-top:18px"><div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">📸 Fotos obrigatórias (4 lados + painel)</div>
+      <div class="fotos-grid" id="vw_fotos"></div></div>`:''}`;
+  document.querySelectorAll('.vitem[data-ok]').forEach(it=>it.onclick=()=>{
+    wiz.veiculoId=it.dataset.vid; wiz.km=null; wiz.kmIA=null; wiz.kmEditado=false; wiz.fotos.painel=null; stepVeiculo(); validateStep(); });
+  if(sel){
+    renderKmBox('km_wrap');
+    renderFotos('vw_fotos', wiz.fotos, FOTOS_IN, 'km_wrap');
+  }
+}
+
+/* --- STEP: VEÍCULO OUT (check-out) --- */
+function stepVeiculoOut(){
+  $('wiz-body').innerHTML = `
+    <div class="step-tit">🚗 Devolução do veículo</div>
+    <div class="step-sub">Fotografe o painel pra ler o KM final, depois os 4 lados.</div>
+    <div id="km_wrap"></div>
+    <div style="margin-top:18px"><div style="font-size:12px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">📸 Fotos de saída (4 lados + painel)</div>
+    <div class="fotos-grid" id="vo_fotos"></div></div>`;
+  renderKmBox('km_wrap');
+  renderFotos('vo_fotos', wiz.fotos, FOTOS_IN, 'km_wrap');
+}
+// validator do step 1: KM lido (ou corrigido) + 5 fotos; check-in ainda exige veículo escolhido
+wizValidators[1] = () => {
+  const f=wiz.fotos, fotosOk = FOTOS_IN.every(([k])=>f[k]);
+  const kmOk = !!wiz.km && !wiz.kmLoading;
+  if(wizMode==='out') return kmOk && fotosOk;
+  return !!wiz.veiculoId && kmOk && fotosOk;
+};
+
+/* --- CAIXA DE KM: vem da foto do painel via IA (anti-fraude) --- */
+function renderKmBox(wrapId){
+  const w = $(wrapId); if(!w) return;
+  if(wiz.kmLoading){
+    w.innerHTML = `<div class="km-ia loading"><div class="spin"></div>
+      <div><div class="t">🤖 Lendo o KM no painel…</div><div class="s">Gemini analisando a foto do odômetro</div></div></div>`;
+    return;
+  }
+  if(wiz.kmIA!=null){
+    w.innerHTML = `<div class="km-ia ${wiz.kmEditado?'edited':'ok'}">
+      <div style="flex:1">
+        <div class="t">${wiz.kmEditado?'✏️ KM corrigido manualmente':'🤖 KM lido pela IA'}</div>
+        <div class="km mono">${(wiz.km||0).toLocaleString('pt-BR')} <span style="font-size:13px;color:var(--txt2)">km</span></div>
+        ${wiz.kmEditado?`<div class="s" style="color:var(--warn)">Leitura original: ${wiz.kmIA.toLocaleString('pt-BR')} · divergência registrada p/ torre</div>`
+                       :`<div class="s">Lido da foto do painel · confiança 97%</div>`}
+      </div>
+      <button class="link" id="km_edit" style="flex:0 0 auto">✏️ corrigir</button></div>
+      <div id="km_edit_wrap"></div>`;
+    $('km_edit').onclick=()=>{
+      const ew=$('km_edit_wrap');
+      ew.innerHTML=`<div style="margin-top:8px"><input type="number" id="km_man" class="mono" inputmode="numeric"
+        placeholder="KM correto" value="${wiz.km||''}" style="text-align:center;font-weight:800">
+        <div style="font-size:10px;color:var(--warn);margin-top:4px;text-align:center">⚠ Correção manual fica marcada e a torre é avisada da divergência.</div></div>`;
+      $('km_man').focus();
+      $('km_man').oninput=e=>{ wiz.km=+e.target.value||0; wiz.kmEditado=(wiz.km!==wiz.kmIA); renderKmBox(wrapId); validateStep(); };
+    };
+    return;
+  }
+  w.innerHTML = `<div class="km-ia empty"><div class="ic">📊</div>
+    <div><div class="t">KM lido automaticamente</div>
+    <div class="s">Tire a foto do <strong>painel ligado</strong> aqui embaixo — o KM é extraído sozinho.</div></div></div>`;
+}
+
+/* --- OCR FAKE: foto do painel → "lê" o KM (simula Gemini) --- */
+function fakeReadKm(wrapId){
+  wiz.kmLoading = true; renderKmBox(wrapId); validateStep();
+  setTimeout(()=>{
+    const base = VEICULOS.find(v=>v.id===wiz.veiculoId)?.ultimoKm || 48000;
+    // check-out simula KM maior (rodou no turno)
+    wiz.kmIA = wizMode==='out' ? base + 137 : base + 3;
+    wiz.km = wiz.kmIA; wiz.kmEditado=false; wiz.kmLoading=false;
+    renderKmBox(wrapId); validateStep();
+    toast('🤖 KM lido do painel: '+wiz.km.toLocaleString('pt-BR'));
+  }, 1400);
+}
+
+/* --- STEP: RESUMO + ASSINATURA --- */
+function stepResumo(){
+  const v = VEICULOS.find(x=>x.id===wiz.veiculoId);
+  $('wiz-body').innerHTML = `
+    <div class="step-tit">📋 Resumo e assinatura</div>
+    <div class="step-sub">Confira os dados e assine pra ${wizMode==='in'?'iniciar':'encerrar'} o turno.</div>
+    <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:14px;margin-bottom:16px">
+      ${v?`<div class="res-row"><span class="k">Veículo</span><span class="v mono">${esc(v.placa)}</span></div>`:''}
+      <div class="res-row"><span class="k">KM ${wizMode==='in'?'inicial':'final'}</span><span class="v mono">${wiz.km?wiz.km.toLocaleString('pt-BR'):'—'}</span></div>
+      <div class="res-row"><span class="k">Fotos</span><span class="v">${FOTOS_IN.filter(([k])=>wiz.fotos[k]).length}/5 ✓</span></div>
+      <div class="res-row" style="border:none"><span class="k">Kit conferido</span><span class="v">${wiz.kit.ciente?'sim ✓':'não'}</span></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:6px">✍ Sua assinatura</div>
+    <div class="sigbox"><canvas id="sig"></canvas><div class="sigph" id="sigph">Assine aqui ↓</div></div>
+    <button class="link" id="sigClear">🔄 Limpar assinatura</button>`;
+  initSig();
+}
+wizValidators[2] = () => !!wiz.assinatura;
+
+/* --- FOTOS FAKE --- */
+function renderFotos(containerId, store, defs, kmWrapId){
+  const c = $(containerId);
+  c.innerHTML = defs.map(([k,label])=>{
+    const has = store[k];
+    const isPainel = k==='painel';
+    return `<div class="foto-slot ${has?'has':''} ${isPainel?'painel':''}" data-k="${k}">
+      <div class="lbl">${esc(label)}${isPainel?' 🤖':''}</div>
+      ${has?`<div class="fake">📷 FOTO FAKE</div><div class="chk">✓</div>`
+           :`<div class="ic">📷</div><div class="hint">${isPainel?'lê o KM sozinho':'toque p/ tirar'}</div>`}
+    </div>`;
+  }).join('');
+  c.querySelectorAll('.foto-slot').forEach(s=>s.onclick=()=>{
+    const k=s.dataset.k, had=!!store[k];
+    store[k] = had ? null : 'fake-data-uri';
+    if(k==='painel'){
+      if(had){ wiz.kmIA=null; wiz.km=null; wiz.kmEditado=false; if(kmWrapId) renderKmBox(kmWrapId); }
+      else if(kmWrapId){ renderFotos(containerId, store, defs, kmWrapId); fakeReadKm(kmWrapId); validateStep(); return; }
+    }
+    renderFotos(containerId, store, defs, kmWrapId); validateStep();
+  });
+}
+
+/* --- ASSINATURA (canvas real, leve) --- */
+function initSig(){
+  const cv=$('sig'); const ph=$('sigph');
+  const r=cv.getBoundingClientRect(); cv.width=r.width; cv.height=160;
+  const ctx=cv.getContext('2d'); ctx.strokeStyle='#0a1428'; ctx.lineWidth=2.5; ctx.lineCap='round';
+  let draw=false, has=false;
+  const pos=e=>{const b=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return[t.clientX-b.left,t.clientY-b.top];};
+  const start=e=>{draw=true;has=true;ph.style.display='none';const[x,y]=pos(e);ctx.beginPath();ctx.moveTo(x,y);e.preventDefault();};
+  const moveD=e=>{if(!draw)return;const[x,y]=pos(e);ctx.lineTo(x,y);ctx.stroke();e.preventDefault();};
+  const end=()=>{if(!draw)return;draw=false;if(has){wiz.assinatura=cv.toDataURL();validateStep();}};
+  cv.addEventListener('mousedown',start);cv.addEventListener('touchstart',start,{passive:false});
+  cv.addEventListener('mousemove',moveD);cv.addEventListener('touchmove',moveD,{passive:false});
+  window.addEventListener('mouseup',end);cv.addEventListener('touchend',end);
+  $('sigClear').onclick=()=>{ctx.clearRect(0,0,cv.width,cv.height);has=false;wiz.assinatura=null;ph.style.display='flex';validateStep();};
+}
+
+/* --- FINALIZAR --- */
+function finalizarWizard(){
+  if(wizMode==='in'){
+    const v=VEICULOS.find(x=>x.id===wiz.veiculoId);
+    $('tbnome').textContent=ME.nome; $('tbav').textContent=ME.nome[0];
+    $('tbplaca').textContent=v?v.placa:'—';
+    toast('✓ Turno iniciado! Você está online.');
+    show('app');
+  } else {
+    toast('🏁 Turno encerrado. Até a próxima!');
+    setTimeout(()=>show('login'), 800);
+  }
+}
+
+/* ===================== APP ===================== */
+$('btDevolver').onclick = startCheckOut;
+$('btlogout').onclick = () => { if(confirm('Sair do app?')) show('login'); };
+
+/* ===================== DEV PANEL ===================== */
+$('devToggle').onclick = () => $('devBody').classList.toggle('show');
+$('devGps').onclick = () => { gpsNaBase=!gpsNaBase; const b=$('devGps');
+  b.classList.toggle('on',gpsNaBase); b.textContent = gpsNaBase?'📍 Estou NA base':'📍 Estou FORA da base';
+  if($('intencao').classList.contains('show')) atualizarBaseInfo(); };
+document.querySelectorAll('#devBody [data-go]').forEach(b=>b.onclick=()=>{
+  const g=b.dataset.go;
+  if(g==='login') show('login');
+  else if(g==='intencao') abrirIntencao();
+  else if(g==='checkin') startCheckIn();
+  else if(g==='app'){ $('tbplaca').textContent='FQA2B34'; $('tbnome').textContent=ME.nome; $('tbav').textContent=ME.nome[0]; show('app'); }
+  else if(g==='checkout'){ gpsNaBase=true; $('devGps').classList.add('on'); $('devGps').textContent='📍 Estou NA base'; startCheckOut(); }
+  $('devBody').classList.remove('show');
+});
+$('devReset').onclick = () => location.reload();
+</script>
+</body>
+</html>
