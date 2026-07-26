@@ -449,6 +449,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
         <div style="font-weight:800;font-size:13px">Indo pra <span id="destinoNome">base</span></div>
         <div style="font-size:10px;opacity:0.85" id="destinoSub">não recebe novos chamados até chegar</div>
       </div>
+      <button id="destinoCheguei" style="background:#fff;border:none;color:#b91c1c;padding:6px 12px;font-size:11px;font-weight:800;border-radius:6px;cursor:pointer;white-space:nowrap">✓ Cheguei</button>
       <button id="destinoCancelar" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:6px 12px;font-size:11px;font-weight:800;border-radius:6px;cursor:pointer;white-space:nowrap">✕ Cancelar</button>
     </div>
     <div id="appver">v · </div>
@@ -791,7 +792,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v37 · 2026-07-26';
+const APP_VERSION = 'v38 · 2026-07-26';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3565,6 +3566,29 @@ function bootApp(){
     if(myPos) map.setView([myPos.lat, myPos.lng], 15);
   };
   document.getElementById('docsbtn').onclick = abrirDocsModal;
+  // "✓ Cheguei" — força abrir o menu de descarregar mesmo com GPS congelado (não espera a
+  // detecção automática de chegada, que depende de fixes frescos de GPS).
+  document.getElementById('destinoCheguei').onclick = () => {
+    // 1) Se dá pra confiar na posição, usa a base mais próxima no raio
+    let base = null, melhor = Infinity;
+    if(myPos){
+      for(const bid in bases){
+        const b = bases[bid];
+        if(!b || b.lat == null || b.lng == null) continue;
+        const d = haversine(myPos, { lat: b.lat, lng: b.lng });
+        if(d <= BASE_RAIO_M && d < melhor){ melhor = d; base = b; }
+      }
+    }
+    // 2) GPS congelado / longe no mapa mas o motorista diz que chegou → usa a base ALVO escolhida
+    if(!base){
+      const alvo = turnoAtivo?.baseDestinoId ? bases[turnoAtivo.baseDestinoId] : (_aguardandoBaseCheckout || null);
+      if(!alvo){ showToast('⚠ Sem base de destino definida', true); return; }
+      if(!confirm(`Confirmar que você chegou em ${alvo.nome}? (o GPS pode estar desatualizado)`)) return;
+      base = alvo;
+    }
+    if(turnoAtivo?.modo === 'descarregando') sairModoDescarga();
+    abrirBaseOpcoes(base);
+  };
   document.getElementById('destinoCancelar').onclick = () => {
     if(!confirm('Cancelar destino e voltar a receber chamados normalmente?')) return;
     _aguardandoBaseCheckout = null; // cancela destino de checkout
@@ -4762,6 +4786,14 @@ let routeColorOverride = null; // 'red' quando descarregando
 function entrarModoDescarga(baseId){
   const base = bases[baseId];
   if(!base) return;
+  // JÁ ESTÁ NA BASE escolhida? Não faz sentido virar "rota-e-espera" (a chegada por GPS
+  // nunca dispara — ainda mais com GPS congelado). Abre o menu de descarregar direto.
+  if(myPos && base.lat != null && haversine(myPos, { lat: base.lat, lng: base.lng }) <= BASE_RAIO_M){
+    // Garante que não fica preso em modo descarga de uma seleção anterior
+    if(turnoAtivo.modo === 'descarregando'){ sairModoDescarga(); }
+    abrirBaseOpcoes(base);
+    return;
+  }
   turnoAtivo.modo = 'descarregando';
   turnoAtivo.baseDestinoId = baseId;
   saveTurno();
