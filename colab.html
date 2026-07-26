@@ -791,7 +791,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v34 · 2026-07-25';
+const APP_VERSION = 'v35 · 2026-07-26';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -4811,18 +4811,20 @@ async function updateRouteToBase(){
 
 function checkArrivedAtBase(){
   if(!turnoAtivo || turnoAtivo.modo !== 'descarregando' || !myPos) return;
-  const baseId = turnoAtivo.baseDestinoId;
-  const base = bases[baseId];
-  if(!base || base.lat == null) return;
-  const d = haversine(myPos, { lat: base.lat, lng: base.lng });
-  if(d < BASE_RAIO_M){
-    if(!nearDestSince['_base_' + baseId]) nearDestSince['_base_' + baseId] = Date.now();
-    else if(Date.now() - nearDestSince['_base_' + baseId] > ARRIVED_TIME_MS){
-      delete nearDestSince['_base_' + baseId];
-      onArrivedAtBase(base);
-    }
-  } else {
-    delete nearDestSince['_base_' + baseId];
+  // Chega em QUALQUER base (nem sempre dá pra ir na base alvo). Pega a mais próxima no raio.
+  let base = null, baseId = null, melhor = Infinity;
+  for(const id in bases){
+    const b = bases[id];
+    if(!b || b.lat == null || b.lng == null) continue;
+    const d = haversine(myPos, { lat: b.lat, lng: b.lng });
+    if(d < BASE_RAIO_M && d < melhor){ melhor = d; base = b; baseId = id; }
+  }
+  if(!base){ for(const id in bases) delete nearDestSince['_base_' + id]; return; }
+  const key = '_base_' + baseId;
+  if(!nearDestSince[key]) nearDestSince[key] = Date.now();
+  else if(Date.now() - nearDestSince[key] > ARRIVED_TIME_MS){
+    delete nearDestSince[key];
+    onArrivedAtBase(base);
   }
 }
 

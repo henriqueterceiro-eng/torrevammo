@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v12 · 2026-07-24';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v13 · 2026-07-26';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5480,6 +5480,19 @@ function removeMotorista(id){
   renderLegend();
 }
 
+// AUTOMAÇÃO: re-sincroniza a telemetria dos motoristas do Firebase (backup do listener ao
+// vivo, que às vezes trava em aba aberta há horas → motorista some/fica offline e a rota
+// desaparece, exigindo F5). Puxa o estado fresco de todos e reaplica. initial:true respeita
+// o ts do nó, então quem parou de mandar aparece offline certo e quem manda fica online.
+async function resyncMotoristas(){
+  if(typeof firebase === 'undefined' || !firebase.apps?.length) return;
+  try {
+    const snap = await firebase.database().ref('vammo/motoristas').once('value');
+    const data = snap.val() || {};
+    for(const id in data){ applyMotoristaTelemetry({ id, ...(data[id] || {}) }, { initial: true }); }
+  } catch(e){ /* offline momentâneo — tenta de novo no próximo tick */ }
+}
+
 // Listener do nó dedicado de telemetria ao vivo (substitui o push de posição no log).
 let _motNodeReady = false;
 function setupMotoristasNode(){
@@ -5491,6 +5504,10 @@ function setupMotoristasNode(){
   ref.on('child_changed', s => applyMotoristaTelemetry({ id: s.key, ...(s.val()||{}) }, { initial: false }));
   ref.on('child_removed', s => removeMotorista(s.key));
   console.log('[torre] listener vammo/motoristas ativo');
+  // Backup automático: re-sincroniza a cada 25s e sempre que o Firebase reconectar —
+  // mantém motoristas/rota vivos mesmo se o listener ao vivo travar (sem F5 manual).
+  setInterval(resyncMotoristas, 25000);
+  try { firebase.database().ref('.info/connected').on('value', s => { if(s.val() === true) resyncMotoristas(); }); } catch(_){}
 }
 
 // Estado pra detectar a QUEDA (perda de sinal) de cada colab e avisar a torre.
