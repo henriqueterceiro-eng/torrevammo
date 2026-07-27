@@ -792,7 +792,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v38 · 2026-07-26';
+const APP_VERSION = 'v39 · 2026-07-26';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1949,6 +1949,9 @@ function _ingestGeo(pos){
 // Dispatcher: no APK nativo usa background-geolocation (foreground service → rastreia
 // mesmo com o Waze na frente); no PWA cai pro watchPosition/poll do navegador.
 function startGPS(){
+  // Restaura a última posição conhecida ANTES do primeiro fix — evita `myPos` null logo após
+  // reabrir o app (watcher nativo parado / sem fix ainda), que travava a descarga na base.
+  if(!myPos){ const b = lerBufferPos(); if(b) myPos = b; }
   if(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()){
     startGPSNative();
     return;
@@ -2222,6 +2225,21 @@ function sendPos(pos){
   lastSentPos = pos;
   lastSentAt = Date.now();
 }
+
+// Lê a última posição conhecida do buffer (localStorage). Usada como fallback quando `myPos`
+// ainda é null (app recém-reaberto, watcher nativo parado, sem fix novo) — assim as checagens
+// de raio de base NÃO travam esperando o primeiro fix de GPS.
+function lerBufferPos(){
+  try {
+    const raw = localStorage.getItem('vammo_last_pos');
+    if(!raw) return null;
+    const p = JSON.parse(raw);
+    if(!p || p.lat == null || p.lng == null) return null;
+    return { lat: p.lat, lng: p.lng, accuracy: p.accuracy, kmh: p.kmh || 0, heading: p.heading, ts: p.ts || 0, _buffered: true };
+  } catch(_){ return null; }
+}
+// Posição pra decisões de raio/base: myPos (fix vivo) OU o buffer (última conhecida).
+function posConhecida(){ return myPos || lerBufferPos(); }
 
 // Buffer da última posição conhecida (sobrevive a tela bloqueada)
 function bufferLastPos(pos){
@@ -3269,9 +3287,10 @@ function abrirModalBase(autoFull){
   if(ativas.length === 0){
     list.innerHTML = `<div style="text-align:center;color:var(--txt2);padding:20px;font-size:12px">Nenhuma base cadastrada ainda.<br>Fale com a torre.</div>`;
   } else {
+    const _pb = posConhecida();
     const comDist = ativas.map(b => ({
       ...b,
-      dist: myPos ? haversine(myPos, {lat:b.lat,lng:b.lng}) : 0
+      dist: _pb ? haversine(_pb, {lat:b.lat,lng:b.lng}) : 0
     })).sort((a,b) => a.dist - b.dist);
     list.innerHTML = comDist.map(b => {
       const distTxt = b.dist > 0 ? (b.dist < 1000 ? Math.round(b.dist)+'m' : (b.dist/1000).toFixed(1)+'km') : '—';
@@ -3569,13 +3588,14 @@ function bootApp(){
   // "✓ Cheguei" — força abrir o menu de descarregar mesmo com GPS congelado (não espera a
   // detecção automática de chegada, que depende de fixes frescos de GPS).
   document.getElementById('destinoCheguei').onclick = () => {
-    // 1) Se dá pra confiar na posição, usa a base mais próxima no raio
+    // 1) Se dá pra confiar na posição (fix vivo OU buffer), usa a base mais próxima no raio
     let base = null, melhor = Infinity;
-    if(myPos){
+    const _p = posConhecida();
+    if(_p){
       for(const bid in bases){
         const b = bases[bid];
         if(!b || b.lat == null || b.lng == null) continue;
-        const d = haversine(myPos, { lat: b.lat, lng: b.lng });
+        const d = haversine(_p, { lat: b.lat, lng: b.lng });
         if(d <= BASE_RAIO_M && d < melhor){ melhor = d; base = b; }
       }
     }
@@ -3598,12 +3618,14 @@ function bootApp(){
     showToast('✓ Destino cancelado — voltando ao modo normal');
   };
   document.getElementById('basebtn').onclick = () => {
-    // Se já está numa base (raio ~500m — pátio grande), abre direto o menu de opções
-    if(myPos){
+    // Se já está numa base (raio ~500m — pátio grande), abre direto o menu de opções.
+    // Usa posConhecida() (myPos OU buffer) — myPos pode estar null logo após reabrir o app.
+    const p = posConhecida();
+    if(p){
       for(const bid in bases){
         const b = bases[bid];
         if(!b.lat || !b.lng) continue;
-        if(haversine(myPos, { lat:b.lat, lng:b.lng }) <= BASE_RAIO_M){
+        if(haversine(p, { lat:b.lat, lng:b.lng }) <= BASE_RAIO_M){
           abrirBaseOpcoes(b);
           return;
         }
@@ -4788,7 +4810,9 @@ function entrarModoDescarga(baseId){
   if(!base) return;
   // JÁ ESTÁ NA BASE escolhida? Não faz sentido virar "rota-e-espera" (a chegada por GPS
   // nunca dispara — ainda mais com GPS congelado). Abre o menu de descarregar direto.
-  if(myPos && base.lat != null && haversine(myPos, { lat: base.lat, lng: base.lng }) <= BASE_RAIO_M){
+  // posConhecida() = myPos OU buffer (myPos pode estar null logo após reabrir o app).
+  const _p = posConhecida();
+  if(_p && base.lat != null && haversine(_p, { lat: base.lat, lng: base.lng }) <= BASE_RAIO_M){
     // Garante que não fica preso em modo descarga de uma seleção anterior
     if(turnoAtivo.modo === 'descarregando'){ sairModoDescarga(); }
     abrirBaseOpcoes(base);
