@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v16 · 2026-07-26';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v17 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -965,6 +965,35 @@ function loadAsgn(){ try{ return JSON.parse(localStorage.getItem('vammo_asgn2')|
 function saveAsgn(a){ localStorage.setItem('vammo_asgn2', JSON.stringify(a)); }
 function loadQueues(){ try{ return JSON.parse(localStorage.getItem('vammo_queue')||'{}'); }catch(_){ return {}; } }
 function saveQueues(q){ localStorage.setItem('vammo_queue', JSON.stringify(q)); }
+
+// Limpa das filas os chamados MORTOS (concluído/cancelado/inexistente). Sem isso a fila enche
+// de fantasmas e o updateRouteFor não acha parada viva → LIMPA A ROTA (bug "perdendo a rota").
+// Persiste a fila limpa no Firebase pra não re-entupir. Guarda: só remove "inexistente" quando
+// já temos a lista de chamados carregada (evita zerar fila num snapshot vazio transitório).
+function pruneQueues(){
+  const q = loadQueues();
+  const byId = {};
+  for(const ch of chamados){ byId[ch.id] = ch; }
+  const temChamados = chamados.length > 0;
+  let changed = false;
+  for(const mid in q){
+    const ids = Array.isArray(q[mid]) ? q[mid] : [];
+    const limpos = ids.filter(cid => {
+      const c = byId[cid];
+      if(c) return c.status !== 'concluido' && c.status !== 'cancelado'; // vivo?
+      return !temChamados; // inexistente: só mantém se ainda não carregou nada (blip)
+    });
+    if(limpos.length !== ids.length){
+      changed = true;
+      if(limpos.length === 0) delete q[mid]; else q[mid] = limpos;
+    }
+  }
+  if(changed){
+    saveQueues(q);
+    try { STORE.setAllQueues(q); } catch(_){}   // persiste limpo no Firebase (some pra todos os gestores)
+  }
+  return changed;
+}
 
 // Helpers da fila — ordem por motorista
 function queueAdd(motoristaId, chamadoId){
@@ -4774,6 +4803,7 @@ function clearAllChamados(){
   saveAsgn({});
   saveStatusMap({});
   saveQueues({});
+  try { STORE.setAllQueues({}); } catch(_){}   // propaga filas VAZIAS pro Firebase (não deixa fantasma)
   chamados = [];
   selId = null;
   // Limpa visual do mapa
@@ -5367,6 +5397,7 @@ function setupStoreListeners(){
       for(const mid in chamadoMarkers){
         if(!data[mid]){ map.removeLayer(chamadoMarkers[mid]); delete chamadoMarkers[mid]; }
       }
+      pruneQueues();   // tira chamados concluídos/apagados das filas ANTES de recalcular rota
       recountMotoristas();
       scheduleUpdateRoutes();
       refreshHeatmap();
