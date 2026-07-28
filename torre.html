@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v19 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v20 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3966,6 +3966,29 @@ function renderMotDetail(){
         <div>📍 <strong>${kmHoje.toFixed(1)}</strong> km rodados</div>
         ${notaHoje != null ? `<div>⭐ <strong style="color:${notaHoje>=8?'#16a34a':notaHoje>=6?'#fbbf24':'#dc2626'}">${notaHoje.toFixed(1)}</strong> média</div>` : ''}
       </div>
+      ${(() => {
+        // TMA médio do colaborador (hoje): total / deslocamento / atendimento
+        const t = mediaDur(corridasHoje, 'totalDurationSec');
+        const d = mediaDur(corridasHoje, 'travelDurationSec');
+        const a = mediaDur(corridasHoje, 'serviceDurationSec');
+        return `<div style="margin-top:6px">
+          <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;margin-bottom:4px">⏱ TMA médio (hoje)</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+            <div style="background:var(--surf);padding:7px 6px;border-radius:6px;text-align:center">
+              <div style="font-size:14px;font-weight:800;color:var(--acc);font-family:var(--mono)">${fmtDurTMA(t.avg)}</div>
+              <div style="font-size:8px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;margin-top:2px">Total</div>
+            </div>
+            <div style="background:var(--surf);padding:7px 6px;border-radius:6px;text-align:center">
+              <div style="font-size:14px;font-weight:800;color:#fbbf24;font-family:var(--mono)">${fmtDurTMA(d.avg)}</div>
+              <div style="font-size:8px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;margin-top:2px">Deslocam.</div>
+            </div>
+            <div style="background:var(--surf);padding:7px 6px;border-radius:6px;text-align:center">
+              <div style="font-size:14px;font-weight:800;color:#16a34a;font-family:var(--mono)">${fmtDurTMA(a.avg)}</div>
+              <div style="font-size:8px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;margin-top:2px">Atendim.</div>
+            </div>
+          </div>
+        </div>`;
+      })()}
     </div>` : ''}
   `;
   // Botão "+ Vincular outro veículo": abre lista de veículos disponíveis pra atribuir
@@ -4427,9 +4450,31 @@ function calcRep(){
     .sort((a,b) => b.completedTs - a.completedTs);
 }
 
+// Formata segundos → "45s" / "12min 30s" / "1h 05min"
+function fmtDurTMA(sec){
+  if(sec == null || !isFinite(sec) || sec < 0) return '—';
+  sec = Math.round(sec);
+  if(sec < 60) return sec + 's';
+  const m = Math.floor(sec/60), s = sec % 60;
+  if(m < 60) return m + 'min' + (s ? ' ' + s + 's' : '');
+  const h = Math.floor(m/60), mm = m % 60;
+  return h + 'h' + (mm ? ' ' + String(mm).padStart(2,'0') + 'min' : '');
+}
+// Média de um campo de duração (só conta corridas que têm o valor > 0) → {avg, n}
+function mediaDur(rows, key){
+  const vals = rows.map(r => r[key]).filter(v => v != null && v > 0);
+  return { avg: vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null, n: vals.length };
+}
+
 function renderRep(){
   const rows = calcRep();
   const totalKm = rows.reduce((s,r) => s + (r.totalKm||0), 0);
+  // ===== TMA (Tempo Médio de Atendimento) — 3 componentes =====
+  // total = recebe→finaliza (totalDurationSec) · deslocamento = sai→chega (travelDurationSec)
+  // · atendimento = chega→finaliza (serviceDurationSec). Média só sobre corridas que têm o marco.
+  const tmaTotal  = mediaDur(rows, 'totalDurationSec');
+  const tmaDesloc = mediaDur(rows, 'travelDurationSec');
+  const tmaAtend  = mediaDur(rows, 'serviceDurationSec');
   const sumNota = rows.reduce((s,r) => s + (r.nota?.final||0), 0);
   const cntNota = rows.filter(r => r.nota).length;
   const avgNota = cntNota > 0 ? sumNota / cntNota : 0;
@@ -4444,6 +4489,26 @@ function renderRep(){
       <div class="rk-tot"><div class="v" style="color:#dc2626">${canc}</div><div class="l">Cancelados</div></div>
       <div class="rk-tot"><div class="v">${totalKm.toFixed(1)}</div><div class="l">Km total</div></div>
       <div class="rk-tot"><div class="v" style="color:${avgNota >= 8 ? '#16a34a' : avgNota >= 6 ? '#fbbf24' : '#dc2626'}">${avgNota.toFixed(1)}</div><div class="l">Nota média</div></div>
+    </div>
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(0,180,229,0.07);border:1px solid var(--acc);border-radius:8px">
+      <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">⏱ TMA · Tempo Médio de Atendimento</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div style="background:var(--surf2);padding:9px 8px;border-radius:8px;text-align:center">
+          <div style="font-size:17px;font-weight:800;color:var(--acc);font-family:var(--mono)">${fmtDurTMA(tmaTotal.avg)}</div>
+          <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;margin-top:3px">Total</div>
+          <div style="font-size:8px;color:var(--txt3);margin-top:1px">recebe → finaliza · n=${tmaTotal.n}</div>
+        </div>
+        <div style="background:var(--surf2);padding:9px 8px;border-radius:8px;text-align:center">
+          <div style="font-size:17px;font-weight:800;color:#fbbf24;font-family:var(--mono)">${fmtDurTMA(tmaDesloc.avg)}</div>
+          <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;margin-top:3px">Deslocamento</div>
+          <div style="font-size:8px;color:var(--txt3);margin-top:1px">sai → chega · n=${tmaDesloc.n}</div>
+        </div>
+        <div style="background:var(--surf2);padding:9px 8px;border-radius:8px;text-align:center">
+          <div style="font-size:17px;font-weight:800;color:#16a34a;font-family:var(--mono)">${fmtDurTMA(tmaAtend.avg)}</div>
+          <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;margin-top:3px">Atendimento</div>
+          <div style="font-size:8px;color:var(--txt3);margin-top:1px">chega → finaliza · n=${tmaAtend.n}</div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -4462,7 +4527,9 @@ function renderRep(){
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Placa</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Cliente</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">Km</th>
-          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">No local</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="TMA total: colab recebe o chamado → finaliza">TMA total</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="Deslocamento: sai para o cliente → chega no cliente">Desloc.</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="Atendimento: chega no cliente → finaliza">Atend.</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:center">Status</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">Nota</th>
         </tr>
@@ -4473,7 +4540,6 @@ function renderRep(){
           const baseN = c?.base || '—';
           const d = new Date(r.completedTs);
           const dStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-          const svc = r.serviceDurationSec ? (r.serviceDurationSec<60 ? Math.round(r.serviceDurationSec)+'s' : Math.floor(r.serviceDurationSec/60)+'min') : '—';
           const nota = r.nota?.final;
           const corNota = nota >= 8 ? '#16a34a' : nota >= 6 ? '#fbbf24' : '#dc2626';
           const stCor = r.endStatus === 'concluido' ? '#16a34a' : r.endStatus === 'cancelado' ? '#dc2626' : 'var(--txt3)';
@@ -4484,7 +4550,9 @@ function renderRep(){
             <td style="padding:8px 12px;font-family:var(--mono)">${esc(r.motoristaPlaca||'—')}</td>
             <td style="padding:8px 12px">${esc(r.cliente||'—')}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${(r.totalKm||0).toFixed(1)}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${svc}</td>
+            <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${fmtDurTMA(r.totalDurationSec)}</td>
+            <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#fbbf24">${fmtDurTMA(r.travelDurationSec)}</td>
+            <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#16a34a">${fmtDurTMA(r.serviceDurationSec)}</td>
             <td style="padding:8px 12px;text-align:center;color:${stCor};font-weight:700">${esc(r.endStatus||'—')}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:${corNota};font-weight:700">${nota != null ? nota.toFixed(1) : '—'}</td>
           </tr>`;
@@ -4496,7 +4564,7 @@ function renderRep(){
 
 function exportRepCSV(){
   const rows = calcRep();
-  const headers = ['Data','Colaborador','Base','Placa','Cliente','Km','Duração no local (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)','Chamado ID'];
+  const headers = ['Data','Colaborador','Base','Placa','Cliente','Km','TMA total (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)','Chamado ID'];
   const lines = [headers.join(';')];
   for(const r of rows){
     const c = colaboradores[r.motoristaId];
@@ -4514,6 +4582,8 @@ function exportRepCSV(){
       r.motoristaPlaca || '',
       r.cliente || '',
       (r.totalKm || 0).toFixed(2),
+      r.totalDurationSec ? Math.round(r.totalDurationSec) : '',
+      r.travelDurationSec ? Math.round(r.travelDurationSec) : '',
       r.serviceDurationSec ? Math.round(r.serviceDurationSec) : '',
       r.endStatus || '',
       r.nota?.final?.toFixed(2) || '',
