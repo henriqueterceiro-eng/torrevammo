@@ -793,7 +793,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v43 · 2026-07-28';
+const APP_VERSION = 'v44 · 2026-07-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2821,6 +2821,16 @@ function bindRotinaInputs(c){
     } else if(tipo === 'check'){
       const cb = step.querySelector('input[type=checkbox]');
       cb.onchange = () => {
+        // SLOTS É SUPREMO: só permite marcar "moto recolhida" se houver slot livre pra ela.
+        // Sem vaga, o colab não pode recolher — precisa descarregar antes.
+        if(id === 'moto_recolhida' && cb.checked){
+          const jaTem = (turnoAtivo?.slotsOcupados || []).some(s => s && s.chamadoId === c.id);
+          if(!jaTem && isFull()){
+            cb.checked = false;
+            alert('⛔ Sem slot livre pra recolher esta moto.\n\nTodos os seus slots estão ocupados. Descarregue numa base antes de recolher outra moto.');
+            return;
+          }
+        }
         steps[id] = cb.checked;
         persistRotina(c);
         renderChamadoCard();
@@ -2912,29 +2922,23 @@ function handleAction(act){
 }
 
 function continuarConclusao(ativo){
-  rideFinalize('concluido');
   const desfecho = desfechoAtendimento(ativo);
-  // GARANTIA (defesa em profundidade): se o atendimento foi RECOLHIDO, a moto TEM que estar
-  // num slot. Se por qualquer motivo (modal de carga pulado/esvaziado, motivo fora da regex,
-  // versão antiga do app) não houver slot pra ESTE chamado, cria agora. Assim "desfecho
-  // recolhido sem moto no carro" nunca mais acontece.
+  // SLOTS É REGRA SUPREMA + garantia do recolhimento: se o atendimento foi RECOLHIDO, a moto
+  // TEM que ocupar um slot (independe do TIPO de chamado — vale sempre que o colab escolher
+  // recolher no fluxo). Se ainda não ocupa: havendo VAGA → cria o slot agora; SEM vaga → NÃO
+  // conclui, manda descarregar antes. Nunca carrega acima da capacidade.
   if(desfecho === 'recolhido' && turnoAtivo){
     const jaTem = (turnoAtivo.slotsOcupados || []).some(s => s && s.chamadoId === ativo.id);
     if(!jaTem){
-      const ok = checkInMoto({ source: 'cliente', chamadoId: ativo.id, clienteName: ativo.cliente || null, placa: ativo.placa || null });
-      if(!ok){
-        // Slots cheios, mas a moto foi recolhida DE FATO → registra mesmo assim (realidade > trava)
-        turnoAtivo.slotsOcupados = turnoAtivo.slotsOcupados || [];
-        turnoAtivo.slotsOcupados.push({
-          id: 'slot_' + Date.now() + '_' + Math.random().toString(36).substring(2,5),
-          ocupadoEm: Date.now(), source: 'cliente', chamadoId: ativo.id,
-          clienteName: ativo.cliente || null, placa: ativo.placa || null, _overCapacity: true
-        });
-        saveTurno(); syncTurnoToTorre(); renderTopBar();
-        showToast('⚠ Moto recolhida acima da capacidade dos slots — confira', true);
+      if(isFull()){
+        alert('⛔ Sem slot livre pra recolher esta moto.\n\nTodos os seus slots estão ocupados. Vá a uma base descarregar antes de concluir este atendimento como "moto recolhida".');
+        if(typeof abrirModalBase === 'function') abrirModalBase(false);
+        return; // NÃO conclui — slots é supremo
       }
+      checkInMoto({ source: 'cliente', chamadoId: ativo.id, clienteName: ativo.cliente || null, placa: ativo.placa || null });
     }
   }
+  rideFinalize('concluido');
   // Anexa assinatura/ausência + desfecho ao status enviado pra torre
   const payload = {
     chamadoId: ativo.id,
