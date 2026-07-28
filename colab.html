@@ -793,7 +793,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v44 · 2026-07-28';
+const APP_VERSION = 'v45 · 2026-07-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1336,10 +1336,11 @@ function calculateNota(ride){
   };
 }
 
-function rideFinalize(status){
+function rideFinalize(status, desfecho){
   if(!currentRide) return;
   currentRide.completedTs = Date.now();
   currentRide.endStatus = status; // 'concluido' ou 'cancelado'
+  if(desfecho) currentRide.desfecho = desfecho; // reparado|recolhido|nao_encontrada|... (pro relatório)
   currentRide.totalKm = +calcKmFromTrajeto(currentRide.trajeto).toFixed(2);
   currentRide.totalDurationSec = Math.round((currentRide.completedTs - currentRide.assignedTs) / 1000);
   // TMA total oficial = ABERTURA do chamado → ENCERRAMENTO (fallback assignedTs se não veio a abertura)
@@ -1487,6 +1488,15 @@ function buildFlow(c){
   const fx = fluxoDoMotivo(c.motivo);
   const S = c.rotinaSteps || {};
   const steps = [];
+  // MOTO NÃO ENCONTRADA — vale pra TODO chamado (qualquer motivo/fluxo). Se a moto não está no
+  // local, finaliza aqui com evidência. É a PRIMEIRA pergunta de qualquer atendimento.
+  steps.push({ id:'moto_encontrada', label:'A moto foi encontrada no local?', tipo:'bool' });
+  if(S.moto_encontrada === undefined) return steps;
+  if(S.moto_encontrada === false){
+    steps.push({ id:'foto_local_vazio', label:'Foto do local (sem a moto)', tipo:'foto' });
+    steps.push({ id:'obs_nao_encontrada', label:'Onde procurou / observações', tipo:'obs', placeholder:'Descreva onde procurou a moto e por que não encontrou' });
+    return steps; // fim do fluxo → desfecho 'nao_encontrada' → finaliza
+  }
   const recolhimento = () => {
     // prova de vida da chave — todo recolhimento, com ou sem cliente
     steps.push({ id:'q_chave', label:'A moto possui chave?', tipo:'bool' });
@@ -1556,6 +1566,7 @@ function stepDone(s, S){
 function desfechoAtendimento(c){
   const fx = fluxoDoMotivo(c.motivo);
   const S = c.rotinaSteps || {};
+  if(S.moto_encontrada === false) return 'nao_encontrada';   // moto não estava no local
   if(fx === 'logistica') return 'movimentado';
   if(fx === 'inadimplencia' && S.cliente_local === true && S.quitou === true) return 'pago_no_local';
   if(S.moto_recolhida === true) return 'recolhido';
@@ -2912,7 +2923,8 @@ function handleAction(act){
         continuarConclusao(ativo);
       }
     };
-    if(turnoAtivo && slotsTotalCount() > 0){
+    // Moto não encontrada → não há o que carregar; pula o modal de carga
+    if(turnoAtivo && slotsTotalCount() > 0 && desfechoAtendimento(ativo) !== 'nao_encontrada'){
       abrirModalCarga(ativo, finalizar);
       return;
     }
@@ -2938,7 +2950,7 @@ function continuarConclusao(ativo){
       checkInMoto({ source: 'cliente', chamadoId: ativo.id, clienteName: ativo.cliente || null, placa: ativo.placa || null });
     }
   }
-  rideFinalize('concluido');
+  rideFinalize('concluido', desfecho);
   // Anexa assinatura/ausência + desfecho ao status enviado pra torre
   const payload = {
     chamadoId: ativo.id,
@@ -3415,6 +3427,21 @@ function confirmarDescarga(){
   syncTurnoToTorre();
   renderTopBar();
   const n = aSair.length;
+  // Registra no chamado de cada moto a BASE onde foi descarregada (pro relatório da torre)
+  if(n > 0 && _descBase){
+    try {
+      if(typeof firebase !== 'undefined' && firebase.apps?.length){
+        const db = firebase.database();
+        aSair.forEach(s => {
+          if(s && s.chamadoId){
+            db.ref('vammo/chamados/' + s.chamadoId).update({
+              descargaBaseId: _descBase.id, descargaBaseNome: _descBase.nome, descargaEm: Date.now()
+            }).catch(()=>{});
+          }
+        });
+      }
+    } catch(_){}
+  }
   if(n > 0){
     showToast(`✓ ${n} moto${n>1?'s descarregadas':' descarregada'} em ${_descBase.nome}`);
   } else {

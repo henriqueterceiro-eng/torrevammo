@@ -758,8 +758,8 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
-const LATEST_COLAB_VERSION = 'v44 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v33 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v34 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1611,9 +1611,10 @@ async function fetchIncidentsInView(announce){
       incidentMarkers.push(m);
     }
     const n = incs.length;
-    // Só avisa na ação manual (ligar a camada) — refresh automático atualiza pinos em silêncio
+    // Só avisa na ação manual (ligar a camada) — refresh automático atualiza pinos em silêncio.
+    // Mensagem ESTÁTICA (sem número que muda) pra nunca dar sensação de "grudado".
     if(announce){
-      showToast(n > 0 ? `🚦 ${n} incidente${n>1?'s':''} de trânsito encontrado${n>1?'s':''}` : '✓ Nenhum incidente nesta área agora');
+      showToast(n > 0 ? '🚦 Incidentes de trânsito no mapa' : '✓ Sem incidentes nesta área');
     }
   } catch(e){
     console.warn('Incidents err:', e.message);
@@ -4580,6 +4581,30 @@ function tmaTotalSec(r){
   return r.totalDurationSec != null ? r.totalDurationSec : null;
 }
 
+// Motivo do chamado da corrida (fallback pro chamado se a corrida antiga não guardou)
+function motivoDaCorrida(r){
+  if(r.motivo) return r.motivo;
+  const ch = chamados.find(x => x.id === r.chamadoId);
+  return (ch && ch.motivo) || '—';
+}
+// Destino/Status final: base onde a moto foi descarregada, OU (se não removeu) resolvida no
+// local / moto não encontrada / pago no local / movimentação. desfecho vem da corrida (colab
+// v45+) com fallback pro chamado; base de descarga vem do chamado (gravada na descarga).
+function destinoDaCorrida(r){
+  const ch = chamados.find(x => x.id === r.chamadoId);
+  const desf = r.desfecho || (ch && ch.desfecho) || null;
+  if(r.endStatus === 'cancelado') return { txt:'✕ Cancelado', cor:'#dc2626' };
+  if(desf === 'nao_encontrada')  return { txt:'🔍 Moto não encontrada', cor:'#dc2626' };
+  if(desf === 'reparado')        return { txt:'🔧 Resolvida no local', cor:'#16a34a' };
+  if(desf === 'pago_no_local')   return { txt:'💵 Pago no local', cor:'#16a34a' };
+  if(desf === 'movimentado')     return { txt:'🚚 Movimentação interna', cor:'#8b5cf6' };
+  if(desf === 'recolhido'){
+    const baseN = (ch && ch.descargaBaseNome) || null;
+    return baseN ? { txt:'📦 Descarregada · ' + baseN, cor:'#00B4E5' } : { txt:'📦 Recolhida (a bordo)', cor:'#fbbf24' };
+  }
+  return { txt: desf || '—', cor:'var(--txt2)' };
+}
+
 function renderRep(){
   const rows = calcRep();
   const totalKm = rows.reduce((s,r) => s + (r.totalKm||0), 0);
@@ -4640,6 +4665,8 @@ function renderRep(){
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Base</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Placa</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Cliente</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Motivo</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Base onde a moto foi descarregada, ou o desfecho (resolvida no local / moto não encontrada / etc.)">Destino / Desfecho</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">Km</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="TMA total: abertura do chamado → encerramento">TMA total</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="Deslocamento: sai para o cliente → chega no cliente">Desloc.</th>
@@ -4657,12 +4684,15 @@ function renderRep(){
           const nota = r.nota?.final;
           const corNota = nota >= 8 ? '#16a34a' : nota >= 6 ? '#fbbf24' : '#dc2626';
           const stCor = r.endStatus === 'concluido' ? '#16a34a' : r.endStatus === 'cancelado' ? '#dc2626' : 'var(--txt3)';
+          const dest = destinoDaCorrida(r);
           return `<tr style="border-bottom:1px solid var(--bdr)">
             <td style="padding:8px 12px;font-family:var(--mono);font-size:10px">${dStr}</td>
             <td style="padding:8px 12px">${esc(r.motoristaNome||'?')}</td>
             <td style="padding:8px 12px">${esc(baseN)}</td>
             <td style="padding:8px 12px;font-family:var(--mono)">${esc(r.motoristaPlaca||'—')}</td>
             <td style="padding:8px 12px">${esc(r.cliente||'—')}</td>
+            <td style="padding:8px 12px">${esc(motivoDaCorrida(r))}</td>
+            <td style="padding:8px 12px;color:${dest.cor};font-weight:600">${esc(dest.txt)}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${(r.totalKm||0).toFixed(1)}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${fmtDurTMA(tmaTotalSec(r))}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#fbbf24">${fmtDurTMA(r.travelDurationSec)}</td>
@@ -4678,7 +4708,7 @@ function renderRep(){
 
 function exportRepCSV(){
   const rows = calcRep();
-  const headers = ['Data','Colaborador','Base','Placa','Cliente','Km','TMA total (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)','Chamado ID'];
+  const headers = ['Data','Colaborador','Base','Placa','Cliente','Motivo','Destino / Desfecho','Km','TMA total (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)','Chamado ID'];
   const lines = [headers.join(';')];
   for(const r of rows){
     const c = colaboradores[r.motoristaId];
@@ -4695,6 +4725,8 @@ function exportRepCSV(){
       c?.base || '',
       r.motoristaPlaca || '',
       r.cliente || '',
+      motivoDaCorrida(r),
+      destinoDaCorrida(r).txt.replace(/^[^\wÀ-ÿ]+/, '').trim(),
       (r.totalKm || 0).toFixed(2),
       tmaTotalSec(r) != null ? Math.round(tmaTotalSec(r)) : '',
       r.travelDurationSec ? Math.round(r.travelDurationSec) : '',
@@ -5124,6 +5156,33 @@ function showToast(msg, isErr){
   clearTimeout(showToast._to);
   showToast._to = setTimeout(() => { t.classList.remove('show'); showToast._deadline = 0; }, Math.max(0, showToast._deadline - now));
 }
+
+// ===== AUTO-UPDATE DA TORRE =====
+// A torre NÃO tem service worker, então uma aba aberta continua rodando o código ANTIGO até dar
+// F5 — por isso correções deployadas "não chegam" em quem está com a torre aberta. Isto checa a
+// versão no servidor periodicamente e, se mudou, mostra um banner discreto pra atualizar (sem
+// recarregar sozinho no meio de uma ação do operador).
+(function watchTorreVersion(){
+  async function check(){
+    try {
+      const r = await fetch('/torre?_v=' + Date.now(), { cache: 'no-store' });
+      if(!r.ok) return;
+      const html = await r.text();
+      const m = html.match(/TORRE_VERSION\s*=\s*'([^']+)'/);
+      if(m && m[1] && m[1].split(' ')[0] !== TORRE_VERSION.split(' ')[0] && !document.getElementById('updbanner')){
+        const b = document.createElement('div');
+        b.id = 'updbanner';
+        b.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10020;background:rgba(0,180,229,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#001823;padding:11px 16px;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.3);display:flex;align-items:center;gap:12px;font-weight:700;font-size:13px';
+        b.innerHTML = `🔄 Nova versão da torre disponível <button id="updnow" style="background:#001823;color:#fff;border:none;padding:7px 14px;border-radius:9px;font-weight:800;cursor:pointer;font-size:12px">Atualizar</button> <button id="upddismiss" style="background:transparent;border:none;color:#001823;opacity:0.7;cursor:pointer;font-size:16px;font-weight:800;line-height:1">✕</button>`;
+        document.body.appendChild(b);
+        document.getElementById('updnow').onclick = () => location.reload();
+        document.getElementById('upddismiss').onclick = () => b.remove();
+      }
+    } catch(_){}
+  }
+  setTimeout(check, 20000);
+  setInterval(check, 120000);
+})();
 
 // Beep curto via Web Audio — chama atenção pra alertas críticos
 function playAlertSound(){
