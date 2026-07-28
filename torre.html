@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v18 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v19 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2472,6 +2472,10 @@ function renderDetail(){
       <button class="b-conc${c.status==='concluido'?' cur':''}" data-st="concluido">Concluído</button>
       <button class="b-canc${c.status==='cancelado'?' cur':''}" data-st="cancelado">Cancelado</button>
     </div>
+    ${c.status !== 'concluido' && c.status !== 'cancelado' ? `
+      <button id="dafinforce" style="width:100%;margin-top:8px;padding:9px;background:rgba(220,38,38,0.14);border:1px solid #dc2626;color:#fca5a5;font-size:12px;font-weight:800;border-radius:6px;cursor:pointer">🛑 Finalizar forçado pela Torre <span style="font-weight:500;opacity:0.8">(gera log)</span></button>
+    ` : ''}
+    ${c.finalizadoForcado ? `<div style="margin-top:8px;padding:7px 10px;background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.5);border-radius:6px;font-size:10px;color:#fca5a5;line-height:1.4">🛑 <strong>Finalizado forçado pela Torre</strong>${c.finalizadoForcadoPor?' por '+esc(c.finalizadoForcadoPor):''}${c.finalizadoForcadoEm?' · '+fmtTime(c.finalizadoForcadoEm):''}</div>` : ''}
     ${motIds.length ? `
       <div class="assign">
         <label>Atribuir a colaborador (${onlineMots.length} online)</label>
@@ -2512,7 +2516,12 @@ function renderDetail(){
     ` : `<div class="assign"><div style="color:var(--txt3);font-size:11px;text-align:center;padding:8px">Nenhum colaborador conectado.<br><small>Abra o app do colaborador em outro device.</small></div></div>`}
   `;
 
-  $$('#detail .statbtns button').forEach(b => b.onclick = () => updateStatus(c.id, b.dataset.st));
+  // Concluir pela torre = finalização FORÇADA (com log). Demais status seguem o fluxo normal.
+  $$('#detail .statbtns button').forEach(b => b.onclick = () => {
+    if(b.dataset.st === 'concluido') finalizarForcado(c.id);
+    else updateStatus(c.id, b.dataset.st);
+  });
+  const ff = $('#dafinforce'); if(ff) ff.onclick = () => finalizarForcado(c.id);
   const tc = $('#trackcopy'); if(tc) tc.onclick = (e) => {
     e.preventDefault();
     const url = location.origin + '/track?id=' + encodeURIComponent(c.id);
@@ -2632,6 +2641,58 @@ function updateStatus(chamadoId, newStatus){
     if(oldMot) updateRouteFor(oldMot);
   }
   renderAll();
+}
+
+// ===== LOG DURÁVEL de ações da torre (NÃO é podado como vammo/events) =====
+// Auditoria de overrides do operador: finalização forçada, atrelar moto no slot, etc.
+function logTorre(tipo, entry){
+  try {
+    if(typeof firebase !== 'undefined' && firebase.apps?.length){
+      firebase.database().ref('vammo/logs_torre').push(cleanForFb({ tipo, ts: Date.now(), ...(entry||{}) }));
+    }
+  } catch(e){ console.warn('[torre] logTorre fail:', e); }
+}
+// Operador da torre — não há login; pergunta 1x e guarda no device (vai nos logs de ação forçada).
+function getOperadorTorre(){
+  let op = '';
+  try { op = localStorage.getItem('torre_operador') || ''; } catch(_){}
+  if(!op){
+    op = (prompt('Seu nome (operador da torre) — vai no log das ações forçadas:') || '').trim();
+    if(op){ try { localStorage.setItem('torre_operador', op); } catch(_){} }
+  }
+  return op || 'Torre (sem identificação)';
+}
+
+// FINALIZAÇÃO FORÇADA PELA TORRE — conclui o chamado sem o colab finalizar no app dele.
+// (Recurso temporário do operador.) Gera log durável em vammo/logs_torre.
+function finalizarForcado(chamadoId){
+  const c = chamados.find(x => x.id === chamadoId);
+  if(!c) return;
+  if(c.status === 'concluido'){ showToast('Chamado já está concluído'); return; }
+  const mot = c.motoristaId ? motoristas[c.motoristaId] : null;
+  if(!confirm(
+    `🛑 FINALIZAR FORÇADO PELA TORRE\n\n` +
+    `Cliente: ${c.cliente || '?'}\nMotivo: ${c.motivo || '—'}\n` +
+    (mot ? `Colaborador: ${mot.nome}\n` : '') +
+    `\nConclui o chamado SEM o colaborador finalizar no app — e gera um LOG de finalização forçada.\n\nContinuar?`
+  )) return;
+  const operador = getOperadorTorre();
+  const ts = Date.now();
+  const statusAnterior = c.status;
+  const oldMot = c.motoristaId || null;
+  // marca a origem forçada no próprio chamado (persiste no banco)
+  c.finalizadoForcado = true; c.finalizadoForcadoPor = operador; c.finalizadoForcadoEm = ts; c.concluidoEm = ts;
+  STORE.updateChamado(chamadoId, { finalizadoForcado: true, finalizadoForcadoPor: operador, finalizadoForcadoEm: ts, concluidoEm: ts });
+  // conclui de fato (reusa updateStatus: tira da fila, atualiza rota, statusMap, demo, sync, render)
+  updateStatus(chamadoId, 'concluido');
+  // LOG DURÁVEL
+  logTorre('finalizacao_forcada', {
+    chamadoId, cliente: c.cliente || null, motivo: c.motivo || null,
+    endereco: c.endereco || null, placa: c.placa || null,
+    motoristaId: oldMot, motoristaNome: mot ? mot.nome : null,
+    statusAnterior, operador
+  });
+  showToast(`🛑 Finalizado forçado por ${operador} · log gravado`);
 }
 
 function atribuir(chamadoId, motoristaId){
@@ -4139,6 +4200,12 @@ function openAddMotoForm(colabId, m){
         mLive.slotsDetalhe = [...(mLive.slotsDetalhe || []), novoSlot];
         mLive.isFull = mLive.slotsCount >= (mLive.slotsTotal || 0);
       }
+      // LOG DURÁVEL de auditoria — moto atrelada ao slot pela torre
+      logTorre('atrela_moto', {
+        motoristaId: colabId, motoristaNome: m.nome || null,
+        placa: placaUp || null, source, clienteName, chamadoId,
+        operador: getOperadorTorre()
+      });
       showToast(`✓ Moto ${placaUp || '(sem placa)'} adicionada · ${m.nome.split(' ')[0]} agora tem ${mLive?.slotsCount}/${mLive?.slotsTotal}`);
       close();
       if(_motDetailId === colabId) renderMotDetail();
