@@ -378,23 +378,30 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 .rk-empty{padding:60px 20px;text-align:center;color:var(--txt2)}
 .rk-empty .ic{font-size:48px;opacity:0.4;margin-bottom:12px}
 
-/* TOAST */
-#toast{position:fixed;top:82px;left:50%;transform:translateX(-50%) translateY(-220%);background:var(--acc);color:#001823;padding:12px 20px;border-radius:24px;font-weight:700;font-size:13px;z-index:10001;box-shadow:0 10px 30px rgba(0,180,229,0.4);transition:transform 0.3s;max-width:90vw;white-space:normal;text-align:center;line-height:1.3}
+/* TOAST — pílula translúcida com blur */
+#toast{position:fixed;top:82px;left:50%;transform:translateX(-50%) translateY(-220%);background:rgba(0,180,229,0.9);color:#001823;padding:12px 22px;border-radius:24px;font-weight:700;font-size:13px;z-index:10001;box-shadow:0 12px 36px rgba(0,180,229,0.32);backdrop-filter:blur(12px) saturate(140%);-webkit-backdrop-filter:blur(12px) saturate(140%);border:1px solid rgba(255,255,255,0.3);transition:transform 0.35s cubic-bezier(.2,.8,.2,1);max-width:90vw;white-space:normal;text-align:center;line-height:1.3}
 #toast.show{transform:translateX(-50%) translateY(0)}
-#toast.err{background:var(--novo);color:#fff}
+#toast.err{background:rgba(220,38,38,0.9);color:#fff;border-color:rgba(255,255,255,0.25)}
 
-/* ALERTAS PERSISTENTES — banner que fica até o gestor dispensar */
-#alertstack{position:fixed;top:78px;right:14px;z-index:10005;display:flex;flex-direction:column;gap:8px;max-width:380px;width:calc(100vw - 28px);max-width:380px}
-.alert-card{background:linear-gradient(135deg,#7c2d12,#dc2626);color:#fff;border-radius:10px;padding:12px 14px;box-shadow:0 10px 30px rgba(220,38,38,0.45);border:1px solid rgba(255,255,255,0.15);font-size:13px;display:flex;gap:10px;align-items:flex-start;animation:alertSlide 0.3s ease-out;position:relative}
+/* ALERTAS LATERAIS — cards glassmorphism (translúcido + blur) */
+#alertstack{position:fixed;top:78px;right:16px;z-index:10005;display:flex;flex-direction:column;gap:10px;width:min(400px,calc(100vw - 32px))}
+.alert-card{position:relative;display:flex;gap:12px;align-items:flex-start;color:#fff;border-radius:16px;padding:15px 46px 15px 15px;font-size:13px;line-height:1.4;
+  background:linear-gradient(135deg,rgba(220,38,38,0.82),rgba(153,27,27,0.78));
+  backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);
+  border:1px solid rgba(255,255,255,0.18);box-shadow:0 16px 44px rgba(0,0,0,0.5);
+  animation:alertSlide 0.35s cubic-bezier(.2,.8,.2,1)}
+.alert-card.warn{background:linear-gradient(135deg,rgba(245,158,11,0.85),rgba(180,83,9,0.8))}
+.alert-card.ok{background:linear-gradient(135deg,rgba(16,185,129,0.85),rgba(6,95,70,0.8))}
 @keyframes alertSlide{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
-.alert-card .ic{font-size:22px;flex:0 0 22px;animation:alertPulse 1.2s infinite}
+.alert-card .ic{font-size:24px;flex:0 0 auto;line-height:1.1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.35));animation:alertPulse 1.4s infinite}
 @keyframes alertPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
-.alert-card .body{flex:1;min-width:0;line-height:1.35}
-.alert-card .body strong{font-size:14px;display:block;margin-bottom:2px}
-.alert-card .body small{font-size:10px;opacity:0.85;display:block;margin-top:3px}
-.alert-card .x{background:rgba(255,255,255,0.15);border:none;color:#fff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;flex:0 0 24px;font-weight:800}
-.alert-card .x:hover{background:rgba(255,255,255,0.3)}
-.alert-card.warn{background:linear-gradient(135deg,#78350f,#f59e0b);color:#fff}
+.alert-card .body{flex:1;min-width:0}
+.alert-card .body strong{font-size:14.5px;display:block;margin-bottom:3px;font-weight:800}
+.alert-card .acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.alert-card .acts a{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.28);color:#fff;text-decoration:none;font-weight:700;font-size:12px;padding:7px 12px;border-radius:10px;line-height:1;transition:background 0.15s}
+.alert-card .acts a:hover{background:rgba(255,255,255,0.32)}
+.alert-card .x{position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.18);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;line-height:28px;text-align:center;font-weight:800;padding:0;transition:background 0.15s}
+.alert-card .x:hover{background:rgba(255,255,255,0.34)}
 
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -752,7 +759,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v44 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v29 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v30 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5142,13 +5149,15 @@ function pushAlert(opts){
   }
   const stack = $('#alertstack');
   const card = document.createElement('div');
-  card.className = 'alert-card' + (opts.tipo === 'warn' ? ' warn' : '');
+  const tipoCls = opts.tipo === 'warn' ? ' warn' : opts.tipo === 'ok' ? ' ok' : '';
+  const icon = opts.tipo === 'warn' ? '⚠' : opts.tipo === 'ok' ? '🎯' : '🚨';
+  card.className = 'alert-card' + tipoCls;
   card.innerHTML = `
-    <div class="ic">${opts.tipo === 'warn' ? '⚠' : '🚨'}</div>
+    <div class="ic">${icon}</div>
     <div class="body">
       <strong>${esc(opts.titulo || 'Alerta')}</strong>
       ${opts.msg ? esc(opts.msg) : ''}
-      ${opts.motId && motoristas[opts.motId] ? `<small><a href="#" data-mapa style="color:#fff;text-decoration:underline">📍 Ver no mapa</a> · <a href="#" data-detail style="color:#fff;text-decoration:underline">ℹ Abrir detalhe</a></small>` : ''}
+      ${opts.motId && motoristas[opts.motId] ? `<div class="acts"><a href="#" data-mapa>📍 Ver no mapa</a><a href="#" data-detail>ℹ Abrir detalhe</a></div>` : ''}
     </div>
     <button class="x" title="Dispensar">✕</button>
   `;
@@ -5456,13 +5465,18 @@ function setupSyncListeners(){
   });
 
   // Atendimento iniciado pelo colab
-  sync.on('chamado:atendimento-iniciado', (data) => {
+  sync.on('chamado:atendimento-iniciado', (data, meta) => {
     const c = chamados.find(x => x.id === data.chamadoId);
     if(c){
-      c.iniciadoEm = Date.now();
+      c.iniciadoEm = c.iniciadoEm || Date.now();
       STORE.updateChamado(c.id, { iniciadoEm: c.iniciadoEm });
-      const mot = motoristas[data.motoristaId];
-      showToast(`▶ ${mot?.nome || 'Colab'} iniciou atendimento de ${c.cliente}`);
+      // Só toast se o evento for RECENTE — evita o banner "grudar" quando o log de eventos
+      // é reprocessado numa reconexão (replay dos últimos eventos).
+      const fresco = !meta || !meta.ts || (Date.now() - meta.ts < 20000);
+      if(fresco){
+        const mot = motoristas[data.motoristaId];
+        showToast(`▶ ${mot?.nome || 'Colab'} iniciou atendimento de ${c.cliente}`);
+      }
       if(selId === c.id) renderDetail();
     }
   });
@@ -5514,34 +5528,14 @@ function setupSyncListeners(){
     STORE.updateChamado(c.id, { arrived: true, arrivedAt: c.arrivedAt });
     // Limpa alerta de "chegando" se ainda estiver na tela
     clearAlert('chegando-' + data.chamadoId);
-    // Alerta persistente: chegou no local (verde)
-    const stack = $('#alertstack');
-    const id = 'chegou-' + data.chamadoId;
-    if(stack && !_alertsAtivos.has(id)){
-      const card = document.createElement('div');
-      card.className = 'alert-card';
-      card.style.background = 'linear-gradient(135deg,#065f46,#10b981)';
-      card.innerHTML = `
-        <div class="ic">🎯</div>
-        <div class="body">
-          <strong>${esc(mot ? mot.nome : 'Colaborador')} chegou no local</strong>
-          ${esc(c.cliente)}${c.endereco ? ' · ' + esc(c.endereco.split(',')[0]) : ''}
-          <small><a href="#" data-mapa style="color:#fff;text-decoration:underline">📍 Ver no mapa</a> · <a href="#" data-detail style="color:#fff;text-decoration:underline">ℹ Abrir detalhe</a></small>
-        </div>
-        <button class="x" title="Dispensar">✕</button>
-      `;
-      card.querySelector('.x').onclick = () => {
-        card.style.animation = 'alertSlide 0.25s ease-out reverse';
-        setTimeout(() => { card.remove(); _alertsAtivos.delete(id); }, 250);
-      };
-      const mapaA = card.querySelector('[data-mapa]');
-      if(mapaA) mapaA.onclick = (e) => { e.preventDefault(); const m = motoristas[data.motoristaId]; if(m && m.lat) map.setView([m.lat, m.lng], 16); };
-      const detA = card.querySelector('[data-detail]');
-      if(detA) detA.onclick = (e) => { e.preventDefault(); openMotDetail(data.motoristaId); };
-      stack.appendChild(card);
-      _alertsAtivos.set(id, card);
-      playAlertSound();
-    }
+    // Alerta persistente: chegou no local (verde) — via pushAlert (mesmo visual dos demais)
+    pushAlert({
+      id: 'chegou-' + data.chamadoId,
+      tipo: 'ok',
+      titulo: `${mot ? mot.nome : 'Colaborador'} chegou no local`,
+      msg: `${c.cliente}${c.endereco ? ' · ' + c.endereco.split(',')[0] : ''}`,
+      motId: data.motoristaId
+    });
     renderAll();
   });
 
