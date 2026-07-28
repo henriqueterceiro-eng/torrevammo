@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v40 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v23 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v24 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2395,20 +2395,28 @@ function renderDetail(){
       <span style="margin-left:8px;color:var(--txt2);font-size:11px">⏱ ${fmtElapsed(c.ts)}</span>
       ${c.travada?'<span class="b b-trav" style="margin-left:6px">⚠ TRAV</span>':''}
     </div>
-    ${gmaps ? `<div class="links"><a href="${gmaps}" target="_blank" rel="noopener">🗺 Google Maps</a>${c.lat && c.lng ? `<a href="https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes" target="_blank">🚗 Waze</a>` : ''}${c.backofficeUrl ? `<a href="${esc(c.backofficeUrl)}" target="_blank">🔗 Backoffice</a>`:''}<a href="#" id="trackcopy" style="background:linear-gradient(135deg,#00B4E5,#0099c4);color:#fff;border:none;font-weight:700">📤 Link p/ cliente</a></div>`:''}
+    ${(() => {
+      // Botão WhatsApp que envia o link de rastreio com mensagem padrão — fica ao lado do "Link p/ cliente".
+      // Usa o telefone do chamado se tiver; senão abre o WhatsApp pra escolher o contato (com a mensagem pronta).
+      const dg = (c.telefone||'').replace(/\D/g,'');
+      const wn = dg ? (dg.length<=11?'55'+dg:dg) : '';
+      const trackUrl = location.origin + '/track?id=' + encodeURIComponent(c.id);
+      const nome = (c.cliente||'').trim().split(/\s+/)[0] || '';
+      const msgWa = `Ola${nome?' '+nome:''}! Aqui e o socorro Vammo. Ja estamos cuidando do seu atendimento e voce pode acompanhar em tempo real por aqui: ${trackUrl}`;
+      const wa = `https://wa.me/${wn}?text=${encodeURIComponent(msgWa)}`;
+      const waBtn = `<a href="${wa}" target="_blank" rel="noopener" title="Enviar link de rastreio no WhatsApp${wn?' do cliente':' — escolha o contato'} com mensagem pronta" style="background:#25D366;color:#08131f;border-color:#25D366;font-weight:800">💬 WhatsApp</a>`;
+      const trackBtn = `<a href="#" id="trackcopy" style="background:linear-gradient(135deg,#00B4E5,#0099c4);color:#fff;border:none;font-weight:700">📤 Link p/ cliente</a>`;
+      const mapBtns = gmaps ? `<a href="${gmaps}" target="_blank" rel="noopener">🗺 Google Maps</a>${c.lat && c.lng ? `<a href="https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes" target="_blank">🚗 Waze</a>` : ''}${c.backofficeUrl ? `<a href="${esc(c.backofficeUrl)}" target="_blank">🔗 Backoffice</a>`:''}` : '';
+      return `<div class="links">${mapBtns}${trackBtn}${waBtn}</div>`;
+    })()}
     ${(() => {
       // Contato do cliente (WhatsApp) + evidências (fotos/vídeo do CX no Slack)
       const dg = (c.telefone||'').replace(/\D/g,'');
       const wn = dg ? (dg.length<=11?'55'+dg:dg) : '';
       const ev = Array.isArray(c.evidencias) ? c.evidencias : (c.evidencias ? String(c.evidencias).split(',').map(s=>s.trim()).filter(Boolean) : []);
       if(!wn && !ev.length) return '';
-      // Botão "enviar link de rastreio no WhatsApp do cliente" com mensagem padrão
-      const trackUrl = location.origin + '/track?id=' + encodeURIComponent(c.id);
-      const nome = (c.cliente||'').trim().split(/\s+/)[0] || '';
-      const msgWa = `Ola${nome?' '+nome:''}! Aqui e o socorro Vammo. Ja estamos cuidando do seu atendimento e voce pode acompanhar em tempo real por aqui: ${trackUrl}`;
-      const enviarLink = wn ? `<a href="https://wa.me/${wn}?text=${encodeURIComponent(msgWa)}" target="_blank" rel="noopener" style="background:#25D366;color:#08131f;border-color:#25D366;font-weight:800">💬 Enviar link no WhatsApp</a>` : '';
       const contato = wn ? `<a href="https://wa.me/${wn}" target="_blank" rel="noopener" style="border-color:#25D366;color:#25D366;font-weight:700">💬 Abrir conversa${c.telefone?' · '+esc(c.telefone):''}</a>` : '';
-      return `<div class="links" style="margin-top:6px">${enviarLink}${contato}${ev.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener">📎 Evidência${ev.length>1?' '+(i+1):''}</a>`).join('')}</div>`;
+      return `<div class="links" style="margin-top:6px">${contato}${ev.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener">📎 Evidência${ev.length>1?' '+(i+1):''}</a>`).join('')}</div>`;
     })()}
     ${(() => {
       // Card de NOTA da corrida (se chamado já foi finalizado)
