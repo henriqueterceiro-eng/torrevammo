@@ -713,6 +713,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
       <div class="slide-thumb" style="width:50px;height:50px;font-size:20px">🏁</div>
     </div>
     <div style="font-size:10px;color:var(--txt3);text-align:center;margin-top:10px">Depois de deslizar, o app abre rota até a base e te avisa quando chegar.</div>
+    <button id="checkoutLongeJaEstou" style="width:100%;padding:10px;background:rgba(22,163,74,0.15);color:#4ade80;border:1px solid #16a34a;font-size:12px;font-weight:800;border-radius:8px;margin-top:10px;cursor:pointer">✓ Já estou na base — fazer checkout mesmo assim</button>
     <button id="checkoutLongeCancelar" style="width:100%;padding:8px;background:transparent;color:var(--txt3);border:none;font-size:11px;margin-top:8px">Cancelar (continuar atendendo)</button>
   </div>
 </div>
@@ -792,7 +793,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v40 · 2026-07-28';
+const APP_VERSION = 'v41 · 2026-07-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3850,6 +3851,15 @@ function abrirCheckoutLongeBase(base, dist){
     document.getElementById('checkoutLongeModal').style.display = 'none';
     entrarModoDestinoCheckout(base);
   });
+  // Override manual: colab jura que está na base (GPS congelado / base com coord errada) → checkout direto
+  const jaEstou = document.getElementById('checkoutLongeJaEstou');
+  if(jaEstou) jaEstou.onclick = () => {
+    if(!confirm(`Confirmar que você JÁ ESTÁ na base ${base.nome} e quer encerrar o turno aqui?`)) return;
+    document.getElementById('checkoutLongeModal').style.display = 'none';
+    _aguardandoBaseCheckout = null;
+    if(turnoAtivo?.modo === 'descarregando') { try { sairModoDescarga(); } catch(_){} }
+    iniciarWizardCheckout();
+  };
   document.getElementById('checkoutLongeCancelar').onclick = () => {
     document.getElementById('checkoutLongeModal').style.display = 'none';
   };
@@ -3869,8 +3879,10 @@ function entrarModoDestinoCheckout(base){
 
 // Checa se chegou na base de checkout — chamado no checkArrivedAtBase
 function checkArrivedAtCheckoutBase(){
-  if(!_aguardandoBaseCheckout || !myPos) return;
-  const dist = haversine(myPos, { lat: _aguardandoBaseCheckout.lat, lng: _aguardandoBaseCheckout.lng });
+  if(!_aguardandoBaseCheckout) return;
+  const p = posConhecida();
+  if(!p) return;
+  const dist = haversine(p, { lat: _aguardandoBaseCheckout.lat, lng: _aguardandoBaseCheckout.lng });
   if(dist <= BASE_RAIO_M){
     const baseChegou = _aguardandoBaseCheckout;
     _aguardandoBaseCheckout = null;
@@ -3921,8 +3933,9 @@ function getCheckoutBase(){
 function isAtCheckoutBase(){
   const base = getCheckoutBase();
   if(!base || base.lat == null || base.lng == null) return { ok: true, base: null }; // sem base cadastrada = permite
-  if(!myPos) return { ok: false, base, dist: null, motivo: 'sem GPS' };
-  const dist = haversine(myPos, { lat: base.lat, lng: base.lng });
+  const p = posConhecida();   // myPos OU buffer — não trava checkout só porque o GPS ainda não deu fix
+  if(!p) return { ok: false, base, dist: null, motivo: 'sem GPS' };
+  const dist = haversine(p, { lat: base.lat, lng: base.lng });
   return { ok: dist <= BASE_RAIO_M, base, dist };
 }
 
@@ -3950,6 +3963,12 @@ async function startCheckOut(){
     abrirCheckoutLongeBase(chk.base, chk.dist);
     return;
   }
+  await iniciarWizardCheckout();
+}
+
+// Abre o wizard de check-out (chamado quando passou as travas OU quando o colab confirma
+// manualmente que já está na base — botão "Já estou na base" do modal de bloqueio).
+async function iniciarWizardCheckout(){
   wizMode = 'out';
   wizStep = 0;
   wizData = {
