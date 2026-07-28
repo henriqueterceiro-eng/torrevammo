@@ -759,7 +759,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v44 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v32 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v33 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5113,18 +5113,16 @@ function playAlertSound(){
 function showToast(msg, isErr){
   const t = $('#toast');
   const now = Date.now();
-  // ANTI-GRUDA: se a MESMA mensagem já está na tela, NÃO reinicia o timer — deixa a que já
-  // está sumir sozinha. Sem isso, um toast re-disparado em loop (ex: refresh de trânsito) fica
-  // "preso" no topo pra sempre. Mensagem diferente reinicia normalmente.
-  if(t.classList.contains('show') && showToast._msg === msg && showToast._shownAt && (now - showToast._shownAt) < 8000){
-    return;
-  }
   t.textContent = msg;
   t.className = isErr ? 'err show' : 'show';
-  showToast._msg = msg;
-  showToast._shownAt = now;
+  // PRAZO FIXO À PROVA DE LOOP: o toast some ~3s depois de APARECER. Chamadas repetidas (mesmo
+  // com o texto mudando, ex: refresh de trânsito) NÃO estendem o prazo — apenas atualizam o
+  // texto. Assim ele NUNCA gruda no topo. Quando já sumiu, uma nova chamada reinicia os 3s.
+  if(!showToast._deadline || showToast._deadline <= now){
+    showToast._deadline = now + 3000;
+  }
   clearTimeout(showToast._to);
-  showToast._to = setTimeout(() => { t.classList.remove('show'); showToast._msg = null; }, 3000);
+  showToast._to = setTimeout(() => { t.classList.remove('show'); showToast._deadline = 0; }, Math.max(0, showToast._deadline - now));
 }
 
 // Beep curto via Web Audio — chama atenção pra alertas críticos
