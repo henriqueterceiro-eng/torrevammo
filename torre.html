@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v40 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v24 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v25 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2404,7 +2404,12 @@ function renderDetail(){
       const nome = (c.cliente||'').trim().split(/\s+/)[0] || '';
       const msgWa = `Ola${nome?' '+nome:''}! Aqui e o socorro Vammo. Ja estamos cuidando do seu atendimento e voce pode acompanhar em tempo real por aqui: ${trackUrl}`;
       const wa = `https://wa.me/${wn}?text=${encodeURIComponent(msgWa)}`;
-      const waBtn = `<a href="${wa}" target="_blank" rel="noopener" title="Enviar link de rastreio no WhatsApp${wn?' do cliente':' — escolha o contato'} com mensagem pronta" style="background:#25D366;color:#08131f;border-color:#25D366;font-weight:800">💬 WhatsApp</a>`;
+      // SÓ pode enviar se for o chamado ATIVO (1º da fila do colab) e estiver EM ROTA
+      const ord = c.motoristaId ? buildOrderMap()[c.id] : null;
+      const emRotaAtivo = c.status === 'em_rota' && !!c.motoristaId && ord && ord.order === 1;
+      const waBtn = emRotaAtivo
+        ? `<a href="${wa}" target="_blank" rel="noopener" title="Enviar link de rastreio no WhatsApp${wn?' do cliente':' — escolha o contato'} com mensagem pronta" style="background:#25D366;color:#08131f;border-color:#25D366;font-weight:800">💬 WhatsApp</a>`
+        : `<a title="Só é possível enviar o link quando o colaborador estiver EM ROTA para este chamado (chamado ativo da fila dele)" onclick="return false" style="background:rgba(37,211,102,0.10);color:var(--txt3);border-color:rgba(37,211,102,0.22);font-weight:800;opacity:0.55;cursor:not-allowed">💬 WhatsApp</a>`;
       const trackBtn = `<a href="#" id="trackcopy" style="background:linear-gradient(135deg,#00B4E5,#0099c4);color:#fff;border:none;font-weight:700">📤 Link p/ cliente</a>`;
       const mapBtns = gmaps ? `<a href="${gmaps}" target="_blank" rel="noopener">🗺 Google Maps</a>${c.lat && c.lng ? `<a href="https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes" target="_blank">🚗 Waze</a>` : ''}${c.backofficeUrl ? `<a href="${esc(c.backofficeUrl)}" target="_blank">🔗 Backoffice</a>`:''}` : '';
       return `<div class="links">${mapBtns}${trackBtn}${waBtn}</div>`;
