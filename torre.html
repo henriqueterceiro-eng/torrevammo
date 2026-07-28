@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v40 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v21 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v22 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2531,7 +2531,7 @@ function renderDetail(){
       prompt('Envie este link pro cliente:', url);
     }
   };
-  const ok = $('#daok'); if(ok) ok.onclick = () => atribuir(c.id, $('#dasel').value);
+  const ok = $('#daok'); if(ok) ok.onclick = () => assignWithMotoCheck(c.id, $('#dasel').value);
   const un = $('#daun'); if(un) un.onclick = () => {
     const motNome = curMot ? curMot.nome : 'o colaborador';
     if(!confirm(`Desatribuir "${c.cliente}" de ${motNome}?\n\nO chamado volta pra fila aberta e o colaborador é notificado.`)) return;
@@ -2609,7 +2609,7 @@ function renderDetail(){
         </div>
       `;
       sug.style.display = 'none';
-      $$('#dasugresult button[data-pick]').forEach(b => b.onclick = () => atribuir(c.id, b.dataset.pick));
+      $$('#dasugresult button[data-pick]').forEach(b => b.onclick = () => assignWithMotoCheck(c.id, b.dataset.pick));
     } catch(e){
       showErr('❌ Erro: ' + e.message);
     }
@@ -2693,6 +2693,76 @@ function finalizarForcado(chamadoId){
     statusAnterior, operador
   });
   showToast(`🛑 Finalizado forçado por ${operador} · log gravado`);
+}
+
+const ASSIGN_MOTO_RAIO_M = 100; // moto (IoT) a mais disso do endereço do chamado → avisa o operador
+
+// Busca a posição da moto do chamado pelo IoT (sob demanda — não depende do painel IoT ligado).
+async function fetchMotoPing(placa){
+  if(!placa) return null;
+  try {
+    const r = await fetch('/iot_status?placas=' + encodeURIComponent((placa||'').toUpperCase()));
+    if(!r.ok) return null;
+    const j = await r.json();
+    const pings = j.pings || j || {};
+    const p = pings[(placa||'').toUpperCase()];
+    if(!p) return null;
+    const temGps = (p.lat != null && p.lon != null && !(p.lat === 0 && p.lon === 0));
+    const online = p.online === true || (p.lp && (Date.now() - p.lp) <= IOT_ONLINE_MIN*60000);
+    return { online, temGps, lat: p.lat, lon: p.lon, lp: p.lp };
+  } catch(_){ return null; }
+}
+
+// Ao atribuir: se a moto (IoT) estiver a >100m do endereço do chamado, pergunta ao operador se
+// quer atrelar o chamado ao LOCAL DA MOTO ou ao LOCAL DO CHAMADO. Senão, atribui direto.
+async function assignWithMotoCheck(chamadoId, motoristaId){
+  if(!motoristaId){ atribuir(chamadoId, motoristaId); return; }          // desatribuir → normal
+  const c = chamados.find(x => x.id === chamadoId);
+  if(!c || c.lat == null || c.lng == null || !c.placa){ atribuir(chamadoId, motoristaId); return; }
+  let ping = null;
+  try { ping = await fetchMotoPing(c.placa); } catch(_){}
+  if(!ping || !ping.temGps){ atribuir(chamadoId, motoristaId); return; }  // moto sem IoT → normal
+  const dist = haversine({lat:c.lat,lng:c.lng}, {lat:ping.lat,lng:ping.lon});
+  if(dist <= ASSIGN_MOTO_RAIO_M){ atribuir(chamadoId, motoristaId); return; }
+  abrirEscolhaLocalMoto(c, motoristaId, ping, dist);                      // >100m → pergunta
+}
+
+function abrirEscolhaLocalMoto(c, motoristaId, ping, dist){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10015;padding:20px';
+  const distLbl = dist >= 1000 ? (dist/1000).toFixed(1)+'km' : Math.round(dist)+'m';
+  const idadeLbl = ping.lp ? (Math.round((Date.now()-ping.lp)/60000)+'min') : '?';
+  const mot = motoristas[motoristaId];
+  overlay.innerHTML = `
+    <div style="background:var(--surf);border:1px solid #fbbf24;border-radius:12px;width:100%;max-width:430px;padding:20px">
+      <h2 style="font-size:16px;margin-bottom:6px;color:#fbbf24">⚠ Moto longe do local do chamado</h2>
+      <p style="color:var(--txt2);font-size:12px;line-height:1.55;margin-bottom:16px">
+        A moto <strong style="font-family:var(--mono)">${esc(c.placa||'')}</strong> está a <strong style="color:#fbbf24">${distLbl}</strong> do endereço informado (chamado de <strong>${esc(c.cliente||'?')}</strong>).<br>
+        <span style="color:var(--txt3);font-size:11px">📡 último ping há ${idadeLbl} · ${ping.online?'online':'offline'}</span><br><br>
+        Pra onde mandar ${mot?esc(mot.nome.split(' ')[0]):'o colaborador'}?
+      </p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button id="escMoto" style="padding:12px;background:rgba(0,180,229,0.15);border:1px solid var(--acc);color:var(--acc);font-weight:800;border-radius:8px;cursor:pointer;text-align:left;font-size:13px">🛵 Local da MOTO (IoT)<div style="font-weight:500;font-size:10px;color:var(--txt2);margin-top:3px">O chamado passa a apontar pra onde a moto está agora</div></button>
+        <button id="escChamado" style="padding:12px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);font-weight:800;border-radius:8px;cursor:pointer;text-align:left;font-size:13px">📍 Local do CHAMADO (endereço)<div style="font-weight:500;font-size:10px;color:var(--txt2);margin-top:3px">Mantém o endereço informado pelo cliente</div></button>
+        <button id="escCancel" style="padding:9px;background:transparent;border:1px solid var(--bdr);color:var(--txt2);font-size:12px;border-radius:8px;cursor:pointer">Cancelar atribuição</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = (e) => { if(e.target === overlay) close(); };
+  overlay.querySelector('#escCancel').onclick = close;
+  overlay.querySelector('#escChamado').onclick = () => { close(); atribuir(c.id, motoristaId); };
+  overlay.querySelector('#escMoto').onclick = () => {
+    close();
+    // Atrela ao local da moto: guarda o endereço original e move as coords do chamado
+    if(c._localChamadoLat == null){ c._localChamadoLat = c.lat; c._localChamadoLng = c.lng; }
+    c.lat = ping.lat; c.lng = ping.lon; c.localMoto = true;
+    STORE.updateChamado(c.id, { lat: ping.lat, lng: ping.lon, localMoto: true, localChamadoLat: c._localChamadoLat, localChamadoLng: c._localChamadoLng });
+    renderChamadoMarkers();
+    showToast('🛵 Chamado atrelado ao local da moto (' + distLbl + ' do endereço)');
+    logTorre('atrela_local_moto', { chamadoId: c.id, cliente: c.cliente||null, placa: c.placa||null, motoristaId, distM: Math.round(dist), operador: getOperadorTorre() });
+    atribuir(c.id, motoristaId);
+  };
 }
 
 function atribuir(chamadoId, motoristaId){
