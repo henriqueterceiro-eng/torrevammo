@@ -793,7 +793,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v41 · 2026-07-28';
+const APP_VERSION = 'v42 · 2026-07-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3168,9 +3168,14 @@ function abrirModalCarga(chamado, onConfirm){
   _cargaPegouList = [];
   _cargaDeixou = 0;
   _cargaChamado = chamado; _cargaCallback = onConfirm;
-  // Pré-popula com a placa do chamado se o motivo indica que vai PEGAR a moto.
+  // Pré-popula com a placa do chamado se vai PEGAR a moto. Detecta por DOIS caminhos:
+  // 1) a ROTINA marcou "moto recolhida" (fonte de verdade do desfecho 'recolhido') — vale pra
+  //    QUALQUER motivo (ex: "Moto não liga", "Chave perdida" também podem virar recolhimento);
+  // 2) fallback pelo texto do motivo. Sem o (1), motivo fora da lista concluía recolhido SEM slot.
   const motivo = (chamado.motivo || '').toLowerCase();
-  const pegaMoto = /recolh|acidente|encaminh|guincho|reboque|busca|retirar|troca/.test(motivo);
+  const S = chamado.rotinaSteps || {};
+  const recolheuNaRotina = S.moto_recolhida === true;
+  const pegaMoto = recolheuNaRotina || /recolh|acidente|encaminh|guincho|reboque|busca|retirar|troca/.test(motivo);
   const placa = (chamado.placa || '').toUpperCase().trim();
   // Input já vem com a placa do chamado (a única recolhível); hint avisa a trava
   document.getElementById('cargaPlacaInput').value = placa || '';
