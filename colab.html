@@ -793,7 +793,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v42 · 2026-07-28';
+const APP_VERSION = 'v43 · 2026-07-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2914,6 +2914,27 @@ function handleAction(act){
 function continuarConclusao(ativo){
   rideFinalize('concluido');
   const desfecho = desfechoAtendimento(ativo);
+  // GARANTIA (defesa em profundidade): se o atendimento foi RECOLHIDO, a moto TEM que estar
+  // num slot. Se por qualquer motivo (modal de carga pulado/esvaziado, motivo fora da regex,
+  // versão antiga do app) não houver slot pra ESTE chamado, cria agora. Assim "desfecho
+  // recolhido sem moto no carro" nunca mais acontece.
+  if(desfecho === 'recolhido' && turnoAtivo){
+    const jaTem = (turnoAtivo.slotsOcupados || []).some(s => s && s.chamadoId === ativo.id);
+    if(!jaTem){
+      const ok = checkInMoto({ source: 'cliente', chamadoId: ativo.id, clienteName: ativo.cliente || null, placa: ativo.placa || null });
+      if(!ok){
+        // Slots cheios, mas a moto foi recolhida DE FATO → registra mesmo assim (realidade > trava)
+        turnoAtivo.slotsOcupados = turnoAtivo.slotsOcupados || [];
+        turnoAtivo.slotsOcupados.push({
+          id: 'slot_' + Date.now() + '_' + Math.random().toString(36).substring(2,5),
+          ocupadoEm: Date.now(), source: 'cliente', chamadoId: ativo.id,
+          clienteName: ativo.cliente || null, placa: ativo.placa || null, _overCapacity: true
+        });
+        saveTurno(); syncTurnoToTorre(); renderTopBar();
+        showToast('⚠ Moto recolhida acima da capacidade dos slots — confira', true);
+      }
+    }
+  }
   // Anexa assinatura/ausência + desfecho ao status enviado pra torre
   const payload = {
     chamadoId: ativo.id,
