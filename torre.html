@@ -759,7 +759,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v44 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v30 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v31 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1359,6 +1359,7 @@ let incidentLayer = null;
 let incidentMarkers = [];
 let incidentsLoading = false;
 let lastIncidentBbox = null;
+let _lastIncCount = -1;   // último nº de incidentes avisado (evita re-toast na mesma área)
 let heatLayer = null;
 let currentLayerName = localStorage.getItem('vammo_layer') || 'dark';
 
@@ -1609,7 +1610,11 @@ async function fetchIncidentsInView(){
       incidentMarkers.push(m);
     }
     const n = incs.length;
-    showToast(n > 0 ? `🚦 ${n} incidente${n>1?'s':''} de trânsito encontrado${n>1?'s':''}` : '✓ Nenhum incidente nesta área agora');
+    // Só avisa quando o número MUDA — evita re-toast a cada pan/refresh na mesma área
+    if(n !== _lastIncCount){
+      _lastIncCount = n;
+      showToast(n > 0 ? `🚦 ${n} incidente${n>1?'s':''} de trânsito encontrado${n>1?'s':''}` : '✓ Nenhum incidente nesta área agora');
+    }
   } catch(e){
     console.warn('Incidents err:', e.message);
     showToast('❌ Erro nos incidentes: ' + e.message, true);
@@ -5107,10 +5112,19 @@ function playAlertSound(){
 
 function showToast(msg, isErr){
   const t = $('#toast');
+  const now = Date.now();
+  // ANTI-GRUDA: se a MESMA mensagem já está na tela, NÃO reinicia o timer — deixa a que já
+  // está sumir sozinha. Sem isso, um toast re-disparado em loop (ex: refresh de trânsito) fica
+  // "preso" no topo pra sempre. Mensagem diferente reinicia normalmente.
+  if(t.classList.contains('show') && showToast._msg === msg && showToast._shownAt && (now - showToast._shownAt) < 8000){
+    return;
+  }
   t.textContent = msg;
   t.className = isErr ? 'err show' : 'show';
+  showToast._msg = msg;
+  showToast._shownAt = now;
   clearTimeout(showToast._to);
-  showToast._to = setTimeout(() => t.classList.remove('show'), 3000);
+  showToast._to = setTimeout(() => { t.classList.remove('show'); showToast._msg = null; }, 3000);
 }
 
 // Beep curto via Web Audio — chama atenção pra alertas críticos
