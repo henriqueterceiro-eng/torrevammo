@@ -752,7 +752,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v17 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v18 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1647,11 +1647,22 @@ function renderBaseMarkers(){
   }
 }
 
+// Chamado concluído/cancelado some da TELA depois de 12h (não polui o mapa/lista).
+// Fica no banco (histórico/notas) — é só ocultação visual. Conta a partir de concluidoEm
+// (fallback ts). Não afeta chamados novos/em rota.
+const CONCLUIDO_OCULTA_MS = 12 * 60 * 60 * 1000; // 12h
+function chamadoOcultoPorTempo(c){
+  if(!c || (c.status !== 'concluido' && c.status !== 'cancelado')) return false;
+  const t = c.concluidoEm || c.canceladoEm || c.ts || 0;
+  return (Date.now() - t) > CONCLUIDO_OCULTA_MS;
+}
+
 function renderChamadoMarkers(){
   const seen = new Set();
   const orderMap = buildOrderMap();
   for(const c of chamados){
     if(!c.lat || !c.lng) continue;
+    if(chamadoOcultoPorTempo(c)) continue;   // concluído/cancelado há +12h → não plota (limpo abaixo)
     seen.add(c.id);
     const al = alertCls(c);
     const isSel = c.id === selId;
@@ -1965,7 +1976,8 @@ function renderLegend(){
 // ============== KPIs / TABS / LIST ==============
 function counts(){
   const c = {novo:0, em_rota:0, concluido:0, cancelado:0};
-  for(const x of chamados) c[x.status] = (c[x.status]||0)+1;
+  // Não conta concluído/cancelado com +12h (some da tela → o número tem que bater com o que aparece)
+  for(const x of chamados){ if(chamadoOcultoPorTempo(x)) continue; c[x.status] = (c[x.status]||0)+1; }
   return c;
 }
 
@@ -2000,7 +2012,7 @@ function renderPills(){
 }
 
 function filtered(){
-  return chamados.filter(c => !filtro || c.status === filtro);
+  return chamados.filter(c => !chamadoOcultoPorTempo(c) && (!filtro || c.status === filtro));
 }
 
 // ===== FILTRO POR CATEGORIA (escurece os não-selecionados; não remove) =====
