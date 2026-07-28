@@ -759,7 +759,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v44 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v31 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v32 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1359,7 +1359,6 @@ let incidentLayer = null;
 let incidentMarkers = [];
 let incidentsLoading = false;
 let lastIncidentBbox = null;
-let _lastIncCount = -1;   // último nº de incidentes avisado (evita re-toast na mesma área)
 let heatLayer = null;
 let currentLayerName = localStorage.getItem('vammo_layer') || 'dark';
 
@@ -1465,7 +1464,7 @@ function toggleIncidents(force){
   const on = force !== undefined ? force : !incidentLayer;
   if(on && !incidentLayer){
     incidentLayer = L.layerGroup().addTo(map);
-    fetchIncidentsInView();
+    fetchIncidentsInView(true);   // ação manual → pode avisar (uma vez)
   } else if(!on && incidentLayer){
     map.removeLayer(incidentLayer);
     incidentLayer = null;
@@ -1547,12 +1546,14 @@ const INCIDENT_ICONS = {
   14: { e: '⚠️', name: 'Outro' }
 };
 
-async function fetchIncidentsInView(){
+async function fetchIncidentsInView(announce){
+  // announce = true SÓ quando o operador liga a camada (ação manual). Nos refreshes automáticos
+  // (moveend/pan) NÃO mostra toast — atualiza os pinos em silêncio. Assim o aviso não "gruda".
   if(!incidentLayer || !TT.has() || incidentsLoading) return;
   const b = map.getBounds();
   const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
   if(span > 1.5){ // aprox 150km — muito zoom out
-    showToast('⚠ Dê zoom mais próximo pra ver incidentes', true);
+    if(announce) showToast('⚠ Dê zoom mais próximo pra ver incidentes', true);
     return;
   }
   const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
@@ -1610,14 +1611,13 @@ async function fetchIncidentsInView(){
       incidentMarkers.push(m);
     }
     const n = incs.length;
-    // Só avisa quando o número MUDA — evita re-toast a cada pan/refresh na mesma área
-    if(n !== _lastIncCount){
-      _lastIncCount = n;
+    // Só avisa na ação manual (ligar a camada) — refresh automático atualiza pinos em silêncio
+    if(announce){
       showToast(n > 0 ? `🚦 ${n} incidente${n>1?'s':''} de trânsito encontrado${n>1?'s':''}` : '✓ Nenhum incidente nesta área agora');
     }
   } catch(e){
     console.warn('Incidents err:', e.message);
-    showToast('❌ Erro nos incidentes: ' + e.message, true);
+    if(announce) showToast('❌ Erro nos incidentes: ' + e.message, true);
   } finally {
     incidentsLoading = false;
   }
