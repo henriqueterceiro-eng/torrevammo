@@ -751,8 +751,8 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
-const LATEST_COLAB_VERSION = '2026-06-03.11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v20 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const LATEST_COLAB_VERSION = 'v40 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v21 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2758,7 +2758,8 @@ function atribuir(chamadoId, motoristaId){
       comentario: c.comentario,
       icon: ico(c.motivo),
       lat: c.lat,
-      lng: c.lng
+      lng: c.lng,
+      ts: c.ts   // abertura do chamado — o colab usa pro TMA total (abertura → encerramento)
     });
     const q = loadQueues();
     const pos = q[motoristaId] ? q[motoristaId].length : 1;
@@ -3968,7 +3969,7 @@ function renderMotDetail(){
       </div>
       ${(() => {
         // TMA médio do colaborador (hoje): total / deslocamento / atendimento
-        const t = mediaDur(corridasHoje, 'totalDurationSec');
+        const t = mediaDur(corridasHoje, tmaTotalSec);   // abertura → encerramento
         const d = mediaDur(corridasHoje, 'travelDurationSec');
         const a = mediaDur(corridasHoje, 'serviceDurationSec');
         return `<div style="margin-top:6px">
@@ -4460,10 +4461,22 @@ function fmtDurTMA(sec){
   const h = Math.floor(m/60), mm = m % 60;
   return h + 'h' + (mm ? ' ' + String(mm).padStart(2,'0') + 'min' : '');
 }
-// Média de um campo de duração (só conta corridas que têm o valor > 0) → {avg, n}
-function mediaDur(rows, key){
-  const vals = rows.map(r => r[key]).filter(v => v != null && v > 0);
+// Média de duração — aceita nome do campo OU função acessora. Só conta valores > 0 → {avg, n}
+function mediaDur(rows, keyOrFn){
+  const get = typeof keyOrFn === 'function' ? keyOrFn : (r => r[keyOrFn]);
+  const vals = rows.map(get).filter(v => v != null && v > 0);
   return { avg: vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null, n: vals.length };
+}
+// TMA TOTAL = ABERTURA do chamado → ENCERRAMENTO (em segundos).
+// Preferência: totalAberturaSec gravado na corrida (colab v39+). Fallback: procura o chamado
+// e usa ts (abertura) → concluidoEm/completedTs. Último recurso: totalDurationSec (recebe→finaliza).
+function tmaTotalSec(r){
+  if(r.totalAberturaSec != null && r.totalAberturaSec > 0) return r.totalAberturaSec;
+  const ch = chamados.find(x => x.id === r.chamadoId);
+  const aberto = r.chamadoAbertoTs || (ch && ch.ts) || null;
+  const encerrado = r.completedTs || (ch && ch.concluidoEm) || null;
+  if(aberto && encerrado && encerrado > aberto) return Math.round((encerrado - aberto) / 1000);
+  return r.totalDurationSec != null ? r.totalDurationSec : null;
 }
 
 function renderRep(){
@@ -4472,7 +4485,7 @@ function renderRep(){
   // ===== TMA (Tempo Médio de Atendimento) — 3 componentes =====
   // total = recebe→finaliza (totalDurationSec) · deslocamento = sai→chega (travelDurationSec)
   // · atendimento = chega→finaliza (serviceDurationSec). Média só sobre corridas que têm o marco.
-  const tmaTotal  = mediaDur(rows, 'totalDurationSec');
+  const tmaTotal  = mediaDur(rows, tmaTotalSec);   // abertura → encerramento
   const tmaDesloc = mediaDur(rows, 'travelDurationSec');
   const tmaAtend  = mediaDur(rows, 'serviceDurationSec');
   const sumNota = rows.reduce((s,r) => s + (r.nota?.final||0), 0);
@@ -4496,7 +4509,7 @@ function renderRep(){
         <div style="background:var(--surf2);padding:9px 8px;border-radius:8px;text-align:center">
           <div style="font-size:17px;font-weight:800;color:var(--acc);font-family:var(--mono)">${fmtDurTMA(tmaTotal.avg)}</div>
           <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;margin-top:3px">Total</div>
-          <div style="font-size:8px;color:var(--txt3);margin-top:1px">recebe → finaliza · n=${tmaTotal.n}</div>
+          <div style="font-size:8px;color:var(--txt3);margin-top:1px">aberto → encerrado · n=${tmaTotal.n}</div>
         </div>
         <div style="background:var(--surf2);padding:9px 8px;border-radius:8px;text-align:center">
           <div style="font-size:17px;font-weight:800;color:#fbbf24;font-family:var(--mono)">${fmtDurTMA(tmaDesloc.avg)}</div>
@@ -4527,7 +4540,7 @@ function renderRep(){
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Placa</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Cliente</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">Km</th>
-          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="TMA total: colab recebe o chamado → finaliza">TMA total</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="TMA total: abertura do chamado → encerramento">TMA total</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="Deslocamento: sai para o cliente → chega no cliente">Desloc.</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="Atendimento: chega no cliente → finaliza">Atend.</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:center">Status</th>
@@ -4550,7 +4563,7 @@ function renderRep(){
             <td style="padding:8px 12px;font-family:var(--mono)">${esc(r.motoristaPlaca||'—')}</td>
             <td style="padding:8px 12px">${esc(r.cliente||'—')}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${(r.totalKm||0).toFixed(1)}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${fmtDurTMA(r.totalDurationSec)}</td>
+            <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${fmtDurTMA(tmaTotalSec(r))}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#fbbf24">${fmtDurTMA(r.travelDurationSec)}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#16a34a">${fmtDurTMA(r.serviceDurationSec)}</td>
             <td style="padding:8px 12px;text-align:center;color:${stCor};font-weight:700">${esc(r.endStatus||'—')}</td>
@@ -4582,7 +4595,7 @@ function exportRepCSV(){
       r.motoristaPlaca || '',
       r.cliente || '',
       (r.totalKm || 0).toFixed(2),
-      r.totalDurationSec ? Math.round(r.totalDurationSec) : '',
+      tmaTotalSec(r) != null ? Math.round(tmaTotalSec(r)) : '',
       r.travelDurationSec ? Math.round(r.travelDurationSec) : '',
       r.serviceDurationSec ? Math.round(r.serviceDurationSec) : '',
       r.endStatus || '',
