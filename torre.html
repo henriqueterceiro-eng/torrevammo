@@ -403,6 +403,13 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 .alert-card .x{position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.18);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;line-height:28px;text-align:center;font-weight:800;padding:0;transition:background 0.15s}
 .alert-card .x:hover{background:rgba(255,255,255,0.34)}
 
+/* GATE DE LOGIN */
+#loginGate{position:fixed;inset:0;z-index:20000;display:none;align-items:center;justify-content:center;padding:24px;background:radial-gradient(1200px 600px at 50% -10%, rgba(0,180,229,0.15), transparent), rgba(4,10,18,0.97);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#loginGate .lg-card{background:rgba(20,30,44,0.92);border:1px solid var(--bdr2);border-radius:20px;padding:34px 30px;max-width:380px;width:100%;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,0.6)}
+#loginGate .lg-logo{font-size:34px;font-weight:900;letter-spacing:3px;color:var(--acc)}
+#loginGate .lg-sub{font-size:12px;color:var(--txt2);font-weight:800;margin-top:2px;margin-bottom:22px;text-transform:uppercase;letter-spacing:2px}
+#loginGate .lg-txt{font-size:13px;color:var(--txt);margin-bottom:20px;line-height:1.5}
+
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:4px}
@@ -427,6 +434,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <div class="pills" id="pills"></div>
     <div class="spacer"></div>
     <div id="syncind" title="Status da sincronização"><span class="d" id="syncdot"></span><span id="synctxt">conectando…</span></div>
+    <div id="userchip" style="display:none;align-items:center;gap:8px;background:rgba(255,255,255,0.06);border:1px solid var(--bdr);border-radius:20px;padding:3px 6px 3px 3px;margin-right:2px"></div>
     <button class="iconbtn" id="cadbtn" title="Cadastros de colaboradores e veículos">📋 Cadastros</button>
     <button class="iconbtn" id="rankbtn" title="Ver ranking e estatísticas dos colaboradores">📊 Ranking</button>
     <button class="iconbtn" id="repbtn" title="Relatórios filtráveis e exportáveis">📈 Relatórios</button>
@@ -436,6 +444,19 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <button class="iconbtn" id="configbtn" title="Configurações">⚙</button>
     <button class="iconbtn" id="colaburlbtn" title="Link do app do colaborador">📱 Colab</button>
   </div>
+
+  <!-- GATE DE LOGIN (Google Sign-In @vammo.com) — cobre a torre até autenticar -->
+  <div id="loginGate">
+    <div class="lg-card">
+      <div class="lg-logo">VAMMO</div>
+      <div class="lg-sub">Torre de Controle</div>
+      <div class="lg-txt">Entre com sua conta <strong>@vammo.com</strong> para acessar.</div>
+      <div id="gbtn" style="display:flex;justify-content:center;min-height:44px"></div>
+      <div id="loginStatus" style="font-size:11px;color:var(--txt2);margin-top:12px;min-height:16px;text-align:center;line-height:1.4"></div>
+    </div>
+  </div>
+  <!-- Banner quando o login do Google ainda não foi configurado (acesso aberto) -->
+  <div id="loginoffbanner" style="display:none;position:fixed;bottom:14px;left:14px;z-index:9000;align-items:center;gap:8px;background:rgba(245,158,11,0.16);border:1px solid #f59e0b;color:#fbbf24;padding:7px 12px;border-radius:10px;font-size:11px;font-weight:600;backdrop-filter:blur(8px)">🔓 Login do Google não configurado — acesso liberado como admin</div>
 
   <div id="main">
     <div id="sidebar">
@@ -491,6 +512,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         <button class="cdtab" data-t="carreta">🚛 Carretas</button>
         <button class="cdtab" data-t="moto">🏍 Motos</button>
         <button class="cdtab" data-t="base">🏠 Bases</button>
+        <button class="cdtab" data-t="operadores">🛡 Operadores da torre</button>
       </div>
       <button onclick="closeCad()" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button>
     </div>
@@ -759,7 +781,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v34 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v35 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1090,6 +1112,10 @@ const STORE = (() => {
         const data = s.val() || {};
         if(handlers.onSettingsSnapshot) handlers.onSettingsSnapshot(data);
       });
+      fb.child('operadores').on('value', s => {
+        const data = s.val() || {};
+        if(handlers.onOperadoresSnapshot) handlers.onOperadoresSnapshot(data);
+      });
       return true;
     } catch(e){ console.warn('STORE init err:', e); return false; }
   }
@@ -1141,6 +1167,8 @@ const STORE = (() => {
       catch(e){ console.warn(e); }
     },
     deleteBase(id){ if(fb) fb.child('bases').child(id).remove().catch(e => console.warn(e)); },
+    saveOperador(o){ if(fb && o.id){ try { fb.child('operadores').child(o.id).set(cleanForFb(o)).catch(e => console.warn('fb saveOp:', e)); } catch(e){ console.warn(e); } } },
+    deleteOperador(id){ if(fb) fb.child('operadores').child(id).remove().catch(e => console.warn(e)); },
     saveSetting(key, value){
       if(!fb) return;
       try { fb.child('settings').child(key).set(value).catch(e => console.warn('fb saveSetting:', e)); }
@@ -2504,7 +2532,7 @@ function renderDetail(){
       <button class="b-conc${c.status==='concluido'?' cur':''}" data-st="concluido">Concluído</button>
       <button class="b-canc${c.status==='cancelado'?' cur':''}" data-st="cancelado">Cancelado</button>
     </div>
-    ${c.status !== 'concluido' && c.status !== 'cancelado' ? `
+    ${(c.status !== 'concluido' && c.status !== 'cancelado' && can('finalizar_forcado')) ? `
       <button id="dafinforce" style="width:100%;margin-top:8px;padding:9px;background:rgba(220,38,38,0.14);border:1px solid #dc2626;color:#fca5a5;font-size:12px;font-weight:800;border-radius:6px;cursor:pointer">🛑 Finalizar forçado pela Torre <span style="font-weight:500;opacity:0.8">(gera log)</span></button>
     ` : ''}
     ${c.finalizadoForcado ? `<div style="margin-top:8px;padding:7px 10px;background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.5);border-radius:6px;font-size:10px;color:#fca5a5;line-height:1.4">🛑 <strong>Finalizado forçado pela Torre</strong>${c.finalizadoForcadoPor?' por '+esc(c.finalizadoForcadoPor):''}${c.finalizadoForcadoEm?' · '+fmtTime(c.finalizadoForcadoEm):''}</div>` : ''}
@@ -2549,9 +2577,12 @@ function renderDetail(){
   `;
 
   // Concluir pela torre = finalização FORÇADA (com log). Demais status seguem o fluxo normal.
+  // Controlador NÃO pode forçar finalização.
   $$('#detail .statbtns button').forEach(b => b.onclick = () => {
-    if(b.dataset.st === 'concluido') finalizarForcado(c.id);
-    else updateStatus(c.id, b.dataset.st);
+    if(b.dataset.st === 'concluido'){
+      if(can('finalizar_forcado')) finalizarForcado(c.id);
+      else showToast('🔒 Sem permissão pra finalizar chamado (só admin)', true);
+    } else updateStatus(c.id, b.dataset.st);
   });
   const ff = $('#dafinforce'); if(ff) ff.onclick = () => finalizarForcado(c.id);
   const tc = $('#trackcopy'); if(tc) tc.onclick = (e) => {
@@ -3306,9 +3337,93 @@ function normalizeColabBases(){
   }
 }
 
+// ===== OPERADORES DA TORRE (cadastro de usuários + papéis) =====
+function renderOperadores(){
+  $('#cadcount').textContent = '';
+  const podeGerir = isAdmin();
+  const devRows = DEV_EMAILS.map(em => ({ id:'dev:'+em, nome: em.split('@')[0], email: em, role:'dev', _dev:true }));
+  const dbRows = Object.values(operadores || {}).filter(o => o && !DEV_EMAILS.includes((o.email||'').toLowerCase()));
+  const rows = [...devRows, ...dbRows].sort((a,b) => (a.role==='dev'?0:a.role==='admin'?1:2) - (b.role==='dev'?0:b.role==='admin'?1:2) || (a.nome||'').localeCompare(b.nome||''));
+  const roleBadge = (r) => {
+    const m = { dev:['DEV','#8b5cf6'], admin:['Admin','#16a34a'], controlador:['Controlador','#fbbf24'] }[r] || [r,'#6b7280'];
+    return `<span class="cd-pill" style="background:${m[1]}22;color:${m[1]}">${m[0]}</span>`;
+  };
+  $('#cadlist').innerHTML = `
+    <div style="padding:10px 16px 4px;font-size:11px;color:var(--txt2);line-height:1.55">
+      <strong style="color:#16a34a">Admin</strong>: acesso total (relatórios, config, cadastros, finalização forçada). ·
+      <strong style="color:#fbbf24">Controlador</strong>: controla rotas/atribuições, mas NÃO vê relatórios/pontuações/config/cadastros nem pode forçar finalização. ·
+      <strong style="color:#8b5cf6">Dev</strong>: acesso total, fixo (não pode ser excluído).
+    </div>
+    <div class="cdrow hdr" style="grid-template-columns:1fr 240px 130px 90px"><div>Nome</div><div>Email</div><div>Papel</div><div></div></div>
+    ${rows.map(o => {
+      const eu = currentUser && (o.email||'').toLowerCase() === (currentUser.email||'').toLowerCase();
+      return `<div class="cdrow" style="grid-template-columns:1fr 240px 130px 90px">
+        <div class="cd-nm">${esc(o.nome||o.email||'?')}${eu?' <span style="font-size:9px;color:var(--acc)">(você)</span>':''}</div>
+        <div style="font-size:11px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.email||'—')}</div>
+        <div>${roleBadge(o.role)}</div>
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+          ${o._dev ? '<span style="font-size:9px;color:var(--txt3)">🔒 fixo</span>'
+            : (podeGerir ? `<button data-editop="${esc(o.id)}" title="Editar" style="background:var(--surf2);border:1px solid var(--bdr);color:var(--acc);padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer">✎</button><button data-delop="${esc(o.id)}" title="Remover" style="background:transparent;border:1px solid var(--bdr);color:var(--novo);padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer">🗑</button>` : '')}
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+  $$('#cadlist [data-editop]').forEach(b => b.onclick = () => openOperadorForm(operadores[b.dataset.editop] || null));
+  $$('#cadlist [data-delop]').forEach(b => b.onclick = () => {
+    const o = operadores[b.dataset.delop]; if(!o) return;
+    if(DEV_EMAILS.includes((o.email||'').toLowerCase())){ alert('Dev não pode ser excluído.'); return; }
+    if(!confirm(`Remover acesso à torre de ${o.nome||o.email}?`)) return;
+    STORE.deleteOperador(o.id);
+  });
+}
+
+function openOperadorForm(op){
+  if(!isAdmin()){ alert('Sem permissão.'); return; }
+  const editing = !!op;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10020;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;width:100%;max-width:420px;padding:22px">
+      <h2 style="font-size:16px;margin-bottom:14px">🛡 ${editing?'Editar':'Novo'} operador da torre</h2>
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600">Nome</label>
+      <input id="opNome" type="text" value="${editing?esc(op.nome||''):''}" placeholder="Nome do operador" style="width:100%;padding:9px;font-size:13px;margin-bottom:12px">
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600">Email @${AUTH_DOMAIN} *</label>
+      <input id="opEmail" type="email" value="${editing?esc(op.email||''):''}" ${editing?'readonly':''} placeholder="fulano@${AUTH_DOMAIN}" style="width:100%;padding:9px;font-size:13px;margin-bottom:12px${editing?';opacity:0.6':''}">
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600">Papel</label>
+      <select id="opRole" style="width:100%;padding:9px;font-size:13px;margin-bottom:16px">
+        <option value="controlador"${(editing&&op.role==='controlador')?' selected':''}>Controlador (só rotas)</option>
+        <option value="admin"${(editing&&op.role==='admin')?' selected':''}>Admin (acesso total)</option>
+      </select>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="opCancel" style="padding:9px 14px;font-size:12px;background:transparent;border:1px solid var(--bdr);color:var(--txt2)">Cancelar</button>
+        <button id="opSave" class="primary" style="padding:9px 14px;font-size:12px;font-weight:800">✓ Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = (e) => { if(e.target===overlay) close(); };
+  overlay.querySelector('#opCancel').onclick = close;
+  setTimeout(() => overlay.querySelector(editing?'#opNome':'#opEmail').focus(), 50);
+  overlay.querySelector('#opSave').onclick = () => {
+    const nome = overlay.querySelector('#opNome').value.trim();
+    const email = overlay.querySelector('#opEmail').value.trim().toLowerCase();
+    const role = overlay.querySelector('#opRole').value;
+    if(!email || !email.endsWith('@'+AUTH_DOMAIN)){ alert('Informe um email @'+AUTH_DOMAIN); return; }
+    if(DEV_EMAILS.includes(email)){ alert('Esse email já é dev (fixo) — não precisa cadastrar.'); return; }
+    const dup = Object.values(operadores).find(o => o && (o.email||'').toLowerCase()===email && (!editing || o.id!==op.id));
+    if(dup){ alert('Já existe um operador com esse email.'); return; }
+    const id = editing ? op.id : ('op_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6));
+    STORE.saveOperador({ id, nome: nome || email.split('@')[0], email, role, criadoEm: editing?(op.criadoEm||Date.now()):Date.now(), criadoPor: currentUser?currentUser.email:null });
+    showToast(`✓ ${nome||email} salvo como ${role}`);
+    close();
+  };
+}
+
 function renderCad(){
   // Atualiza tabs
   $$('#cadtabs .cdtab').forEach(b => b.classList.toggle('active', b.dataset.t === cadTab));
+
+  if(cadTab === 'operadores'){ renderOperadores(); return; }
 
   let items = [];
   if(cadTab === 'colab'){
@@ -5746,6 +5861,18 @@ function setupStoreListeners(){
     onSettingsSnapshot: (data) => {
       globalSettings = data || {};
     },
+    onOperadoresSnapshot: (data) => {
+      operadores = data || {};
+      // resolve um login que estava esperando as permissões carregarem
+      if(_pendingLogin){ aplicarLoginQuandoPronto(_pendingLogin); }
+      // se o admin mudou/removeu o papel do usuário logado (e não é dev/aberto), re-aplica
+      else if(currentUser && currentUser.role !== 'dev'){
+        const r = roleForEmail(currentUser.email);
+        if(!r){ try{ localStorage.removeItem('torre_user'); }catch(_){}; location.reload(); }
+        else if(r !== currentUser.role){ currentUser.role = r; aplicarPermissoes(); renderUserChip(); }
+      }
+      if($('#cadmodal') && $('#cadmodal').style.display === 'flex' && cadTab === 'operadores') renderCad();
+    },
     onCorridaAdded: (rideId, ride) => {
       if(!ride.chamadoId) return;
       corridas[ride.chamadoId] = ride;
@@ -6042,6 +6169,120 @@ function renderAll(){
 }
 
 // ============== INIT ==============
+// ============================================================
+// AUTH & PRIVILÉGIOS (RBAC) — Google Sign-In @vammo.com + trava de UI por papel
+// ============================================================
+// COLE AQUI o Client ID OAuth do Google (origem autorizada: https://torrevammo.pages.dev).
+// Enquanto vazio, o login fica DESATIVADO e a torre abre liberada como admin (com aviso no rodapé).
+const GOOGLE_CLIENT_ID = '';
+const DEV_EMAILS = ['henrique.terceiro@vammo.com']; // dev(s): acesso total, NÃO podem ser excluídos
+const AUTH_DOMAIN = 'vammo.com';
+let operadores = {};      // {id: {id, nome, email, role}}  (vammo/operadores)
+let currentUser = null;   // {email, nome, picture, role}  role: 'dev'|'admin'|'controlador'
+let _pendingLogin = null; // login aguardando operadores carregarem pra resolver o papel
+
+// controlador NÃO pode: relatórios, pontuações (ranking/mensal), config, cadastros, frota, finalização forçada
+const CONTROLADOR_BLOQUEADO = new Set(['relatorios','ranking','mensal','config','cadastros','frota','finalizar_forcado']);
+
+function roleForEmail(email){
+  email = (email||'').toLowerCase().trim();
+  if(!email) return null;
+  if(DEV_EMAILS.includes(email)) return 'dev';
+  const op = Object.values(operadores || {}).find(o => o && (o.email||'').toLowerCase().trim() === email);
+  return op ? (op.role || 'controlador') : null;
+}
+function isAdmin(){ return !!currentUser && (currentUser.role === 'dev' || currentUser.role === 'admin'); }
+function isDev(){ return !!currentUser && currentUser.role === 'dev'; }
+function can(feature){
+  if(!currentUser) return false;
+  if(isAdmin()) return true;
+  return !CONTROLADOR_BLOQUEADO.has(feature);
+}
+
+function decodeJwt(token){
+  try {
+    const b = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    const json = decodeURIComponent(atob(b).split('').map(c => '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+    return JSON.parse(json);
+  } catch(_){ return null; }
+}
+function _authMsg(txt, err){
+  const s = document.getElementById('loginStatus');
+  if(s){ s.textContent = txt || ''; s.style.color = err ? '#fca5a5' : 'var(--txt2)'; }
+}
+
+function loginGoogleCallback(resp){
+  const p = decodeJwt(resp.credential);
+  if(!p || !p.email){ _authMsg('Não consegui ler sua conta Google.', true); return; }
+  const email = (p.email||'').toLowerCase();
+  if(p.hd !== AUTH_DOMAIN && !email.endsWith('@'+AUTH_DOMAIN)){ _authMsg('Use sua conta @'+AUTH_DOMAIN+'.', true); return; }
+  aplicarLoginQuandoPronto({ email, nome: p.name || p.email, picture: p.picture || '' });
+}
+function aplicarLoginQuandoPronto(pend){
+  const role = roleForEmail(pend.email);
+  if(role){ setUsuario({ ...pend, role }); return; }
+  if(!STORE.ready()){ _pendingLogin = pend; _authMsg('Carregando permissões…'); return; }
+  _pendingLogin = null;
+  try { localStorage.removeItem('torre_user'); } catch(_){}
+  _authMsg((pend.nome||'Você') + ', você ainda não tem acesso à torre. Peça pro admin te cadastrar em "Operadores da torre".', true);
+}
+function setUsuario(u){
+  currentUser = u;
+  _pendingLogin = null;
+  try { localStorage.setItem('torre_user', JSON.stringify({ email:u.email, nome:u.nome, picture:u.picture })); } catch(_){}
+  const g = document.getElementById('loginGate'); if(g) g.style.display = 'none';
+  aplicarPermissoes();
+  renderUserChip();
+}
+function aplicarPermissoes(){
+  const gate = (id, feat) => { const el = document.getElementById(id); if(el) el.style.display = can(feat) ? '' : 'none'; };
+  gate('rankbtn','ranking');
+  gate('repbtn','relatorios');
+  gate('rkmbtn','mensal');
+  gate('cadbtn','cadastros');
+  gate('configbtn','config');
+  gate('frotabtn','frota');
+  if(selId && typeof renderDetail === 'function') renderDetail(); // re-aplica gating da finalização forçada
+}
+function renderUserChip(){
+  const el = document.getElementById('userchip');
+  if(!el || !currentUser) return;
+  const roleLbl = { dev:'DEV', admin:'Admin', controlador:'Controlador' }[currentUser.role] || currentUser.role;
+  const roleCor = currentUser.role === 'controlador' ? '#fbbf24' : '#16a34a';
+  const ini = (currentUser.nome||'?').charAt(0).toUpperCase();
+  const av = currentUser.picture
+    ? `<img src="${esc(currentUser.picture)}" referrerpolicy="no-referrer" style="width:22px;height:22px;border-radius:50%;object-fit:cover">`
+    : `<div style="width:22px;height:22px;border-radius:50%;background:var(--acc);color:#001823;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px">${esc(ini)}</div>`;
+  el.style.display = 'flex';
+  el.innerHTML = `${av}<div style="line-height:1.1"><div style="font-size:11px;font-weight:700;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((currentUser.nome||'').split(' ')[0])}</div><div style="font-size:8px;font-weight:800;color:${roleCor};text-transform:uppercase;letter-spacing:0.4px">${esc(roleLbl)}</div></div><button id="logoutbtn" title="Sair" style="background:transparent;border:none;color:var(--txt3);cursor:pointer;font-size:15px;padding:2px 4px">⎋</button>`;
+  const lo = document.getElementById('logoutbtn');
+  if(lo) lo.onclick = () => {
+    try { localStorage.removeItem('torre_user'); } catch(_){}
+    try { if(window.google && google.accounts) google.accounts.id.disableAutoSelect(); } catch(_){}
+    location.reload();
+  };
+}
+function startAuth(){
+  // MODO ABERTO: sem Client ID → libera como admin/dev com aviso (não trava ninguém antes de configurar)
+  if(!GOOGLE_CLIENT_ID){
+    currentUser = { email:'(login não configurado)', nome:'Acesso aberto', picture:'', role:'dev' };
+    const g = document.getElementById('loginGate'); if(g) g.style.display = 'none';
+    aplicarPermissoes();
+    renderUserChip();
+    const b = document.getElementById('loginoffbanner'); if(b) b.style.display = 'flex';
+    return;
+  }
+  const g = document.getElementById('loginGate'); if(g) g.style.display = 'flex';
+  try { const saved = JSON.parse(localStorage.getItem('torre_user')||'null'); if(saved && saved.email) aplicarLoginQuandoPronto(saved); } catch(_){}
+  loadScript('https://accounts.google.com/gsi/client').then(() => {
+    if(!(window.google && google.accounts && google.accounts.id)){ _authMsg('Google Sign-In indisponível.', true); return; }
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: loginGoogleCallback, auto_select: true });
+    const btnDiv = document.getElementById('gbtn');
+    if(btnDiv){ btnDiv.innerHTML=''; google.accounts.id.renderButton(btnDiv, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', logo_alignment:'left' }); }
+    if(!currentUser){ try { google.accounts.id.prompt(); } catch(_){} }
+  }).catch(() => _authMsg('Falha ao carregar o Google Sign-In. Recarregue.', true));
+}
+
 function init(){
   // Carrega chamados demo persistidos
   if(demoMode){
@@ -6080,6 +6321,7 @@ function init(){
   setupSyncListeners();
   setupStoreListeners();
   setTab('chamados');
+  startAuth();   // login/gate (ou modo aberto se Client ID não configurado)
 
   // Pede heartbeat pra todos os motoristas conhecidos
   setTimeout(() => sync.send('motorista:ping', {}), 1000);
@@ -6116,7 +6358,7 @@ function init(){
     $('#cadbusca').value = '';
     renderCad();
   });
-  $('#cadnovo').onclick = () => openCadForm(cadTab, null);
+  $('#cadnovo').onclick = () => { if(cadTab === 'operadores') openOperadorForm(null); else openCadForm(cadTab, null); };
   $('#cadbusca').oninput = (e) => { cadBusca = e.target.value; renderCad(); };
   $$('#rkperiodo .rkp').forEach(b => b.onclick = () => {
     $$('#rkperiodo .rkp').forEach(x => x.classList.remove('active'));
