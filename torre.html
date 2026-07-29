@@ -854,7 +854,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v42 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v43 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1128,6 +1128,18 @@ function buildOrderMap(){
   const q = loadQueues();
   for(const mid in q){
     q[mid].forEach((cid, i) => { map[cid] = { motId: mid, order: i+1, total: q[mid].length }; });
+  }
+  return map;
+}
+// NÚMERO DIÁRIO DO CHAMADO — sequência 1..N por DIA (reinicia todo dia), derivada do ts.
+// Determinística (sem contador/race): rank do chamado entre os do mesmo dia, por ts.
+function _diaStr(ts){ const d = new Date(ts||0); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function buildNumeroMap(){
+  const byDay = {};
+  for(const c of chamados){ if(!c || !c.ts) continue; const d = _diaStr(c.ts); (byDay[d] = byDay[d] || []).push(c); }
+  const map = {};
+  for(const d in byDay){
+    byDay[d].sort((a,b) => (a.ts - b.ts) || (a.id < b.id ? -1 : 1)).forEach((c,i) => { map[c.id] = i+1; });
   }
   return map;
 }
@@ -1775,6 +1787,7 @@ function chamadoOcultoPorTempo(c){
 function renderChamadoMarkers(){
   const seen = new Set();
   const orderMap = buildOrderMap();
+  const numMap = buildNumeroMap();
   for(const c of chamados){
     if(!c.lat || !c.lng) continue;
     if(chamadoOcultoPorTempo(c)) continue;   // concluído/cancelado há +12h → não plota (limpo abaixo)
@@ -1784,7 +1797,9 @@ function renderChamadoMarkers(){
     const cls = `cm-icon ${al} ${isSel?'sel':''}`;
     const color = statusColor(c.status);
     const ord = orderMap[c.id];
-    const numHtml = ord ? `<div class="qnum${ord.order===1?' first':''}">${ord.order}</div>` : '';
+    const num = numMap[c.id];
+    // Badge = NÚMERO DIÁRIO do chamado (reinicia todo dia). Pulsa se é o PRÓXIMO da fila do colab.
+    const numHtml = num ? `<div class="qnum${(ord && ord.order===1)?' first':''}" title="Chamado #${num} do dia">${num}</div>` : '';
     const html = `<div class="pin">${numHtml}<div class="body" style="background:${color}"><div class="em">${ico(c.motivo)}</div></div></div>`;
     const icon = L.divIcon({ className: cls, html, iconSize:[34,42], iconAnchor:[17,40] });
     if(chamadoMarkers[c.id]){
@@ -2179,6 +2194,7 @@ function renderList(){
     return;
   }
   const orderMap = buildOrderMap();
+  const numMap = buildNumeroMap();
   $('#listwrap').innerHTML = items.map(c => {
     const sel = c.id === selId ? ' sel' : '';
     const al = alertCls(c);
@@ -2203,12 +2219,17 @@ function renderList(){
       return `<span class="b" style="background:${cor};color:#fff">⭐ ${v}</span>`;
     })() : '';
     const queueBadge = ord ? `<span class="b b-queue${ord.order===1?' first':''}" title="Posição ${ord.order} na fila de ${ord.total}">${ord.order}/${ord.total}</span>` : '';
-    const motBadge = mot ? `<span class="b b-mot" style="background:${mot.color}">${esc(mot.nome.split(' ')[0])}</span>` : '';
+    // motBadge: se o colab atrelado está OFFLINE (fora do mapa), usa o nome gravado no chamado
+    // (não some o responsável). Fica acinzentado pra indicar offline.
+    const motBadge = mot
+      ? `<span class="b b-mot" style="background:${mot.color}">${esc(mot.nome.split(' ')[0])}</span>`
+      : (motId && c.motoristaNome ? `<span class="b b-mot" style="background:#6b7280" title="Colaborador offline — segue responsável">${esc(c.motoristaNome.split(' ')[0])} ⚫</span>` : '');
     const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>`;
+    const numTag = numMap[c.id] ? `<span style="font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800;margin-right:5px">#${numMap[c.id]}</span>` : '';
     const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : ((catDim(c) || ctrlDim(c)) ? ' style="opacity:0.3"' : '');
     return `<div class="card${sel} ${al}" data-id="${c.id}"${fadeStyle}>
       <div class="row1">
-        <div class="nome">${esc(c.cliente||'?')}</div>
+        <div class="nome">${numTag}${esc(c.cliente||'?')}</div>
         <div class="ico">${ico(c.motivo)}</div>
       </div>
       <div class="badges">${stBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
@@ -2489,7 +2510,14 @@ function renderDetail(){
     const m = motoristas[id];
     return m.status !== 'off' && (Date.now() - (m.lastSeen||0)) <= MOTORISTA_TTL_MS;
   });
-  const curMot = c.motoristaId ? motoristas[c.motoristaId] : null;
+  // Responsável atrelado — se estiver OFFLINE (fora do mapa), usa o nome/placa gravados no chamado
+  // pra NÃO sumir o responsável (o admin precisa saber de quem é, mesmo offline). Só a torre troca.
+  let curMot = c.motoristaId ? motoristas[c.motoristaId] : null;
+  let curMotOffline = false;
+  if(c.motoristaId && !curMot){
+    curMot = { id: c.motoristaId, nome: c.motoristaNome || 'Colaborador', placa: c.motoristaPlaca || '', color: '#6b7280', _offline: true };
+    curMotOffline = true;
+  }
   const motOpts = '<option value="">— selecionar colaborador —</option>' +
     motIds.map(id => {
       const m = motoristas[id];
@@ -2501,9 +2529,10 @@ function renderDetail(){
 
   const gmaps = c.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.endereco + ', São Paulo, SP')}` : '';
 
+  const _numCh = buildNumeroMap()[c.id];
   $('#detail').innerHTML = `
     <button class="x" onclick="closeDetail()">×</button>
-    <h3>${ico(c.motivo)} ${esc(c.cliente||'?')}</h3>
+    <h3>${_numCh ? `<span style="font-family:var(--mono);font-size:13px;background:rgba(0,180,229,0.15);color:var(--acc);padding:1px 8px;border-radius:6px;margin-right:6px;font-weight:800">#${_numCh}</span>` : ''}${ico(c.motivo)} ${esc(c.cliente||'?')}</h3>
     <div class="mtv">${esc(c.motivo||'—')}</div>
     <div>
       <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>
@@ -2639,8 +2668,8 @@ function renderDetail(){
           <div class="line1">
             <div class="mavt" style="background:${curMot.color}">${esc(curMot.nome.charAt(0).toUpperCase())}</div>
             <div class="minfo">
-              <div class="mn">📲 ${esc(curMot.nome)}</div>
-              <div class="ms">${esc(curMot.placa||'sem placa')}</div>
+              <div class="mn">📲 ${esc(curMot.nome)}${curMotOffline?' <span style="font-size:9px;background:rgba(107,114,128,0.3);color:#cbd5e1;padding:1px 6px;border-radius:4px;font-weight:700;vertical-align:middle">⚫ offline</span>':''}</div>
+              <div class="ms">${esc(curMot.placa||'sem placa')}${curMotOffline?' · continua responsável até a torre trocar':''}</div>
             </div>
           </div>
           <button class="unassign" id="daun">✕ Desatribuir deste colaborador</button>
@@ -2958,6 +2987,9 @@ function atribuir(chamadoId, motoristaId){
     queueAdd(motoristaId, chamadoId);
     a[chamadoId] = motoristaId;
     c.motoristaId = motoristaId;
+    // Guarda nome/placa do colab atrelado — pra continuar mostrando o responsável mesmo quando
+    // ele ficar OFFLINE (é removido do mapa, mas o chamado segue com ele até a torre trocar).
+    { const _m = motoristas[motoristaId]; c.motoristaNome = _m ? _m.nome : (c.motoristaNome || null); c.motoristaPlaca = _m ? (_m.placa || null) : (c.motoristaPlaca || null); }
     // Controlador responsável = quem atribuiu (carimba na atribuição)
     c.atribuidoPor = currentUser ? (currentUser.nome || currentUser.email) : null;
     c.atribuidoPorEmail = currentUser ? currentUser.email : null;
@@ -2970,7 +3002,7 @@ function atribuir(chamadoId, motoristaId){
     }
     saveAsgn(a);
     // Persiste tudo no Firebase
-    STORE.updateChamado(chamadoId, { motoristaId, status: c.status, atribuidoPor: c.atribuidoPor, atribuidoPorEmail: c.atribuidoPorEmail, atribuidoEm: c.atribuidoEm });
+    STORE.updateChamado(chamadoId, { motoristaId, status: c.status, atribuidoPor: c.atribuidoPor, atribuidoPorEmail: c.atribuidoPorEmail, atribuidoEm: c.atribuidoEm, motoristaNome: c.motoristaNome, motoristaPlaca: c.motoristaPlaca });
     STORE.setAllQueues(loadQueues());
     // Envia chamado pro motorista (vai pro final da fila no app dele)
     sync.send('chamado:atribuir', {
