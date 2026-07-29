@@ -781,7 +781,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v35 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v36 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -6174,7 +6174,7 @@ function renderAll(){
 // ============================================================
 // COLE AQUI o Client ID OAuth do Google (origem autorizada: https://torrevammo.pages.dev).
 // Enquanto vazio, o login fica DESATIVADO e a torre abre liberada como admin (com aviso no rodapé).
-const GOOGLE_CLIENT_ID = '';
+const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const DEV_EMAILS = ['henrique.terceiro@vammo.com']; // dev(s): acesso total, NÃO podem ser excluídos
 const AUTH_DOMAIN = 'vammo.com';
 let operadores = {};      // {id: {id, nome, email, role}}  (vammo/operadores)
