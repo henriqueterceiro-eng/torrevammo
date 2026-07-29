@@ -549,6 +549,31 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
   </div>
 </div>
 
+<!-- MODAL PRODUTIVIDADE DA TORRE (tempo em tela + ocioso, histórico) -->
+<div id="prodmodal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;flex-direction:column;z-index:10001;padding:30px">
+  <div style="max-width:960px;width:100%;margin:0 auto;background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 60px);overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:14px">
+      <h2 style="font-size:18px;flex:1">📊 Produtividade da Torre</h2>
+      <button onclick="closeProd()" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button>
+    </div>
+    <div style="padding:12px 20px;border-bottom:1px solid var(--bdr);display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">
+      <div>
+        <label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Período</label>
+        <div style="display:flex;gap:4px" id="prodperiodo">
+          <button class="rkp" data-d="1">Hoje</button>
+          <button class="rkp active" data-d="3">3 dias</button>
+          <button class="rkp" data-d="5">5 dias</button>
+          <button class="rkp" data-d="15">15 dias</button>
+          <button class="rkp" data-d="30">30 dias</button>
+        </div>
+      </div>
+      <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Colaborador</label><select id="prodcolab" style="font-size:11px;padding:5px 8px"><option value="">Time todo</option></select></div>
+    </div>
+    <div style="padding:12px 20px;border-bottom:1px solid var(--bdr)" id="prodtotais"></div>
+    <div style="flex:1;overflow:auto;padding:16px 20px" id="prodlist"></div>
+  </div>
+</div>
+
 <!-- FORM DE CADASTRO -->
 <div id="cadform" style="position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;align-items:center;justify-content:center;z-index:10002;padding:24px">
   <div style="background:var(--surf);border:1px solid var(--bdr2);padding:22px;border-radius:12px;width:560px;max-width:95vw;max-height:90vh;overflow:auto">
@@ -829,7 +854,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v41 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v42 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1009,7 +1034,6 @@ let motoristas = {};       // {id: {nome, placa, color, lat, lng, status, lastSe
 let filtro = null;
 let catFiltro = new Set(); // filtro por CATEGORIA de chamado (escurece no mapa/lista; vazio = todos acesos)
 let ctrlFiltro = new Set(); // filtro por CONTROLADOR responsável (admin) — acende só os marcados
-let sessoes = {};          // {emailKey: {nome,email,role,onlineSec,idleSec,ts}} sessões dos operadores
 let selId = null;
 let tab = 'chamados';
 let addMode = false;
@@ -1166,10 +1190,6 @@ const STORE = (() => {
         const data = s.val() || {};
         if(handlers.onOperadoresSnapshot) handlers.onOperadoresSnapshot(data);
       });
-      fb.child('operador_sessao').on('value', s => {
-        const data = s.val() || {};
-        if(handlers.onSessoesSnapshot) handlers.onSessoesSnapshot(data);
-      });
       return true;
     } catch(e){ console.warn('STORE init err:', e); return false; }
   }
@@ -1223,7 +1243,6 @@ const STORE = (() => {
     deleteBase(id){ if(fb) fb.child('bases').child(id).remove().catch(e => console.warn(e)); },
     saveOperador(o){ if(fb && o.id){ try { fb.child('operadores').child(o.id).set(cleanForFb(o)).catch(e => console.warn('fb saveOp:', e)); } catch(e){ console.warn(e); } } },
     deleteOperador(id){ if(fb) fb.child('operadores').child(id).remove().catch(e => console.warn(e)); },
-    saveSessao(key, o){ if(fb && key){ try { fb.child('operador_sessao').child(key).set(cleanForFb(o)).catch(()=>{}); } catch(_){} } },
     saveSetting(key, value){
       if(!fb) return;
       try { fb.child('settings').child(key).set(value).catch(e => console.warn('fb saveSetting:', e)); }
@@ -2215,7 +2234,7 @@ function renderMot(){
     <span style="font-size:11px;color:var(--txt2);font-weight:600">📱 Link do app:</span>
     <a href="${esc(url)}" target="_blank" style="flex:1;font-family:var(--mono);font-size:10px;color:var(--acc);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(url)}">${esc(url)}</a>
     <button onclick="copyColabUrl()" style="padding:4px 8px;font-size:10px;background:var(--surf2);border:1px solid var(--bdr);border-radius:4px;cursor:pointer" title="Copiar link">📋</button>
-  </div>`;
+  </div>` + (isAdmin() ? `<div style="padding:8px 12px;border-bottom:1px solid var(--bdr)"><button onclick="openProd()" style="width:100%;padding:9px;background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);font-size:12px;font-weight:800;border-radius:8px;cursor:pointer">📊 Produtividade da Torre</button></div>` : '');
   if(!ids.length){
     $('#motwrap').innerHTML = linkHeader + `<div id="motempty">
       <div class="ic">📱</div>
@@ -5988,10 +6007,6 @@ function setupStoreListeners(){
       }
       if($('#cadmodal') && $('#cadmodal').style.display === 'flex' && cadTab === 'operadores') renderCad();
     },
-    onSessoesSnapshot: (data) => {
-      sessoes = data || {};
-      if(typeof renderCtrlFilter === 'function') renderCtrlFilter();
-    },
     onCorridaAdded: (rideId, ride) => {
       if(!ride.chamadoId) return;
       corridas[ride.chamadoId] = ride;
@@ -6436,13 +6451,28 @@ function renderSessChip(){
   const idleCor = pct >= 40 ? '#fbbf24' : 'var(--txt3)';
   el.innerHTML = `<span title="Tempo com a torre aberta">🟢 ${_fmtHMS(_sessOnlineSec)}</span><span style="color:${idleCor}" title="Tempo sem interagir na tela (${pct}% do tempo online)">💤 ${_fmtHMS(_sessIdleSec)}</span>`;
 }
-function syncSessao(){
-  if(!currentUser || !STORE.saveSessao) return;
-  const key = (currentUser.email || 'anon').replace(/[.#$/\[\]]/g, '_');
-  STORE.saveSessao(key, {
-    email: currentUser.email, nome: currentUser.nome, role: currentUser.role,
-    onlineSec: _sessOnlineSec, idleSec: _sessIdleSec, ts: Date.now()
-  });
+function _hojeStr(d){ d = d || new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _sessKey(){ return ((currentUser && currentUser.email) || 'anon').replace(/[.#$/\[\]]/g, '_'); }
+let _lastSyncOnline = 0, _lastSyncIdle = 0;
+// Acumula o HISTÓRICO DIÁRIO por operador em vammo/operador_produtividade/<key>/<YYYY-MM-DD>.
+// Incrementa só o DELTA desde o último sync (transaction) → sobrevive a reloads e várias sessões.
+function syncProd(){
+  if(!currentUser || typeof firebase === 'undefined' || !firebase.apps?.length) return;
+  const dOn = _sessOnlineSec - _lastSyncOnline;
+  const dIdle = _sessIdleSec - _lastSyncIdle;
+  if(dOn <= 0 && dIdle <= 0) return;
+  _lastSyncOnline = _sessOnlineSec; _lastSyncIdle = _sessIdleSec;
+  const day = _hojeStr();
+  try {
+    firebase.database().ref('vammo/operador_produtividade/' + _sessKey() + '/' + day).transaction(cur => {
+      cur = cur || {};
+      cur.onlineSec = (cur.onlineSec || 0) + dOn;
+      cur.idleSec = (cur.idleSec || 0) + dIdle;
+      cur.nome = currentUser.nome; cur.email = currentUser.email; cur.role = currentUser.role;
+      cur.ts = Date.now();
+      return cur;
+    }).catch(()=>{});
+  } catch(_){}
 }
 let _sessStarted = false;
 function startSessionTracker(){
@@ -6456,8 +6486,9 @@ function startSessionTracker(){
     if(Date.now() - _sessLastInteract > IDLE_THRESHOLD_MS) _sessIdleSec++;
     renderSessChip();
   }, 1000);
-  setTimeout(syncSessao, 3000);
-  setInterval(syncSessao, 15000);
+  setTimeout(syncProd, 5000);
+  setInterval(syncProd, 15000);
+  window.addEventListener('beforeunload', syncProd); // grava o resto ao fechar
 }
 
 // ===== FILTRO POR CONTROLADOR (admin) — acende só os marcados; demais dimados =====
@@ -6477,17 +6508,10 @@ function renderCtrlFilter(){
   const nomes = Object.keys(counts).sort((a,b) => counts[b]-counts[a] || a.localeCompare(b));
   if(nomes.length === 0){ el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
-  // online/ocioso por nome (via sessões)
-  const sessByName = {};
-  for(const k in (sessoes||{})){ const s = sessoes[k]; if(s && s.nome) sessByName[s.nome] = s; }
-  const isOnline = (s) => s && (Date.now() - (s.ts||0) < 90000);
   el.innerHTML = `<div class="ctrlf-hd">👮 Chamados por controlador${ctrlFiltro.size ? ` <button data-ctrl="__clear" class="ctrlf-clear">✕ limpar</button>` : ''}</div>` +
     nomes.map(nome => {
       const on = ctrlFiltro.has(nome);
-      const s = sessByName[nome];
-      const onl = isOnline(s);
-      const sess = s ? `<span class="ctrlf-sess" title="${onl?'online agora':'offline'} · online ${_fmtHMS(s.onlineSec)}${s.idleSec?' · ocioso '+_fmtHMS(s.idleSec):''}">${onl?'🟢':'⚫'}${onl && s.idleSec>60?' 💤':''}</span>` : '';
-      return `<label class="ctrlf-row${on?' on':''}"><input type="checkbox" ${on?'checked':''} data-ctrlk="${esc(nome)}"><span class="ctrlf-nm">${esc(nome)}</span>${sess}<span class="ctrlf-n">${counts[nome]}</span></label>`;
+      return `<label class="ctrlf-row${on?' on':''}"><input type="checkbox" ${on?'checked':''} data-ctrlk="${esc(nome)}"><span class="ctrlf-nm">${esc(nome)}</span><span class="ctrlf-n">${counts[nome]}</span></label>`;
     }).join('');
   el.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => {
     const k = cb.dataset.ctrlk;
@@ -6497,6 +6521,96 @@ function renderCtrlFilter(){
   const clr = el.querySelector('[data-ctrl="__clear"]');
   if(clr) clr.onclick = () => { ctrlFiltro.clear(); renderAll(); };
 }
+
+// ============================================================
+// PRODUTIVIDADE DA TORRE — histórico diário de tempo em tela + ocioso
+// ============================================================
+let _prodData = {};
+let prodState = { dias: 3, colab: '' };
+function _fmtHTot(sec){ sec = Math.max(0, Math.round(sec||0)); const h = Math.floor(sec/3600), m = Math.round((sec%3600)/60); if(h > 0) return h + 'h' + (m ? ' ' + m + 'min' : ''); return m + 'min'; }
+// Gráfico de linha SVG (self-contained): dias no X, horas no Y; 2 séries (em tela / ocioso)
+function prodLineChart(days, s1, s2){
+  const W = 660, H = 200, pl = 38, pr = 12, pt = 12, pb = 30;
+  const maxV = Math.max(1, ...s1, ...s2);
+  const iw = W - pl - pr, ih = H - pt - pb;
+  const x = i => pl + (days.length <= 1 ? iw/2 : (i/(days.length-1))*iw);
+  const y = v => pt + ih - (v/maxV)*ih;
+  const path = arr => arr.map((v,i) => (i?'L':'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+  const grid = [0,0.25,0.5,0.75,1].map(f => { const v = maxV*f, yy = y(v); return `<line x1="${pl}" y1="${yy.toFixed(1)}" x2="${W-pr}" y2="${yy.toFixed(1)}" stroke="var(--bdr)" stroke-width="0.5"/><text x="4" y="${(yy+3).toFixed(1)}" fill="var(--txt3)" font-size="9">${v.toFixed(1)}h</text>`; }).join('');
+  const step = Math.max(1, Math.ceil(days.length/12));
+  const xlab = days.map((d,i) => (i%step===0||i===days.length-1) ? `<text x="${x(i).toFixed(1)}" y="${H-8}" fill="var(--txt3)" font-size="8" text-anchor="middle">${d.slice(5)}</text>` : '').join('');
+  const dots = (arr,cor) => arr.map((v,i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" fill="${cor}"/>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:220px">${grid}<path d="${path(s1)}" fill="none" stroke="#00B4E5" stroke-width="2"/><path d="${path(s2)}" fill="none" stroke="#fbbf24" stroke-width="2"/>${dots(s1,'#00B4E5')}${dots(s2,'#fbbf24')}${xlab}</svg>`;
+}
+async function openProd(){
+  if(!isAdmin()) return;
+  $('#prodmodal').style.display = 'flex';
+  $('#prodlist').innerHTML = '<div style="padding:30px;text-align:center;color:var(--txt2)">Carregando histórico…</div>';
+  $('#prodtotais').innerHTML = '';
+  try {
+    const snap = await firebase.database().ref('vammo/operador_produtividade').once('value');
+    _prodData = snap.val() || {};
+  } catch(e){ _prodData = {}; }
+  const nomes = {};
+  for(const k in _prodData){ const d = _prodData[k] || {}; for(const day in d){ if(d[day] && d[day].nome){ nomes[k] = d[day].nome; break; } } }
+  const sel = $('#prodcolab'), cur = sel.value;
+  sel.innerHTML = '<option value="">Time todo</option>' + Object.keys(nomes).sort((a,b) => nomes[a].localeCompare(nomes[b])).map(k => `<option value="${esc(k)}">${esc(nomes[k])}</option>`).join('');
+  sel.value = cur || '';
+  renderProd();
+}
+function closeProd(){ $('#prodmodal').style.display = 'none'; }
+window.closeProd = closeProd;
+function renderProd(){
+  const dias = prodState.dias, days = [], today = new Date();
+  for(let i = dias-1; i >= 0; i--){ const d = new Date(today); d.setDate(d.getDate()-i); days.push(_hojeStr(d)); }
+  const daySet = new Set(days);
+  const recs = [];
+  for(const k in _prodData){
+    if(prodState.colab && k !== prodState.colab) continue;
+    const d = _prodData[k] || {};
+    for(const day in d){ if(daySet.has(day) && d[day]) recs.push({ k, day, nome: d[day].nome||k, on: d[day].onlineSec||0, id: d[day].idleSec||0 }); }
+  }
+  const totalOn = recs.reduce((s,r)=>s+r.on,0);
+  const totalId = recs.reduce((s,r)=>s+r.id,0);
+  const nAtivos = recs.filter(r=>r.on>0).length;
+  const medLog = nAtivos ? totalOn/nAtivos : 0, medOci = nAtivos ? totalId/nAtivos : 0;
+  const pctOci = totalOn ? Math.round(totalId/totalOn*100) : 0;
+  const onByDay = days.map(day => recs.filter(r=>r.day===day).reduce((s,r)=>s+r.on,0)/3600);
+  const idByDay = days.map(day => recs.filter(r=>r.day===day).reduce((s,r)=>s+r.id,0)/3600);
+  $('#prodtotais').innerHTML = `<div class="rk-totais">
+    <div class="rk-tot"><div class="v" style="color:var(--acc)">${_fmtHTot(totalOn)}</div><div class="l">Tempo em tela</div></div>
+    <div class="rk-tot"><div class="v" style="color:#fbbf24">${_fmtHTot(totalId)}</div><div class="l">Tempo ocioso · ${pctOci}%</div></div>
+    <div class="rk-tot"><div class="v">${_fmtHTot(medLog)}</div><div class="l">Média logado/dia</div></div>
+    <div class="rk-tot"><div class="v">${_fmtHTot(medOci)}</div><div class="l">Média ocioso/dia</div></div>
+  </div>`;
+  const porOp = {};
+  for(const r of recs){ (porOp[r.k] = porOp[r.k] || {nome:r.nome, on:0, id:0, dias:0}); porOp[r.k].on+=r.on; porOp[r.k].id+=r.id; if(r.on>0) porOp[r.k].dias++; }
+  const ops = Object.values(porOp).sort((a,b)=>b.on-a.on);
+  const chart = prodLineChart(days, onByDay, idByDay);
+  const tabela = recs.length === 0
+    ? '<div class="rk-empty"><div class="ic">🕒</div><div style="font-weight:700">Sem dados no período</div><div style="font-size:12px;margin-top:6px">A produtividade é gravada conforme os operadores usam a torre logados.</div></div>'
+    : `<div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin:16px 0 6px">Por colaborador</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="text-align:left;color:var(--txt2);font-size:9px;text-transform:uppercase;letter-spacing:0.4px;font-weight:700">
+          <th style="padding:6px 10px;border-bottom:1px solid var(--bdr)">Colaborador</th>
+          <th style="padding:6px 10px;border-bottom:1px solid var(--bdr);text-align:center">Dias</th>
+          <th style="padding:6px 10px;border-bottom:1px solid var(--bdr);text-align:right">Em tela</th>
+          <th style="padding:6px 10px;border-bottom:1px solid var(--bdr);text-align:right">Ocioso</th>
+          <th style="padding:6px 10px;border-bottom:1px solid var(--bdr);text-align:right">% ocioso</th>
+          <th style="padding:6px 10px;border-bottom:1px solid var(--bdr);text-align:right">Média/dia</th>
+        </tr></thead><tbody>
+        ${ops.map(o => { const pc = o.on ? Math.round(o.id/o.on*100) : 0; return `<tr style="border-bottom:1px solid var(--bdr)">
+          <td style="padding:6px 10px">${esc(o.nome)}</td>
+          <td style="padding:6px 10px;text-align:center;font-family:var(--mono)">${o.dias}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:var(--mono)">${_fmtHTot(o.on)}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:var(--mono);color:#fbbf24">${_fmtHTot(o.id)}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:var(--mono);color:${pc>=40?'#fbbf24':'var(--txt2)'}">${pc}%</td>
+          <td style="padding:6px 10px;text-align:right;font-family:var(--mono)">${_fmtHTot(o.dias ? o.on/o.dias : 0)}</td>
+        </tr>`; }).join('')}
+        </tbody></table>`;
+  $('#prodlist').innerHTML = `<div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">📈 Dia a dia (horas) · <span style="color:#00B4E5">━ em tela</span> · <span style="color:#fbbf24">━ ocioso</span></div>${chart}${tabela}`;
+}
+window.openProd = openProd;
 
 function init(){
   // Carrega chamados demo persistidos
@@ -6591,6 +6705,9 @@ function init(){
   // Relatórios
   $('#repbtn').onclick = openRep;
   $$('#repperiodo .rkp').forEach(b => b.onclick = () => { applyRepPeriodoPreset(b.dataset.p); renderRep(); });
+  // Produtividade da Torre — período + colaborador
+  $$('#prodperiodo .rkp').forEach(b => b.onclick = () => { $$('#prodperiodo .rkp').forEach(x => x.classList.remove('active')); b.classList.add('active'); prodState.dias = +b.dataset.d; renderProd(); });
+  { const pc = $('#prodcolab'); if(pc) pc.onchange = (e) => { prodState.colab = e.target.value; renderProd(); }; }
   $('#repde').onchange = (e) => {
     const d = new Date(e.target.value + 'T00:00:00');
     if(!isNaN(d.getTime())){ repState.de = d.getTime(); repState.periodo = 'custom'; $$('#repperiodo .rkp').forEach(x => x.classList.remove('active')); renderRep(); }
