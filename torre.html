@@ -923,7 +923,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v50 · 2026-07-29';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v51 · 2026-07-29';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1918,6 +1918,16 @@ function _clearMarkerAnim(id){
   delete _markerTgt[id];
 }
 
+// Um colab COM chamado ativo que fica sem ping (parado) está quase sempre EM ATENDIMENTO no
+// local: o celular fica parado/no bolso, o GPS nativo só dispara ao MOVER e o heartbeat JS
+// congela em 2º plano. Isso NÃO é "offline" — o pino deve permanecer no último ponto e
+// mostrar "em atendimento". (Fonte: nativo parado ≠ deslogado.)
+function motEmAtendimento(m, ageS){
+  if(!m || m.status === 'off') return false;
+  if((m.activeCount || 0) <= 0) return false;
+  return ageS > MOTORISTA_TTL_MS/1000;
+}
+
 function renderMotoristaMarkers(){
   const seen = new Set();
   const now = Date.now();
@@ -1926,9 +1936,10 @@ function renderMotoristaMarkers(){
     if(!m.lat || !m.lng) continue;
     seen.add(id);
     const ageS = Math.round((now - (m.lastSeen || 0))/1000);
-    const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
-    const isStale = !isOff && ageS > 60; // > 30s sem update mas ainda dentro do TTL
-    let ringColor = m.status === 'busy' ? '#d97706' : isOff ? '#6b7280' : isStale ? '#fbbf24' : '#10b981';
+    const emAtend = motEmAtendimento(m, ageS);
+    const isOff = m.status === 'off' || (ageS > MOTORISTA_TTL_MS/1000 && !emAtend);
+    const isStale = !isOff && !emAtend && ageS > 60; // > 60s sem update mas ainda dentro do TTL
+    let ringColor = emAtend ? '#0ea5e9' : m.status === 'busy' ? '#d97706' : isOff ? '#6b7280' : isStale ? '#fbbf24' : '#10b981';
     if(m.modo === 'descarregando') ringColor = '#dc2626';
     else if(m.isFull) ringColor = '#dc2626';
     const initial = (m.nome || '?').charAt(0).toUpperCase();
@@ -1957,8 +1968,8 @@ function renderMotoristaMarkers(){
     const warnCls = m._offRoute ? ' warn' : '';
     const staleCls = isStale ? ' stale' : '';
     const icon = L.divIcon({ className: `mt-icon ${isOff?'off':''}${warnCls}${staleCls}`, html, iconSize:[100,90], iconAnchor:[50,23] });
-    const stTxt = isOff ? 'offline' : m.status === 'busy' ? 'em rota' : 'online';
-    const ageTxt = isStale ? ` · <span style="color:#fbbf24">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
+    const stTxt = isOff ? 'offline' : emAtend ? '🔧 em atendimento' : m.status === 'busy' ? 'em rota' : 'online';
+    const ageTxt = emAtend ? ` · <span style="color:#0ea5e9;font-weight:700">🔧 em atendimento (parado há ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'})</span>` : isStale ? ` · <span style="color:#fbbf24">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
     const filaTxt = m.activeCount > 0 ? ` · ${m.activeCount} na fila` : '';
     const ruaTxt = m.currentStreet ? `<br><small style="color:#00B4E5">📍 ${esc(m.currentStreet)}${m.currentArea?' · '+esc(m.currentArea):''}</small>` : '';
     const spdTxt = (m.kmh != null) ? `<br><small style="color:${m.kmh > 0 ? '#fbbf24' : '#9ca3af'};font-weight:700">${m.kmh === 0 ? '🛑 parado' : `🏃 ${m.kmh} km/h`}</small>` : '';
@@ -2345,11 +2356,12 @@ function renderMot(){
       return n + (c && (c.status === 'concluido' || c.status === 'cancelado') ? 0 : 1);
     }, 0);
     const ageS = Math.round((Date.now() - (m.lastSeen||0))/1000);
-    const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
-    const isStale = !isOff && ageS > 60;
-    const stCls = isOff ? 'off' : m.status === 'busy' ? 'busy' : 'online';
-    const stLbl = isOff ? 'offline' : m.modo === 'descarregando' ? '🔴 descarregando' : m.status === 'busy' ? 'em rota' : 'online';
-    const ageLbl = isStale ? ` · <span style="color:#fbbf24;font-weight:700">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
+    const emAtend = m.status !== 'off' && ac > 0 && ageS > MOTORISTA_TTL_MS/1000;
+    const isOff = m.status === 'off' || (ageS > MOTORISTA_TTL_MS/1000 && !emAtend);
+    const isStale = !isOff && !emAtend && ageS > 60;
+    const stCls = isOff ? 'off' : emAtend ? 'busy' : m.status === 'busy' ? 'busy' : 'online';
+    const stLbl = isOff ? 'offline' : emAtend ? '🔧 em atendimento' : m.modo === 'descarregando' ? '🔴 descarregando' : m.status === 'busy' ? 'em rota' : 'online';
+    const ageLbl = emAtend ? ` · <span style="color:#0ea5e9;font-weight:700">🔧 parado no local há ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'}</span>` : isStale ? ` · <span style="color:#fbbf24;font-weight:700">⏱ ${ageS < 60 ? ageS+'s' : Math.floor(ageS/60)+'min'} sem GPS</span>` : '';
     // Etiqueta do modo de rastreamento (só aparece quando o colab já reporta — app v37+)
     let gpsModeLbl = '';
     if(!isOff && m.gpsMode === 'web'){
@@ -4162,10 +4174,11 @@ function renderMotDetail(){
   const veh = veiculosColab[0] || null;
   const now = Date.now();
   const ageS = Math.round((now - (m.lastSeen||0))/1000);
-  const isOff = m.status === 'off' || ageS > MOTORISTA_TTL_MS/1000;
-  const isStale = !isOff && ageS > 60;
-  const stCor = isOff ? '#6b7280' : isStale ? '#fbbf24' : m.status === 'busy' ? '#d97706' : '#16a34a';
-  const stLbl = isOff ? 'offline' : isStale ? 'sem GPS' : m.status === 'busy' ? 'em rota' : 'online';
+  const emAtend = motEmAtendimento(m, ageS);
+  const isOff = m.status === 'off' || (ageS > MOTORISTA_TTL_MS/1000 && !emAtend);
+  const isStale = !isOff && !emAtend && ageS > 60;
+  const stCor = emAtend ? '#0ea5e9' : isOff ? '#6b7280' : isStale ? '#fbbf24' : m.status === 'busy' ? '#d97706' : '#16a34a';
+  const stLbl = emAtend ? '🔧 em atendimento' : isOff ? 'offline' : isStale ? 'sem GPS' : m.status === 'busy' ? 'em rota' : 'online';
   // Aviso: pino velho no modo WEB = app suspenso (Waze na frente / tela apagada), NÃO motorista parado.
   let gpsWarn = '';
   if(!isOff && m.gpsMode === 'web'){
@@ -6228,8 +6241,12 @@ function applyMotoristaTelemetry(data, opts){
   // estiver no mapa, remove. Updates AO VIVO (initial:false) sempre passam (ts fresco).
   if(opts.initial){
     const idade = data.ts ? (Date.now() - data.ts) : Infinity;
-    if(idade > MOTORISTA_REMOVE_MS || data.status === 'off'){
-      if(motoristas[data.id]) removeMotorista(data.id);
+    const existe = motoristas[data.id];
+    // Em atendimento (tem chamado ativo e NÃO deslogou): NÃO remove no resync mesmo com ping
+    // velho — fica parado no local, o pino deve permanecer no último ponto conhecido.
+    const emAtendimento = existe && (existe.activeCount || 0) > 0 && data.status !== 'off';
+    if((idade > MOTORISTA_REMOVE_MS || data.status === 'off') && !emAtendimento){
+      if(existe) removeMotorista(data.id);
       return;
     }
   }
@@ -6353,14 +6370,18 @@ function checkMotoristasTTL(){
   for(const id in motoristas){
     const m = motoristas[id];
     const age = now - (m.lastSeen||0);
-    if(age > MOTORISTA_REMOVE_MS){
+    // Colab COM chamado ativo que ficou sem ping está quase sempre EM ATENDIMENTO no local
+    // (parado). NÃO remove do mapa nem alerta "caiu" — mantém o pino no último ponto conhecido.
+    const emAtendimento = (m.activeCount || 0) > 0 && m.status !== 'off';
+    if(age > MOTORISTA_REMOVE_MS && !emAtendimento){
       toRemove.push({ id, nome: m.nome });
     } else if(age > MOTORISTA_TTL_MS && m.status !== 'off'){
       changed = true;
     }
     // --- Aviso de colab que CAIU (perdeu sinal). Logout/checkout (status 'off') NÃO alerta. ---
+    // Em atendimento (parado no local) também NÃO alerta — é esperado ficar sem ping ali.
     const conectado = age <= MOTORISTA_TTL_MS; // heartbeat vivo (independe do status)
-    const caiu = _motConectado[id] === true && !conectado && m.status !== 'off';
+    const caiu = _motConectado[id] === true && !conectado && m.status !== 'off' && !emAtendimento;
     if(!_ttlPrimeiraVez && caiu){
       const mins = Math.max(1, Math.round(age/60000));
       pushAlert({
