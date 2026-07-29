@@ -45,7 +45,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #app{display:flex;flex-direction:column;height:100vh;width:100vw}
 
 /* NAV */
-#nav{flex:0 0 92px;display:flex;align-items:center;gap:14px;padding:0 22px;background:linear-gradient(180deg,rgba(10,22,44,0.72) 0%,rgba(7,15,31,0.6) 100%);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);border-bottom:1px solid var(--bdr2);font-size:13px;position:relative;z-index:600}
+#nav{flex:0 0 92px;display:flex;align-items:center;gap:14px;padding:0 22px;background:linear-gradient(180deg,rgba(0,0,0,0.66) 0%,rgba(0,0,0,0.5) 100%);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border-bottom:1px solid var(--bdr2);font-size:13px;position:relative;z-index:600}
 #nav::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--acc) 25%,#7cf0ff 50%,var(--acc) 75%,transparent 100%);opacity:0.85;box-shadow:0 0 12px rgba(0,180,229,0.5)}
 .brand{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 22px 0 4px;margin-right:8px;border-right:1px solid var(--bdr);height:72px;gap:3px;position:relative}
 .brand::after{content:'';position:absolute;left:-10px;top:50%;transform:translateY(-50%);width:130px;height:130px;background:radial-gradient(circle, rgba(0,180,229,0.22), transparent 70%);pointer-events:none;z-index:-1;filter:blur(4px)}
@@ -61,10 +61,10 @@ body.navmode #navmodeexit{display:inline-flex}
 #navmodeexit{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:1300;align-items:center;gap:8px;background:rgba(0,180,229,0.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#001823;border:1px solid rgba(255,255,255,0.35);border-radius:24px;padding:9px 18px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 12px 34px rgba(0,0,0,0.45)}
 #navmodeexit:hover{background:#00c8ff}
 #nav .pills{display:flex;gap:6px;align-items:stretch}
-.pill{padding:6px 12px;border:1px solid var(--bdr);background:var(--surf);cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-radius:8px;color:var(--txt2);font-weight:700;transition:all 0.15s;height:38px}
-.pill:hover{background:var(--surf2);color:var(--txt);border-color:var(--bdr2)}
-.pill.active{background:var(--surf2);color:var(--txt);border-color:var(--bdr2);box-shadow:inset 0 -2px 0 var(--acc),0 2px 8px rgba(0,180,229,0.15)}
-.pill .n{background:var(--bg);padding:3px 9px;border-radius:10px;font-size:13px;font-weight:800;font-family:var(--mono);min-width:24px;text-align:center;line-height:1}
+.pill{padding:6px 12px;border:1px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.07);cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-radius:8px;color:#cdd8ea;font-weight:700;transition:all 0.15s;height:38px}
+.pill:hover{background:rgba(255,255,255,0.14);color:#fff;border-color:rgba(255,255,255,0.3)}
+.pill.active{background:rgba(0,180,229,0.16);color:#fff;border-color:var(--acc);box-shadow:inset 0 -2px 0 var(--acc),0 2px 12px rgba(0,180,229,0.25)}
+.pill .n{background:rgba(0,0,0,0.4);padding:3px 9px;border-radius:10px;font-size:13px;font-weight:800;font-family:var(--mono);min-width:24px;text-align:center;line-height:1}
 .pill.active .n{background:var(--acc);color:#001823}
 .pill[data-f="novo"].active .n{background:var(--novo);color:#fff}
 .pill[data-f="em_rota"].active .n{background:var(--rota);color:#fff}
@@ -72,8 +72,8 @@ body.navmode #navmodeexit{display:inline-flex}
 .pill[data-f="cancelado"].active .n{background:var(--canc);color:#fff}
 #nav .spacer{flex:1}
 
-#nav .iconbtn{padding:7px 11px;font-size:11px;display:flex;align-items:center;gap:5px;border-radius:7px;transition:all 0.15s}
-#nav .iconbtn:hover{border-color:var(--bdr2);background:var(--surf2)}
+#nav .iconbtn{padding:7px 12px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:5px;border-radius:8px;transition:all 0.15s;background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.18);color:#e9f0fb}
+#nav .iconbtn:hover{border-color:var(--acc);background:rgba(255,255,255,0.17);color:#fff;box-shadow:0 2px 12px rgba(0,180,229,0.2)}
 #nav .iconbtn.on{background:var(--acc);color:#001823;border-color:var(--acc);font-weight:700;box-shadow:0 0 0 1px rgba(0,180,229,0.3)}
 #nav .demo-on{background:var(--rota);color:#fff;border-color:var(--rota);font-weight:700}
 #syncind{display:flex;align-items:center;gap:6px;font-size:0;color:transparent;padding:0;height:32px;cursor:default}
@@ -905,7 +905,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v48 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v49 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
