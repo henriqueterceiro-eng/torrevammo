@@ -793,7 +793,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v45 · 2026-07-28';
+const APP_VERSION = 'v46 · 2026-07-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1260,7 +1260,11 @@ function rideMarkEnRoute(){
 }
 
 function rideMarkArrived(){
-  if(currentRide && !currentRide.arrivedTs) currentRide.arrivedTs = Date.now();
+  if(currentRide && !currentRide.arrivedTs){
+    currentRide.arrivedTs = Date.now();
+    // Local de EXECUÇÃO (onde o colab chegou/atendeu) — pra torre comparar com o endereço do chamado
+    if(myPos){ currentRide.execLat = myPos.lat; currentRide.execLng = myPos.lng; }
+  }
 }
 
 function rideMarkDeviation(dist){
@@ -2949,6 +2953,12 @@ function continuarConclusao(ativo){
       }
       checkInMoto({ source: 'cliente', chamadoId: ativo.id, clienteName: ativo.cliente || null, placa: ativo.placa || null });
     }
+  }
+  // Anexa assinatura + presença na corrida (registro durável do relatório)
+  if(currentRide){
+    if(ativo._assinatura){ currentRide.assinatura = ativo._assinatura; currentRide.assinaturaNome = ativo._assinaturaNome || ''; }
+    currentRide.clienteAusente = !!ativo._clienteAusente;
+    currentRide.pagamentoNoLocal = desfecho === 'pago_no_local';
   }
   rideFinalize('concluido', desfecho);
   // Anexa assinatura/ausência + desfecho ao status enviado pra torre

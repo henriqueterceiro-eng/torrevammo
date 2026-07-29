@@ -473,7 +473,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <div id="userchip" style="display:none;align-items:center;gap:8px;background:rgba(255,255,255,0.06);border:1px solid var(--bdr);border-radius:20px;padding:3px 6px 3px 3px;margin-right:2px"></div>
     <button class="iconbtn" id="cadbtn" title="Cadastros de colaboradores e veículos">📋 Cadastros</button>
     <button class="iconbtn" id="rankbtn" title="Ver ranking e estatísticas dos colaboradores">📊 Ranking</button>
-    <button class="iconbtn" id="repbtn" title="Relatórios filtráveis e exportáveis">📈 Relatórios</button>
+    <button class="iconbtn" id="repbtn" title="Relatórios de Chamados — filtráveis e exportáveis">📈 Chamados</button>
     <button class="iconbtn" id="rkmbtn" title="Ranking mensal dos colaboradores">🏆 Mensal</button>
     <button class="iconbtn" id="frotabtn" title="Revisão de frota — veículos pendentes">🔧 Frota</button>
     <button class="iconbtn" id="demobtn" title="Modo demo: crie chamados manualmente sem Slack">🧪 Demo</button>
@@ -631,7 +631,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
   <div style="max-width:1300px;width:100%;margin:0 auto;background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 60px);overflow:hidden">
     <div style="padding:16px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:14px">
       <div style="flex:1">
-        <h2 style="font-size:18px">📈 Relatórios</h2>
+        <h2 style="font-size:18px">📈 Relatórios de Chamados</h2>
         <div style="font-size:11px;color:var(--txt2);margin-top:2px" id="repmeta">—</div>
       </div>
       <div class="rephelp">ⓘ Legenda
@@ -866,8 +866,8 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
-const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v44 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const LATEST_COLAB_VERSION = 'v46 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v45 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3801,6 +3801,10 @@ function openCadForm(tab, id){
           </select>`;
         })()}</div>
       </div>
+      <div class="cdform-field"><label>Vínculo</label><select id="f_vinculo">
+        <option value="vammo"${(item?.vinculo||'vammo')==='vammo'?' selected':''}>🟦 Vammo (próprio)</option>
+        <option value="terceirizado"${item?.vinculo==='terceirizado'?' selected':''}>🟨 Terceirizado</option>
+      </select></div>
     `;
   } else if(isBase){
     $('#cadFormBody').innerHTML = `
@@ -3930,6 +3934,7 @@ function openCadForm(tab, id){
         // Operação
         turno: $('#f_turno').value,
         base: $('#f_base').value.trim(),
+        vinculo: ($('#f_vinculo') ? $('#f_vinculo').value : (item?.vinculo || 'vammo')),
         ativo: true,
         // Preserva senha existente em edição
         senhaHash: item?.senhaHash || null,
@@ -4869,6 +4874,47 @@ function controladorDaCorrida(r){
   if(!ch) return '—';
   return ch.atribuidoPor || ch.abertoPor || ch.analista || '—';
 }
+// Vínculo do colaborador: Vammo (próprio) ou Terceirizado
+function vinculoDaCorrida(r){
+  const c = colaboradores[r.motoristaId];
+  return (c && c.vinculo === 'terceirizado') ? 'Terceirizado' : 'Vammo';
+}
+// Local de EXECUÇÃO vs endereço do chamado — retorna maps link se executou em local diferente
+function execInfoDaCorrida(r){
+  const ch = chamados.find(x => x.id === r.chamadoId);
+  const dLat = r.destLat != null ? r.destLat : (ch ? ch.lat : null);
+  const dLng = r.destLng != null ? r.destLng : (ch ? ch.lng : null);
+  const eLat = r.execLat, eLng = r.execLng;
+  if(eLat == null || eLng == null) return { txt: '—', diff: false };
+  let diff = true;
+  if(dLat != null && dLng != null){ diff = haversine({lat:dLat,lng:dLng}, {lat:eLat,lng:eLng}) > 150; }
+  return { diff, lat: eLat, lng: eLng, url: `https://www.google.com/maps?q=${eLat},${eLng}` };
+}
+const FOTO_LABELS = { foto_reparada:'🔧 Moto reparada', foto_placa:'🔢 Placa', foto_embarcada:'📦 Moto embarcada', foto_chave:'🔑 Chave', foto_local_vazio:'📍 Local (sem moto)', foto_danos:'💥 Danos', foto_comprovante:'💵 Comprovante de pagamento' };
+function openFotosCorrida(r){
+  const rs = r.rotinaSteps || {};
+  const fotos = Object.keys(rs).filter(k => typeof rs[k] === 'string' && rs[k].startsWith('data:')).map(k => ({ label: FOTO_LABELS[k] || k, src: rs[k] }));
+  const ass = r.assinatura || (chamados.find(x => x.id === r.chamadoId)||{}).assinatura || null;
+  const assNome = r.assinaturaNome || (chamados.find(x => x.id === r.chamadoId)||{}).assinaturaNome || '';
+  if(!fotos.length && !ass){ showToast('Sem fotos/assinatura neste atendimento'); return; }
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(4,10,20,0.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10030;padding:20px';
+  overlay.innerHTML = `<div style="background:rgba(12,22,42,0.96);border:1px solid var(--bdr2);border-radius:14px;max-width:760px;width:100%;max-height:90vh;overflow:auto;padding:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <h2 style="font-size:16px;flex:1">📷 Evidências · ${esc(r.cliente||'')}${r.pagamentoNoLocal?' · 💵 pago no local':''}</h2>
+      <button id="fxCls" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px">
+      ${fotos.map(f => `<div><div style="font-size:11px;color:var(--txt2);font-weight:700;margin-bottom:4px">${esc(f.label)}</div><a href="${f.src}" target="_blank" title="abrir em tamanho grande"><img src="${f.src}" style="width:100%;border-radius:8px;border:1px solid var(--bdr);display:block"></a></div>`).join('')}
+      ${ass ? `<div><div style="font-size:11px;color:#4ade80;font-weight:700;margin-bottom:4px">✍ Assinatura${assNome?' · '+esc(assNome):''}</div><img src="${ass}" style="width:100%;border-radius:8px;border:1px solid var(--bdr);background:#fff;display:block"></div>` : ''}
+    </div>
+    ${!fotos.length ? '<div style="color:var(--txt3);font-size:12px;text-align:center;padding:10px">Sem fotos — só assinatura.</div>' : ''}
+  </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = e => { if(e.target === overlay) close(); };
+  overlay.querySelector('#fxCls').onclick = close;
+}
 // TEMPO DE ATRIBUIÇÃO = ABERTURA do chamado → ATRIBUÍDO a um colaborador (em segundos)
 function tempoAtribSec(r){
   const ch = chamados.find(x => x.id === r.chamadoId);
@@ -4881,6 +4927,7 @@ function tempoAtribSec(r){
 
 function renderRep(){
   const rows = calcRep();
+  const numMap = buildNumeroMap();   // número diário do chamado (ID de rastreio)
   const totalKm = rows.reduce((s,r) => s + (r.totalKm||0), 0);
   // ===== TMA (Tempo Médio de Atendimento) — 3 componentes =====
   // total = recebe→finaliza (totalDurationSec) · deslocamento = sai→chega (travelDurationSec)
@@ -4940,11 +4987,15 @@ function renderRep(){
     <table style="width:100%;border-collapse:collapse;font-size:11px">
       <thead style="position:sticky;top:0;background:var(--bg);z-index:1">
         <tr style="text-align:left;color:var(--txt2);font-size:9px;letter-spacing:0.4px;text-transform:uppercase;font-weight:700">
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="ID único de rastreio do chamado (nº do dia)">ID</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Data</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Colaborador</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Vammo (próprio) ou Terceirizado">Vínculo</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Base</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Placa</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Cliente</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Endereço do chamado</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Local onde o atendimento foi executado, se diferente do endereço do chamado">Execução</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Motivo</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Controlador responsável: quem atribuiu / abriu o chamado (ou analista do CX)">Controlador</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Desfecho do atendimento">Desfecho</th>
@@ -4956,10 +5007,11 @@ function renderRep(){
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="Atendimento: chega no cliente → finaliza">Atend.</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:center">Status</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">Nota</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:center" title="Fotos da conclusão, assinatura e comprovante">Evidências</th>
         </tr>
       </thead>
       <tbody>
-        ${rows.map(r => {
+        ${rows.map((r,i) => {
           const c = colaboradores[r.motoristaId];
           const baseN = c?.base || '—';
           const d = new Date(r.completedTs);
@@ -4968,12 +5020,27 @@ function renderRep(){
           const corNota = nota >= 8 ? '#16a34a' : nota >= 6 ? '#fbbf24' : '#dc2626';
           const stCor = r.endStatus === 'concluido' ? '#16a34a' : r.endStatus === 'cancelado' ? '#dc2626' : 'var(--txt3)';
           const dest = destinoDaCorrida(r);
+          const ch = chamados.find(x => x.id === r.chamadoId);
+          const numId = numMap[r.chamadoId];
+          const vinc = vinculoDaCorrida(r);
+          const exec = execInfoDaCorrida(r);
+          const rs2 = r.rotinaSteps || {};
+          const temFoto = Object.keys(rs2).some(k => typeof rs2[k]==='string' && rs2[k].startsWith('data:'));
+          const assinado = !!(r.assinatura || (ch && ch.assinatura));
+          const pago = !!r.pagamentoNoLocal || (ch && ch.pagamentoNoLocal);
+          const evid = (temFoto || assinado)
+            ? `<button data-fotos="${i}" title="Ver fotos/assinatura" style="background:rgba(0,180,229,0.15);border:1px solid var(--acc);color:var(--acc);padding:3px 8px;border-radius:6px;font-size:12px;cursor:pointer">📷${assinado?' ✍':''}${pago?' 💵':''}</button>`
+            : '<span style="color:var(--txt3);font-size:10px">—</span>';
           return `<tr style="border-bottom:1px solid var(--bdr)">
+            <td style="padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800" title="${esc(r.chamadoId||'')}">${numId?('#'+numId):'—'}</td>
             <td style="padding:8px 12px;font-family:var(--mono);font-size:10px">${dStr}</td>
             <td style="padding:8px 12px">${esc(r.motoristaNome||'?')}</td>
+            <td style="padding:8px 12px"><span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:${vinc==='Terceirizado'?'rgba(245,158,11,0.2)':'rgba(0,180,229,0.15)'};color:${vinc==='Terceirizado'?'#fbbf24':'var(--acc)'}">${vinc}</span></td>
             <td style="padding:8px 12px">${esc(baseN)}</td>
             <td style="padding:8px 12px;font-family:var(--mono)">${esc(r.motoristaPlaca||'—')}</td>
             <td style="padding:8px 12px">${esc(r.cliente||'—')}</td>
+            <td style="padding:8px 12px;font-size:10px;max-width:200px">${esc((ch && ch.endereco) || r.endereco || '—')}</td>
+            <td style="padding:8px 12px;font-size:10px">${exec.diff ? `<a href="${exec.url}" target="_blank" style="color:#fbbf24">📍 outro local</a>` : (exec.txt==='—' ? '<span style="color:var(--txt3)">—</span>' : '<span style="color:var(--txt3)">mesmo local</span>')}</td>
             <td style="padding:8px 12px">${esc(motivoDaCorrida(r))}</td>
             <td style="padding:8px 12px">${esc(controladorDaCorrida(r))}</td>
             <td style="padding:8px 12px;color:${dest.cor};font-weight:600">${esc(dest.txt)}</td>
@@ -4985,20 +5052,26 @@ function renderRep(){
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#16a34a">${fmtDurTMA(r.serviceDurationSec)}</td>
             <td style="padding:8px 12px;text-align:center;color:${stCor};font-weight:700">${esc(r.endStatus||'—')}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:${corNota};font-weight:700">${nota != null ? nota.toFixed(1) : '—'}</td>
+            <td style="padding:8px 12px;text-align:center">${evid}</td>
           </tr>`;
         }).join('')}
       </tbody>
     </table>
   `;
+  // Wire dos botões de evidências (fotos + assinatura)
+  $$('#replist [data-fotos]').forEach(b => b.onclick = () => { const r = rows[+b.dataset.fotos]; if(r) openFotosCorrida(r); });
 }
 
 function exportRepCSV(){
   const rows = calcRep();
-  const headers = ['Data','Colaborador','Base','Placa','Cliente','Motivo','Controlador','Desfecho','Base descarga','Km','TMA total (s)','Atribuicao (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)','Chamado ID'];
+  const numMap = buildNumeroMap();
+  const headers = ['ID (nº dia)','Chamado ID','Data','Colaborador','Vinculo','Base','Placa','Cliente','Endereco chamado','Endereco execucao (link)','Assinado','Pago no local','Motivo','Controlador','Desfecho','Base descarga','Km','TMA total (s)','Atribuicao (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)'];
   const lines = [headers.join(';')];
   for(const r of rows){
     const c = colaboradores[r.motoristaId];
+    const ch = chamados.find(x => x.id === r.chamadoId);
     const d = new Date(r.completedTs);
+    const exec = execInfoDaCorrida(r);
     const csvCell = (v) => {
       if(v == null) return '';
       let s = String(v).replace(/"/g, '""');
@@ -5006,11 +5079,18 @@ function exportRepCSV(){
       return s;
     };
     lines.push([
+      numMap[r.chamadoId] ? '#'+numMap[r.chamadoId] : '',
+      r.chamadoId || '',
       d.toISOString(),
       r.motoristaNome || '',
+      vinculoDaCorrida(r),
       c?.base || '',
       r.motoristaPlaca || '',
       r.cliente || '',
+      (ch && ch.endereco) || r.endereco || '',
+      exec.diff ? exec.url : '',
+      (r.assinatura || (ch && ch.assinatura)) ? 'sim' : 'nao',
+      (r.pagamentoNoLocal || (ch && ch.pagamentoNoLocal)) ? 'sim' : 'nao',
       motivoDaCorrida(r),
       controladorDaCorrida(r),
       destinoDaCorrida(r).txt.replace(/^[^\wÀ-ÿ]+/, '').trim(),
@@ -5026,8 +5106,7 @@ function exportRepCSV(){
       r.nota?.velocidade?.toFixed(2) || '',
       r.nota?.tempo?.toFixed(2) || '',
       r.deviations?.length || 0,
-      r.maxKmh ? Math.round(r.maxKmh) : '',
-      r.chamadoId || ''
+      r.maxKmh ? Math.round(r.maxKmh) : ''
     ].map(csvCell).join(';'));
   }
   const csv = '﻿' + lines.join('\n'); // BOM pra Excel abrir UTF-8 com acentos
