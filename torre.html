@@ -420,6 +420,18 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 .rephelp-pop hr{border:none;border-top:1px solid var(--bdr);margin:8px 0}
 .rephelp-pop>div{margin-bottom:4px}
 
+/* Filtro por controlador (admin) */
+#ctrlfilter{padding:6px 10px 8px;border-bottom:1px solid var(--bdr);display:flex;flex-direction:column;gap:2px;max-height:220px;overflow-y:auto}
+.ctrlf-hd{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--acc);font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.ctrlf-clear{background:transparent;border:1px solid var(--bdr);color:var(--txt3);font-size:9px;padding:1px 5px;border-radius:4px;cursor:pointer}
+.ctrlf-row{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:6px;cursor:pointer;font-size:11px}
+.ctrlf-row:hover{background:var(--surf2)}
+.ctrlf-row.on{background:rgba(0,180,229,0.12)}
+.ctrlf-row input{accent-color:var(--acc);width:14px;height:14px;flex:0 0 14px;cursor:pointer}
+.ctrlf-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.ctrlf-sess{font-size:11px}
+.ctrlf-n{background:var(--surf2);color:var(--txt2);font-weight:800;border-radius:8px;padding:1px 7px;font-size:10px;font-family:var(--mono)}
+
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:4px}
@@ -444,6 +456,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <div class="pills" id="pills"></div>
     <div class="spacer"></div>
     <div id="syncind" title="Status da sincronização"><span class="d" id="syncdot"></span><span id="synctxt">conectando…</span></div>
+    <div id="sesschip" style="display:none;align-items:center;gap:10px;background:rgba(255,255,255,0.06);border:1px solid var(--bdr);border-radius:16px;padding:4px 10px;font-size:10px;font-weight:700;font-family:var(--mono);white-space:nowrap" title="Tempo com a torre aberta · tempo sem interagir"></div>
     <div id="userchip" style="display:none;align-items:center;gap:8px;background:rgba(255,255,255,0.06);border:1px solid var(--bdr);border-radius:20px;padding:3px 6px 3px 3px;margin-right:2px"></div>
     <button class="iconbtn" id="cadbtn" title="Cadastros de colaboradores e veículos">📋 Cadastros</button>
     <button class="iconbtn" id="rankbtn" title="Ver ranking e estatísticas dos colaboradores">📊 Ranking</button>
@@ -475,6 +488,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         <div class="tab" data-tab="motoristas">Colaboradores <span id="tab2n">0</span></div>
       </div>
       <div id="catfilter"></div>
+      <div id="ctrlfilter" style="display:none"></div>
       <div id="listwrap"></div>
       <div id="motwrap"></div>
     </div>
@@ -815,7 +829,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v40 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v41 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -994,6 +1008,8 @@ let chamados = [];         // de Slack OU demo
 let motoristas = {};       // {id: {nome, placa, color, lat, lng, status, lastSeen}}
 let filtro = null;
 let catFiltro = new Set(); // filtro por CATEGORIA de chamado (escurece no mapa/lista; vazio = todos acesos)
+let ctrlFiltro = new Set(); // filtro por CONTROLADOR responsável (admin) — acende só os marcados
+let sessoes = {};          // {emailKey: {nome,email,role,onlineSec,idleSec,ts}} sessões dos operadores
 let selId = null;
 let tab = 'chamados';
 let addMode = false;
@@ -1150,6 +1166,10 @@ const STORE = (() => {
         const data = s.val() || {};
         if(handlers.onOperadoresSnapshot) handlers.onOperadoresSnapshot(data);
       });
+      fb.child('operador_sessao').on('value', s => {
+        const data = s.val() || {};
+        if(handlers.onSessoesSnapshot) handlers.onSessoesSnapshot(data);
+      });
       return true;
     } catch(e){ console.warn('STORE init err:', e); return false; }
   }
@@ -1203,6 +1223,7 @@ const STORE = (() => {
     deleteBase(id){ if(fb) fb.child('bases').child(id).remove().catch(e => console.warn(e)); },
     saveOperador(o){ if(fb && o.id){ try { fb.child('operadores').child(o.id).set(cleanForFb(o)).catch(e => console.warn('fb saveOp:', e)); } catch(e){ console.warn(e); } } },
     deleteOperador(id){ if(fb) fb.child('operadores').child(id).remove().catch(e => console.warn(e)); },
+    saveSessao(key, o){ if(fb && key){ try { fb.child('operador_sessao').child(key).set(cleanForFb(o)).catch(()=>{}); } catch(_){} } },
     saveSetting(key, value){
       if(!fb) return;
       try { fb.child('settings').child(key).set(value).catch(e => console.warn('fb saveSetting:', e)); }
@@ -1756,7 +1777,7 @@ function renderChamadoMarkers(){
       chamadoMarkers[c.id] = m;
     }
     // Concluído/cancelado fica bem transparente pra não poluir o mapa (mas continua clicável)
-    chamadoMarkers[c.id].setOpacity((c.status === 'concluido' || c.status === 'cancelado') ? 0.25 : (catDim(c) ? 0.3 : 1));
+    chamadoMarkers[c.id].setOpacity((c.status === 'concluido' || c.status === 'cancelado') ? 0.25 : ((catDim(c) || ctrlDim(c)) ? 0.3 : 1));
   }
   for(const id in chamadoMarkers){
     if(!seen.has(id)){ map.removeLayer(chamadoMarkers[id]); delete chamadoMarkers[id]; }
@@ -2165,7 +2186,7 @@ function renderList(){
     const queueBadge = ord ? `<span class="b b-queue${ord.order===1?' first':''}" title="Posição ${ord.order} na fila de ${ord.total}">${ord.order}/${ord.total}</span>` : '';
     const motBadge = mot ? `<span class="b b-mot" style="background:${mot.color}">${esc(mot.nome.split(' ')[0])}</span>` : '';
     const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>`;
-    const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : (catDim(c) ? ' style="opacity:0.3"' : '');
+    const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : ((catDim(c) || ctrlDim(c)) ? ' style="opacity:0.3"' : '');
     return `<div class="card${sel} ${al}" data-id="${c.id}"${fadeStyle}>
       <div class="row1">
         <div class="nome">${esc(c.cliente||'?')}</div>
@@ -5967,6 +5988,10 @@ function setupStoreListeners(){
       }
       if($('#cadmodal') && $('#cadmodal').style.display === 'flex' && cadTab === 'operadores') renderCad();
     },
+    onSessoesSnapshot: (data) => {
+      sessoes = data || {};
+      if(typeof renderCtrlFilter === 'function') renderCtrlFilter();
+    },
     onCorridaAdded: (rideId, ride) => {
       if(!ride.chamadoId) return;
       corridas[ride.chamadoId] = ride;
@@ -6264,6 +6289,7 @@ function renderMotoPingMarkers(){
 function renderAll(){
   renderPills();
   renderCatFilter();
+  renderCtrlFilter();
   renderList();
   renderMot();
   renderChamadoMarkers();
@@ -6348,6 +6374,8 @@ function aplicarPermissoes(){
   gate('configbtn','config');
   gate('frotabtn','frota');
   if(selId && typeof renderDetail === 'function') renderDetail(); // re-aplica gating da finalização forçada
+  if(typeof startSessionTracker === 'function') startSessionTracker(); // conta online/ocioso após login
+  if(typeof renderCtrlFilter === 'function') renderCtrlFilter();
 }
 function renderUserChip(){
   const el = document.getElementById('userchip');
@@ -6386,6 +6414,88 @@ function startAuth(){
     if(btnDiv){ btnDiv.innerHTML=''; google.accounts.id.renderButton(btnDiv, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', logo_alignment:'left' }); }
     if(!currentUser){ try { google.accounts.id.prompt(); } catch(_){} }
   }).catch(() => _authMsg('Falha ao carregar o Google Sign-In. Recarregue.', true));
+}
+
+// ============================================================
+// SESSÃO DO OPERADOR — tempo online + tempo ocioso (sem interação)
+// ============================================================
+let _sessOnlineSec = 0, _sessIdleSec = 0, _sessLastInteract = Date.now();
+const IDLE_THRESHOLD_MS = 60 * 1000; // 60s sem mexer = ocioso
+function _sessMarkInteract(){ _sessLastInteract = Date.now(); }
+function _fmtHMS(sec){
+  sec = Math.max(0, Math.round(sec||0));
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+  if(h > 0) return h + 'h' + String(m).padStart(2,'0');
+  if(m > 0) return m + 'min';
+  return s + 's';
+}
+function renderSessChip(){
+  const el = document.getElementById('sesschip'); if(!el || !currentUser) return;
+  el.style.display = 'flex';
+  const pct = _sessOnlineSec > 0 ? Math.round(_sessIdleSec/_sessOnlineSec*100) : 0;
+  const idleCor = pct >= 40 ? '#fbbf24' : 'var(--txt3)';
+  el.innerHTML = `<span title="Tempo com a torre aberta">🟢 ${_fmtHMS(_sessOnlineSec)}</span><span style="color:${idleCor}" title="Tempo sem interagir na tela (${pct}% do tempo online)">💤 ${_fmtHMS(_sessIdleSec)}</span>`;
+}
+function syncSessao(){
+  if(!currentUser || !STORE.saveSessao) return;
+  const key = (currentUser.email || 'anon').replace(/[.#$/\[\]]/g, '_');
+  STORE.saveSessao(key, {
+    email: currentUser.email, nome: currentUser.nome, role: currentUser.role,
+    onlineSec: _sessOnlineSec, idleSec: _sessIdleSec, ts: Date.now()
+  });
+}
+let _sessStarted = false;
+function startSessionTracker(){
+  if(_sessStarted) return;
+  _sessStarted = true;
+  _sessLastInteract = Date.now();
+  ['mousemove','mousedown','keydown','touchstart','scroll','wheel','click'].forEach(ev =>
+    window.addEventListener(ev, _sessMarkInteract, { passive: true }));
+  setInterval(() => {
+    _sessOnlineSec++;
+    if(Date.now() - _sessLastInteract > IDLE_THRESHOLD_MS) _sessIdleSec++;
+    renderSessChip();
+  }, 1000);
+  setTimeout(syncSessao, 3000);
+  setInterval(syncSessao, 15000);
+}
+
+// ===== FILTRO POR CONTROLADOR (admin) — acende só os marcados; demais dimados =====
+function ctrlDoChamado(c){ return c.atribuidoPor || c.abertoPor || c.analista || '(sem controlador)'; }
+function ctrlDim(c){ return ctrlFiltro.size > 0 && !ctrlFiltro.has(ctrlDoChamado(c)); }
+function renderCtrlFilter(){
+  const el = document.getElementById('ctrlfilter'); if(!el) return;
+  if(!isAdmin()){ el.style.display = 'none'; el.innerHTML = ''; return; } // só admin/dev
+  // conta chamados ativos por controlador
+  const counts = {};
+  for(const c of chamados){
+    if(c.status === 'concluido' || c.status === 'cancelado') continue;
+    if(typeof chamadoOcultoPorTempo === 'function' && chamadoOcultoPorTempo(c)) continue;
+    const nome = ctrlDoChamado(c);
+    counts[nome] = (counts[nome] || 0) + 1;
+  }
+  const nomes = Object.keys(counts).sort((a,b) => counts[b]-counts[a] || a.localeCompare(b));
+  if(nomes.length === 0){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  // online/ocioso por nome (via sessões)
+  const sessByName = {};
+  for(const k in (sessoes||{})){ const s = sessoes[k]; if(s && s.nome) sessByName[s.nome] = s; }
+  const isOnline = (s) => s && (Date.now() - (s.ts||0) < 90000);
+  el.innerHTML = `<div class="ctrlf-hd">👮 Chamados por controlador${ctrlFiltro.size ? ` <button data-ctrl="__clear" class="ctrlf-clear">✕ limpar</button>` : ''}</div>` +
+    nomes.map(nome => {
+      const on = ctrlFiltro.has(nome);
+      const s = sessByName[nome];
+      const onl = isOnline(s);
+      const sess = s ? `<span class="ctrlf-sess" title="${onl?'online agora':'offline'} · online ${_fmtHMS(s.onlineSec)}${s.idleSec?' · ocioso '+_fmtHMS(s.idleSec):''}">${onl?'🟢':'⚫'}${onl && s.idleSec>60?' 💤':''}</span>` : '';
+      return `<label class="ctrlf-row${on?' on':''}"><input type="checkbox" ${on?'checked':''} data-ctrlk="${esc(nome)}"><span class="ctrlf-nm">${esc(nome)}</span>${sess}<span class="ctrlf-n">${counts[nome]}</span></label>`;
+    }).join('');
+  el.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => {
+    const k = cb.dataset.ctrlk;
+    if(cb.checked) ctrlFiltro.add(k); else ctrlFiltro.delete(k);
+    renderAll();
+  });
+  const clr = el.querySelector('[data-ctrl="__clear"]');
+  if(clr) clr.onclick = () => { ctrlFiltro.clear(); renderAll(); };
 }
 
 function init(){
