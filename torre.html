@@ -782,7 +782,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v37 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v38 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5904,6 +5904,17 @@ document.addEventListener('visibilitychange', () => {
 function applyMotoristaTelemetry(data, opts){
   opts = opts || {};
   if(!data || !data.id) return;
+  // ANTI-FANTASMA: no SEED (resync/child_added inicial), NÃO re-adiciona quem já está offline
+  // além do limite de remoção — o nó em vammo/motoristas persiste (colab não deslogou), e sem
+  // isso o resync re-plotava o motorista velho a cada 25s (piscava "aparece e some"). Se já
+  // estiver no mapa, remove. Updates AO VIVO (initial:false) sempre passam (ts fresco).
+  if(opts.initial){
+    const idade = data.ts ? (Date.now() - data.ts) : Infinity;
+    if(idade > MOTORISTA_REMOVE_MS || data.status === 'off'){
+      if(motoristas[data.id]) removeMotorista(data.id);
+      return;
+    }
+  }
   if(!motoristas[data.id]){
     motoristas[data.id] = {
       id: data.id, nome: data.nome, placa: data.placa,
