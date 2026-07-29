@@ -474,6 +474,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <button class="iconbtn" id="cadbtn" title="Cadastros de colaboradores e veículos">📋 Cadastros</button>
     <button class="iconbtn" id="rankbtn" title="Ver ranking e estatísticas dos colaboradores">📊 Ranking</button>
     <button class="iconbtn" id="repbtn" title="Relatórios de Chamados — filtráveis e exportáveis">📈 Chamados</button>
+    <button class="iconbtn" id="logcolabbtn" title="Log de colaboradores — check-in/out, tempos, km, online/ocioso">👣 Log de colabs</button>
     <button class="iconbtn" id="rkmbtn" title="Ranking mensal dos colaboradores">🏆 Mensal</button>
     <button class="iconbtn" id="frotabtn" title="Revisão de frota — veículos pendentes">🔧 Frota</button>
     <button class="iconbtn" id="demobtn" title="Modo demo: crie chamados manualmente sem Slack">🧪 Demo</button>
@@ -584,6 +585,30 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     </div>
     <div style="padding:12px 20px;border-bottom:1px solid var(--bdr)" id="prodtotais"></div>
     <div style="flex:1;overflow:auto;padding:16px 20px" id="prodlist"></div>
+  </div>
+</div>
+
+<!-- MODAL LOG DE COLABORADORES (check-in/out + tempos + km + online/offline) -->
+<div id="logcolabmodal" style="position:fixed;inset:0;background:rgba(6,13,26,0.6);display:none;flex-direction:column;z-index:10001;padding:30px">
+  <div style="max-width:1180px;width:100%;margin:0 auto;background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 60px);overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:14px">
+      <h2 style="font-size:18px;flex:1">👣 Log de Colaboradores</h2>
+      <button onclick="closeLogColab()" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button>
+    </div>
+    <div style="padding:12px 20px;border-bottom:1px solid var(--bdr);display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">
+      <div>
+        <label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Período</label>
+        <div style="display:flex;gap:4px" id="logperiodo">
+          <button class="rkp active" data-d="1">Hoje</button>
+          <button class="rkp" data-d="3">3 dias</button>
+          <button class="rkp" data-d="5">5 dias</button>
+          <button class="rkp" data-d="15">15 dias</button>
+          <button class="rkp" data-d="30">30 dias</button>
+        </div>
+      </div>
+      <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Colaborador</label><select id="logcolab" style="font-size:11px;padding:5px 8px"><option value="">Todos</option></select></div>
+    </div>
+    <div style="flex:1;overflow:auto" id="logcolablist"></div>
   </div>
 </div>
 
@@ -866,8 +891,8 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
-const LATEST_COLAB_VERSION = 'v46 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v45 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const LATEST_COLAB_VERSION = 'v47 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v46 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5025,12 +5050,17 @@ function renderRep(){
           const vinc = vinculoDaCorrida(r);
           const exec = execInfoDaCorrida(r);
           const rs2 = r.rotinaSteps || {};
-          const temFoto = Object.keys(rs2).some(k => typeof rs2[k]==='string' && rs2[k].startsWith('data:'));
+          const nFotos = Object.keys(rs2).filter(k => typeof rs2[k]==='string' && rs2[k].startsWith('data:')).length;
+          const temFoto = nFotos > 0;
           const assinado = !!(r.assinatura || (ch && ch.assinatura));
-          const pago = !!r.pagamentoNoLocal || (ch && ch.pagamentoNoLocal);
-          const evid = (temFoto || assinado)
-            ? `<button data-fotos="${i}" title="Ver fotos/assinatura" style="background:rgba(0,180,229,0.15);border:1px solid var(--acc);color:var(--acc);padding:3px 8px;border-radius:6px;font-size:12px;cursor:pointer">📷${assinado?' ✍':''}${pago?' 💵':''}</button>`
-            : '<span style="color:var(--txt3);font-size:10px">—</span>';
+          const pago = !!(r.pagamentoNoLocal || (ch && ch.pagamentoNoLocal));
+          // Status À VISTA (sem abrir): ✍ verde = assinado / ⚠ = sem assinatura; 📷N; 💵 se pago
+          const assTag = assinado
+            ? '<span style="color:#4ade80" title="assinado pelo cliente">✍</span>'
+            : (r.endStatus==='concluido' && !r.clienteAusente ? '<span style="color:#fbbf24" title="concluído SEM assinatura">⚠</span>' : '<span style="color:var(--txt3)" title="sem assinatura (cliente ausente / não requer)">–</span>');
+          const evid = (temFoto || assinado || pago)
+            ? `<button data-fotos="${i}" title="Ver fotos/assinatura/comprovante" style="background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">${assTag}${temFoto?` 📷${nFotos}`:''}${pago?' 💵':''}</button>`
+            : `<span style="font-size:12px;white-space:nowrap">${assTag}</span>`;
           return `<tr style="border-bottom:1px solid var(--bdr)">
             <td style="padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800" title="${esc(r.chamadoId||'')}">${numId?('#'+numId):'—'}</td>
             <td style="padding:8px 12px;font-family:var(--mono);font-size:10px">${dStr}</td>
@@ -6309,6 +6339,13 @@ function checkMotoristasTTL(){
         msg: (m.placa ? m.placa + ' · ' : '') + 'perdeu sinal há ' + mins + ' min' + (m.status === 'busy' ? ' — estava EM ROTA' : ''),
         motId: id
       });
+      // Conta 1 queda no histórico diário do colaborador (pro Log de colabs)
+      try {
+        if(firebase.apps?.length){
+          const _d = new Date(); const _dia = _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
+          firebase.database().ref('vammo/colab_dia/'+id+'/'+_dia).transaction(cur => { cur = cur || {}; cur.offlineCount = (cur.offlineCount||0) + 1; cur.nome = m.nome; cur.ts = Date.now(); return cur; }).catch(()=>{});
+        }
+      } catch(_){}
     }
     if(conectado || m.status === 'off') clearAlert('off_' + id); // voltou ou saiu de propósito -> tira card
     _motConectado[id] = conectado;
@@ -6508,6 +6545,7 @@ function aplicarPermissoes(){
   const gate = (id, feat) => { const el = document.getElementById(id); if(el) el.style.display = can(feat) ? '' : 'none'; };
   gate('rankbtn','ranking');
   gate('repbtn','relatorios');
+  gate('logcolabbtn','relatorios');
   gate('rkmbtn','mensal');
   gate('cadbtn','cadastros');
   gate('configbtn','config');
@@ -6736,6 +6774,136 @@ function renderProd(){
 }
 window.openProd = openProd;
 
+// ============================================================
+// LOG DE COLABORADORES — check-in/out + tempos + km + online/offline (por período)
+// ============================================================
+let _colabDia = {};
+let logState = { dias: 1, colab: '' };
+function kmEstDaCorrida(r){
+  const t = r.trajeto; const o = (Array.isArray(t) && t.length) ? t[0] : null;
+  if(!o || o.lat == null || r.destLat == null || r.destLng == null) return 0;
+  return haversine({lat:o.lat,lng:o.lng}, {lat:r.destLat,lng:r.destLng}) * 1.4 / 1000; // km (fator estrada ~1.4)
+}
+async function openLogColab(){
+  if(!isAdmin()) return;
+  $('#logcolabmodal').style.display = 'flex';
+  $('#logcolablist').innerHTML = '<div style="padding:30px;text-align:center;color:var(--txt2)">Carregando…</div>';
+  try { const s = await firebase.database().ref('vammo/colab_dia').once('value'); _colabDia = s.val() || {}; }
+  catch(e){ _colabDia = {}; }
+  // popula select (colaboradores com corrida OU cadastro)
+  const nomes = {};
+  for(const r of Object.values(corridas)){ if(r && r.motoristaId) nomes[r.motoristaId] = r.motoristaNome || r.motoristaId; }
+  for(const id in colaboradores){ if(colaboradores[id] && colaboradores[id].nome) nomes[id] = colaboradores[id].nome; }
+  const sel = $('#logcolab'), cur = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>' + Object.keys(nomes).sort((a,b)=>nomes[a].localeCompare(nomes[b])).map(k=>`<option value="${esc(k)}">${esc(nomes[k])}</option>`).join('');
+  sel.value = cur || '';
+  renderLogColab();
+}
+function closeLogColab(){ $('#logcolabmodal').style.display = 'none'; }
+window.closeLogColab = closeLogColab;
+function renderLogColab(){
+  const dias = logState.dias, days = [], today = new Date();
+  for(let i = dias-1; i >= 0; i--){ const d = new Date(today); d.setDate(d.getDate()-i); days.push(_hojeStr(d)); }
+  const daySet = new Set(days);
+  const deTs = new Date(days[0] + 'T00:00:00').getTime();
+  const ateTs = new Date(days[days.length-1] + 'T23:59:59').getTime();
+  const agg = {};
+  const get = (id, nome, placa) => (agg[id] = agg[id] || { id, nome: nome||'?', placa: placa||'', n:0, execArr:[], atendArr:[], kmReal:0, kmEst:0, onlineSec:0, offlineCount:0 });
+  for(const r of Object.values(corridas)){
+    if(!r || !r.motoristaId || r.completedTs < deTs || r.completedTs > ateTs) continue;
+    if(logState.colab && r.motoristaId !== logState.colab) continue;
+    const a = get(r.motoristaId, r.motoristaNome, r.motoristaPlaca);
+    if(r.endStatus === 'concluido') a.n++;
+    if(r.totalDurationSec > 0) a.execArr.push(r.totalDurationSec);
+    if(r.serviceDurationSec > 0) a.atendArr.push(r.serviceDurationSec);
+    a.kmReal += r.totalKm || 0;
+    a.kmEst += kmEstDaCorrida(r);
+  }
+  for(const id in (_colabDia||{})){
+    if(logState.colab && id !== logState.colab) continue;
+    const dd = _colabDia[id] || {}; let on=0, off=0, nome=null;
+    for(const day in dd){ if(daySet.has(day) && dd[day]){ on += dd[day].onlineSec||0; off += dd[day].offlineCount||0; nome = dd[day].nome || nome; } }
+    if(on || off){ const a = get(id, nome || (colaboradores[id] && colaboradores[id].nome)); a.onlineSec = on; a.offlineCount = off; }
+  }
+  const avg = arr => arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : 0;
+  const list = Object.values(agg).sort((x,y) => y.n - x.n || y.onlineSec - x.onlineSec);
+  const tAt = list.reduce((s,a)=>s+a.n,0), tKmR = list.reduce((s,a)=>s+a.kmReal,0), tKmE = list.reduce((s,a)=>s+a.kmEst,0), tOn = list.reduce((s,a)=>s+a.onlineSec,0), tOff = list.reduce((s,a)=>s+a.offlineCount,0);
+  const vinc = id => (colaboradores[id] && colaboradores[id].vinculo === 'terceirizado') ? 'Terceirizado' : 'Vammo';
+  const body = list.length === 0
+    ? '<div class="rk-empty"><div class="ic">👣</div><div style="font-weight:700">Sem dados no período</div><div style="font-size:12px;margin-top:6px">Atendimentos vêm das corridas; online/offline começou a ser medido agora.</div></div>'
+    : `<div class="rk-totais" style="margin:0 0 12px">
+        <div class="rk-tot"><div class="v">${tAt}</div><div class="l">Atendimentos</div></div>
+        <div class="rk-tot"><div class="v">${tKmR.toFixed(0)}</div><div class="l">Km real</div></div>
+        <div class="rk-tot"><div class="v">${tKmE.toFixed(0)}</div><div class="l">Km estim.</div></div>
+        <div class="rk-tot"><div class="v" style="color:var(--acc)">${_fmtHTot(tOn)}</div><div class="l">Online total</div></div>
+        <div class="rk-tot"><div class="v" style="color:#fbbf24">${tOff}</div><div class="l">Quedas</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="text-align:left;color:var(--txt2);font-size:9px;text-transform:uppercase;letter-spacing:0.4px;font-weight:700">
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr)">Colaborador</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr)">Vínculo</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:center">Atend.</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:right" title="Recebeu o chamado → conclusão">T. execução méd</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:right" title="Chegou no local → conclusão">T. atendim. méd</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:right">Km real</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:right">Km estim.</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:right" title="Tempo com o app aberto">Online</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:center" title="Quantas vezes caiu (offline)">Quedas</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:center">Check-in/out</th>
+        </tr></thead><tbody>
+        ${list.map(a => `<tr style="border-bottom:1px solid var(--bdr)">
+          <td style="padding:7px 10px">${esc(a.nome)}${a.placa?` <span style="font-size:9px;color:var(--txt3);font-family:var(--mono)">${esc(a.placa)}</span>`:''}</td>
+          <td style="padding:7px 10px"><span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:${vinc(a.id)==='Terceirizado'?'rgba(245,158,11,0.2)':'rgba(0,180,229,0.15)'};color:${vinc(a.id)==='Terceirizado'?'#fbbf24':'var(--acc)'}">${vinc(a.id)}</span></td>
+          <td style="padding:7px 10px;text-align:center;font-family:var(--mono);font-weight:700">${a.n}</td>
+          <td style="padding:7px 10px;text-align:right;font-family:var(--mono)">${a.execArr.length?fmtDurTMA(avg(a.execArr)):'—'}</td>
+          <td style="padding:7px 10px;text-align:right;font-family:var(--mono);color:#16a34a">${a.atendArr.length?fmtDurTMA(avg(a.atendArr)):'—'}</td>
+          <td style="padding:7px 10px;text-align:right;font-family:var(--mono)">${a.kmReal.toFixed(1)}</td>
+          <td style="padding:7px 10px;text-align:right;font-family:var(--mono);color:var(--txt2)">${a.kmEst.toFixed(1)}</td>
+          <td style="padding:7px 10px;text-align:right;font-family:var(--mono);color:var(--acc)">${a.onlineSec?_fmtHTot(a.onlineSec):'—'}</td>
+          <td style="padding:7px 10px;text-align:center;font-family:var(--mono);color:${a.offlineCount?'#fbbf24':'var(--txt3)'}">${a.offlineCount||'—'}</td>
+          <td style="padding:7px 10px;text-align:center">${turnos[a.id]?`<button data-cio="${esc(a.id)}" style="background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer">🚪 ver</button>`:'<span style="color:var(--txt3);font-size:10px">—</span>'}</td>
+        </tr>`).join('')}
+        </tbody></table>
+        <div style="font-size:10px;color:var(--txt3);margin-top:10px;line-height:1.5">⏱ <b>Execução</b> = recebeu o chamado → conclusão · <b>Atendimento</b> = chegou no local → conclusão · <b>Km estim.</b> ≈ linha reta origem→destino ×1.4 · <b>Online/Quedas</b> começaram a ser medidos agora (histórico cresce a cada dia).</div>`;
+  $('#logcolablist').innerHTML = '<div style="padding:16px 20px">' + body + '</div>';
+  $$('#logcolablist [data-cio]').forEach(b => b.onclick = () => openCheckinout(b.dataset.cio));
+}
+function openCheckinout(colabId){
+  const t = turnos[colabId];
+  const nome = (colaboradores[colabId] && colaboradores[colabId].nome) || (t && t.colabNome) || 'Colaborador';
+  if(!t){ showToast('Sem turno registrado pra ' + nome); return; }
+  const lblF = { frente:'Frente', lateral_d:'Lateral D', traseira:'Traseira', lateral_e:'Lateral E', painel:'Painel', carreta:'Carreta' };
+  const bloco = (titulo, cor, dados, km, ts) => {
+    if(!dados) return `<div style="flex:1;min-width:270px"><div style="font-weight:800;color:${cor};margin-bottom:6px">${titulo}</div><div style="color:var(--txt3);font-size:12px">— sem registro —</div></div>`;
+    const fv = dados.fotosVeiculo || {};
+    const fotos = Object.entries(fv).filter(([k,v]) => typeof v === 'string' && v.startsWith('data:'));
+    if(typeof dados.fotoCarreta === 'string' && dados.fotoCarreta.startsWith('data:')) fotos.push(['carreta', dados.fotoCarreta]);
+    return `<div style="flex:1;min-width:270px">
+      <div style="font-weight:800;color:${cor};margin-bottom:4px">${titulo}${ts?` · <span style="font-size:10px;color:var(--txt3);font-weight:500">${new Date(ts).toLocaleString('pt-BR')}</span>`:''}</div>
+      <div style="font-size:12px;margin-bottom:8px">KM: <strong>${km!=null?Number(km).toLocaleString('pt-BR'):'—'}</strong></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:8px;margin-bottom:8px">
+        ${fotos.length?fotos.map(([k,src])=>`<div><div style="font-size:9px;color:var(--txt2);margin-bottom:2px">${lblF[k]||k}</div><a href="${src}" target="_blank"><img src="${src}" style="width:100%;border-radius:6px;border:1px solid var(--bdr)"></a></div>`).join(''):'<div style="color:var(--txt3);font-size:11px">sem fotos</div>'}
+      </div>
+      ${dados.assinatura?`<div style="font-size:10px;color:#4ade80;margin-bottom:3px">✍ assinatura</div><img src="${dados.assinatura}" style="width:150px;background:#fff;border-radius:6px;border:1px solid var(--bdr)">`:''}
+    </div>`;
+  };
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(4,10,20,0.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10035;padding:20px';
+  overlay.innerHTML = `<div style="background:rgba(12,22,42,0.97);border:1px solid var(--bdr2);border-radius:14px;max-width:880px;width:100%;max-height:90vh;overflow:auto;padding:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><h2 style="font-size:16px;flex:1">🚪 Check-in / Check-out · ${esc(nome)}${t.veiculoPlaca?` · <span style="font-family:var(--mono);font-size:12px;color:var(--txt2)">${esc(t.veiculoPlaca)}</span>`:''}</h2><button id="cioCls" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button></div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap">
+      ${bloco('🟢 Check-in', '#16a34a', t.checkIn, t.kmInicial, (t.checkIn&&t.checkIn.ts) || t.iniciadoEm)}
+      ${bloco(t.ativo ? '⏳ Turno em aberto (sem check-out)' : '🔴 Check-out', '#f87171', t.ativo ? null : t.checkOut, t.kmFinal, (t.checkOut&&t.checkOut.ts) || t.encerradoEm)}
+    </div>
+    ${(t.kmFinal!=null && t.kmInicial!=null)?`<div style="margin-top:12px;font-size:12px;color:var(--txt2);border-top:1px solid var(--bdr);padding-top:10px">🛞 KM rodado no turno: <strong style="color:var(--acc)">${(t.kmFinal-t.kmInicial).toLocaleString('pt-BR')} km</strong></div>`:''}
+  </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = e => { if(e.target === overlay) close(); };
+  overlay.querySelector('#cioCls').onclick = close;
+}
+window.openLogColab = openLogColab;
+
 function init(){
   // Carrega chamados demo persistidos
   if(demoMode){
@@ -6828,6 +6996,10 @@ function init(){
 
   // Relatórios
   $('#repbtn').onclick = openRep;
+  $('#logcolabbtn').onclick = openLogColab;
+  $$('#logperiodo .rkp').forEach(b => b.onclick = () => { $$('#logperiodo .rkp').forEach(x => x.classList.remove('active')); b.classList.add('active'); logState.dias = +b.dataset.d; renderLogColab(); });
+  { const lc = $('#logcolab'); if(lc) lc.onclick = null; }
+  { const lc = $('#logcolab'); if(lc) lc.onchange = (e) => { logState.colab = e.target.value; renderLogColab(); }; }
   $$('#repperiodo .rkp').forEach(b => b.onclick = () => { applyRepPeriodoPreset(b.dataset.p); renderRep(); });
   // Produtividade da Torre — período + colaborador
   $$('#prodperiodo .rkp').forEach(b => b.onclick = () => { $$('#prodperiodo .rkp').forEach(x => x.classList.remove('active')); b.classList.add('active'); prodState.dias = +b.dataset.d; renderProd(); });

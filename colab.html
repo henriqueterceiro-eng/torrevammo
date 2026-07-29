@@ -793,7 +793,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v46 · 2026-07-28';
+const APP_VERSION = 'v47 · 2026-07-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3610,12 +3610,39 @@ function playBeep(){
 }
 
 // ====================== INIT ======================
+// ===== Tracking diário de tempo ONLINE do colaborador (pro "Log de colabs" da torre) =====
+// Acumula segundos com o app aberto/visível em vammo/colab_dia/<id>/<YYYY-MM-DD> (delta+transaction).
+let _colOnlineSec = 0, _colLastSync = 0, _colTrackStarted = false;
+function _colDiaStr(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function syncColOnline(){
+  if(!me || !me.id || typeof firebase === 'undefined' || !firebase.apps?.length) return;
+  const delta = _colOnlineSec - _colLastSync;
+  if(delta <= 0) return;
+  _colLastSync = _colOnlineSec;
+  try {
+    firebase.database().ref('vammo/colab_dia/' + me.id + '/' + _colDiaStr()).transaction(cur => {
+      cur = cur || {};
+      cur.onlineSec = (cur.onlineSec || 0) + delta;
+      cur.nome = me.nome; cur.placa = me.placa || null; cur.ts = Date.now();
+      return cur;
+    }).catch(()=>{});
+  } catch(_){}
+}
+function startColabOnlineTracker(){
+  if(_colTrackStarted) return;
+  _colTrackStarted = true;
+  setInterval(() => { if(document.visibilityState === 'visible') _colOnlineSec++; }, 1000);
+  setInterval(syncColOnline, 20000);
+  window.addEventListener('beforeunload', syncColOnline);
+}
+
 function bootApp(){
   showApp();
   renderTopBar();
   initMap();
   setupSyncListeners();
   startGPS();
+  startColabOnlineTracker();
   const av = document.getElementById('appver');
   if(av) av.textContent = 'app ' + APP_VERSION;
 
