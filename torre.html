@@ -9,12 +9,12 @@
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <style>
 :root{
-  --bg:#0a1428;
-  --surf:#152339;
-  --surf2:#1e3050;
-  --bdr:#2d3f55;
-  --bdr2:#3d5278;
-  --txt:#e8eef8;
+  --bg:#070f1f;
+  --surf:rgba(20,33,57,0.74);
+  --surf2:rgba(31,49,82,0.8);
+  --bdr:rgba(125,165,215,0.14);
+  --bdr2:rgba(0,180,229,0.34);
+  --txt:#eaf1fb;
   --txt2:#9aa8bd;
   --txt3:#6b7a91;
   --acc:#00B4E5;
@@ -28,7 +28,13 @@
   --mono:'IBM Plex Mono','SF Mono','Courier New',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px}
+html,body{height:100%;overflow:hidden;color:var(--txt);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;
+  background:
+    radial-gradient(1100px 640px at 12% -12%, rgba(0,180,229,0.14), transparent 58%),
+    radial-gradient(950px 720px at 112% 8%, rgba(90,120,255,0.09), transparent 55%),
+    radial-gradient(800px 800px at 50% 120%, rgba(0,180,229,0.06), transparent 60%),
+    var(--bg);
+  background-attachment:fixed}
 button{font-family:inherit;cursor:pointer;border:1px solid var(--bdr);background:var(--surf);color:var(--txt);padding:6px 12px;font-size:12px;border-radius:6px;font-weight:500}
 button:hover{background:var(--surf2);border-color:var(--bdr2)}
 button.primary{background:var(--acc);color:#001823;border-color:var(--acc);font-weight:700}
@@ -39,12 +45,12 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #app{display:flex;flex-direction:column;height:100vh;width:100vw}
 
 /* NAV */
-#nav{flex:0 0 68px;display:flex;align-items:center;gap:14px;padding:0 20px;background:linear-gradient(180deg,#0d1730 0%,#0a1428 100%);border-bottom:1px solid var(--bdr2);font-size:13px;position:relative}
-#nav::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--acc) 30%,var(--acc) 70%,transparent 100%);opacity:0.7}
-.brand{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding-right:16px;margin-right:4px;border-right:1px solid var(--bdr);height:52px;gap:3px;position:relative}
-.brand .lg{height:34px;color:var(--acc);display:block;filter:drop-shadow(0 0 14px rgba(0,180,229,0.55))}
+#nav{flex:0 0 74px;display:flex;align-items:center;gap:14px;padding:0 20px;background:linear-gradient(180deg,rgba(10,22,44,0.72) 0%,rgba(7,15,31,0.6) 100%);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);border-bottom:1px solid var(--bdr2);font-size:13px;position:relative;z-index:600}
+#nav::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--acc) 25%,#7cf0ff 50%,var(--acc) 75%,transparent 100%);opacity:0.85;box-shadow:0 0 12px rgba(0,180,229,0.5)}
+.brand{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:0 20px 0 6px;margin-right:6px;border-right:1px solid var(--bdr);height:58px;gap:4px;position:relative}
+.brand .lg{height:46px;color:var(--acc);display:block;filter:drop-shadow(0 0 18px rgba(0,180,229,0.7)) drop-shadow(0 0 4px rgba(124,240,255,0.6))}
 .brand .lg svg{height:100%;width:auto;display:block}
-.brand .sub{color:var(--acc);font-weight:900;font-size:11px;letter-spacing:7px;text-transform:uppercase;padding-left:2px;text-shadow:0 0 10px rgba(0,180,229,0.5);margin-top:1px}
+.brand .sub{color:var(--acc);font-weight:900;font-size:10px;letter-spacing:6px;text-transform:uppercase;padding-left:3px;text-shadow:0 0 10px rgba(0,180,229,0.6);margin-top:1px;opacity:0.9}
 #nav .pills{display:flex;gap:6px;align-items:stretch}
 .pill{padding:6px 12px;border:1px solid var(--bdr);background:var(--surf);cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-radius:8px;color:var(--txt2);font-weight:700;transition:all 0.15s;height:38px}
 .pill:hover{background:var(--surf2);color:var(--txt);border-color:var(--bdr2)}
@@ -72,13 +78,14 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #main{flex:1;display:flex;min-height:0;overflow:hidden;position:relative}
 
 /* SIDEBAR */
-#sidebar{flex:0 0 340px;border-right:1px solid var(--bdr2);background:var(--surf);display:flex;flex-direction:column;min-height:0;overflow:hidden}
-#tabs{display:flex;border-bottom:1px solid var(--bdr);background:var(--bg)}
-.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:11px;color:var(--txt2);font-weight:600;letter-spacing:0.3px}
-.tab.active{background:var(--surf);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acc)}
+#sidebar{flex:0 0 340px;border-right:1px solid var(--bdr2);background:linear-gradient(180deg,rgba(12,22,42,0.62),rgba(8,15,30,0.5));backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);display:flex;flex-direction:column;min-height:0;overflow:hidden;box-shadow:1px 0 24px rgba(0,0,0,0.35)}
+#tabs{display:flex;border-bottom:1px solid var(--bdr);background:transparent}
+.tab{flex:1;padding:11px;text-align:center;cursor:pointer;font-size:11px;color:var(--txt2);font-weight:700;letter-spacing:0.3px;transition:color .15s,background .15s}
+.tab:hover{color:var(--txt)}
+.tab.active{background:rgba(0,180,229,0.08);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acc)}
 
-#listwrap{flex:1;overflow:auto;min-height:0;background:var(--bg)}
-#catfilter{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border-bottom:1px solid var(--bdr);background:var(--bg)}
+#listwrap{flex:1;overflow:auto;min-height:0;background:transparent}
+#catfilter{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border-bottom:1px solid var(--bdr);background:transparent}
 #catfilter .catchip{padding:5px 9px;border-radius:14px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background .15s,border-color .15s,color .15s}
 #catfilter .catchip .cn{background:var(--surf2);color:var(--txt2);padding:0 6px;border-radius:8px;font-size:10px;font-family:var(--mono)}
 #catfilter .catchip.clear{color:var(--txt3);border-style:dashed}
@@ -109,9 +116,9 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 .card .meta{display:flex;justify-content:space-between;color:var(--txt3);font-size:10px;margin-top:4px;font-family:var(--mono)}
 
 /* Motoristas */
-#motwrap{flex:1;overflow:auto;display:none;flex-direction:column;background:var(--surf)}
+#motwrap{flex:1;overflow:auto;display:none;flex-direction:column;background:transparent}
 #motwrap.show{display:flex}
-.mot{border-bottom:1px solid var(--bdr);background:var(--surf)}
+.mot{border-bottom:1px solid var(--bdr);background:transparent}
 .mot .mhdr{padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer}
 .mot .mhdr:hover{background:var(--surf2)}
 .mot .av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex:0 0 36px;position:relative}
@@ -209,7 +216,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 .b-arrived{background:#16a34a;color:#fff;font-weight:700;animation:pulse 1.5s infinite}
 
 /* Detail panel */
-#detail{position:absolute;top:12px;right:12px;width:340px;background:var(--surf);border:1px solid var(--bdr2);box-shadow:0 12px 32px rgba(0,0,0,0.6);padding:14px;display:none;z-index:1000;max-height:calc(100% - 24px);overflow:auto;font-size:12px;border-radius:10px}
+#detail{position:absolute;top:12px;right:12px;width:340px;background:rgba(11,21,40,0.82);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border:1px solid var(--bdr2);box-shadow:0 16px 44px rgba(0,0,0,0.55),0 0 0 1px rgba(0,180,229,0.08);padding:14px;display:none;z-index:1000;max-height:calc(100% - 24px);overflow:auto;font-size:12px;border-radius:14px}
 #detail.show{display:block}
 #detail .x{position:absolute;top:8px;right:10px;background:transparent;border:none;font-size:18px;color:var(--txt2);padding:0;width:28px;height:28px;border-radius:50%}
 #detail .x:hover{background:var(--surf2)}
@@ -431,6 +438,12 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 .ctrlf-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .ctrlf-sess{font-size:11px}
 .ctrlf-n{background:var(--surf2);color:var(--txt2);font-weight:800;border-radius:8px;padding:1px 7px;font-size:10px;font-family:var(--mono)}
+
+/* Modais translúcidos com blur (fundo mais transparente + futurista) */
+#addch,#cadform,#cadmodal,#frotamodal,#motdetailmodal,#prodmodal,#rankmodal,#repmodal,#rkmmodal{
+  background:rgba(6,13,26,0.6) !important;
+  backdrop-filter:blur(10px) saturate(130%);-webkit-backdrop-filter:blur(10px) saturate(130%);
+}
 
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -854,7 +867,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v43 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v44 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
