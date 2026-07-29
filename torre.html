@@ -411,6 +411,15 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #loginGate .lg-sub{font-size:12px;color:var(--txt2);font-weight:800;margin-top:2px;margin-bottom:22px;text-transform:uppercase;letter-spacing:2px}
 #loginGate .lg-txt{font-size:13px;color:var(--txt);margin-bottom:20px;line-height:1.5}
 
+/* Legenda hover do relatório */
+.rephelp{position:relative;font-size:12px;color:var(--acc);font-weight:700;cursor:help;padding:6px 10px;border:1px solid var(--acc);border-radius:8px;background:rgba(0,180,229,0.08);white-space:nowrap}
+.rephelp-pop{display:none;position:absolute;top:calc(100% + 8px);right:0;width:350px;max-width:90vw;background:rgba(20,30,44,0.98);border:1px solid var(--bdr2);border-radius:10px;padding:12px 14px;box-shadow:0 20px 60px rgba(0,0,0,0.6);z-index:20;font-size:11px;color:var(--txt);line-height:1.55;font-weight:400;white-space:normal;text-align:left}
+.rephelp:hover .rephelp-pop{display:block}
+.rephelp-pop .rh-tit{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--acc);font-weight:800;margin-bottom:8px}
+.rephelp-pop b{color:var(--txt);font-weight:800}
+.rephelp-pop hr{border:none;border-top:1px solid var(--bdr);margin:8px 0}
+.rephelp-pop>div{margin-bottom:4px}
+
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:4px}
@@ -573,6 +582,24 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
         <h2 style="font-size:18px">📈 Relatórios</h2>
         <div style="font-size:11px;color:var(--txt2);margin-top:2px" id="repmeta">—</div>
       </div>
+      <div class="rephelp">ⓘ Legenda
+        <div class="rephelp-pop">
+          <div class="rh-tit">O que é cada dado</div>
+          <div><b>Motivo</b> — motivo do chamado</div>
+          <div><b>Controlador</b> — quem atribuiu / abriu o chamado (ou analista do CX)</div>
+          <div><b>Desfecho</b> — resultado: 🔧 resolvida no local · 📦 recolhida/descarregada · 🔍 moto não encontrada · 💵 pago no local · 🚚 movimentação</div>
+          <div><b>Base descarga</b> — base onde a moto foi descarregada (se recolhida)</div>
+          <div><b>Km</b> — distância rodada no atendimento</div>
+          <div><b>TMA total</b> — abertura do chamado → encerramento</div>
+          <div><b>Atrib.</b> — abertura → atribuído a um colaborador</div>
+          <div><b>Desloc.</b> — saída p/ o cliente → chegada no cliente</div>
+          <div><b>Atend.</b> — chegada no cliente → finalização</div>
+          <div><b>Status</b> — concluído / cancelado</div>
+          <div><b>Nota</b> — nota do atendimento (0–10)</div>
+          <hr>
+          <div style="color:var(--txt3)">Os cards <b>⏱ TMA</b> mostram a MÉDIA de cada tempo no período/filtro · <b>n</b> = quantas corridas entraram na média.</div>
+        </div>
+      </div>
       <button class="primary" id="repexp" title="Exportar resultado filtrado em CSV">⬇ Exportar CSV</button>
       <button onclick="closeRep()" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button>
     </div>
@@ -697,6 +724,12 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Placa (opcional)</label>
     <input type="text" id="addrPlaca" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase">
 
+    <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Cliente aguardando no local?</label>
+    <select id="addrAguardando">
+      <option value="sim">✅ Sim — cliente aguardando no local</option>
+      <option value="nao">❌ Não — cliente não está no local</option>
+    </select>
+
     <div id="addrResult" style="margin-top:14px;padding:10px;background:var(--surf2);border-radius:6px;font-size:11px;color:var(--txt2);display:none"></div>
 
     <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
@@ -782,7 +815,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v45 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v39 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v40 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2436,6 +2469,7 @@ function renderDetail(){
       <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>
       <span style="margin-left:8px;color:var(--txt2);font-size:11px">⏱ ${fmtElapsed(c.ts)}</span>
       ${c.travada?'<span class="b b-trav" style="margin-left:6px">⚠ TRAV</span>':''}
+      ${c.clienteAguardando === true ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : (c.clienteAguardando === false ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}
     </div>
     ${(() => {
       // DESTAQUE: controlador responsável pelo chamado (quem atribuiu > quem abriu > analista CX)
@@ -2887,6 +2921,7 @@ function atribuir(chamadoId, motoristaId){
     // Controlador responsável = quem atribuiu (carimba na atribuição)
     c.atribuidoPor = currentUser ? (currentUser.nome || currentUser.email) : null;
     c.atribuidoPorEmail = currentUser ? currentUser.email : null;
+    if(!c.atribuidoEm) c.atribuidoEm = Date.now(); // 1ª atribuição → base do "tempo de atribuição"
     if(c.status === 'novo'){
       c.status = 'em_rota';
       const sm = loadStatusMap();
@@ -2895,7 +2930,7 @@ function atribuir(chamadoId, motoristaId){
     }
     saveAsgn(a);
     // Persiste tudo no Firebase
-    STORE.updateChamado(chamadoId, { motoristaId, status: c.status, atribuidoPor: c.atribuidoPor, atribuidoPorEmail: c.atribuidoPorEmail });
+    STORE.updateChamado(chamadoId, { motoristaId, status: c.status, atribuidoPor: c.atribuidoPor, atribuidoPorEmail: c.atribuidoPorEmail, atribuidoEm: c.atribuidoEm });
     STORE.setAllQueues(loadQueues());
     // Envia chamado pro motorista (vai pro final da fila no app dele)
     sync.send('chamado:atribuir', {
@@ -4749,6 +4784,15 @@ function controladorDaCorrida(r){
   if(!ch) return '—';
   return ch.atribuidoPor || ch.abertoPor || ch.analista || '—';
 }
+// TEMPO DE ATRIBUIÇÃO = ABERTURA do chamado → ATRIBUÍDO a um colaborador (em segundos)
+function tempoAtribSec(r){
+  const ch = chamados.find(x => x.id === r.chamadoId);
+  if(!ch) return null;
+  const aberto = r.chamadoAbertoTs || ch.ts || null;
+  const atrib = ch.atribuidoEm || null;
+  if(aberto && atrib && atrib >= aberto) return Math.round((atrib - aberto) / 1000);
+  return null;
+}
 
 function renderRep(){
   const rows = calcRep();
@@ -4757,6 +4801,7 @@ function renderRep(){
   // total = recebe→finaliza (totalDurationSec) · deslocamento = sai→chega (travelDurationSec)
   // · atendimento = chega→finaliza (serviceDurationSec). Média só sobre corridas que têm o marco.
   const tmaTotal  = mediaDur(rows, tmaTotalSec);   // abertura → encerramento
+  const tmaAtrib  = mediaDur(rows, tempoAtribSec); // abertura → atribuição
   const tmaDesloc = mediaDur(rows, 'travelDurationSec');
   const tmaAtend  = mediaDur(rows, 'serviceDurationSec');
   const sumNota = rows.reduce((s,r) => s + (r.nota?.final||0), 0);
@@ -4776,11 +4821,16 @@ function renderRep(){
     </div>
     <div style="margin-top:10px;padding:10px 12px;background:rgba(0,180,229,0.07);border:1px solid var(--acc);border-radius:8px">
       <div style="font-size:10px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">⏱ TMA · Tempo Médio de Atendimento</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
         <div style="background:var(--surf2);padding:9px 8px;border-radius:8px;text-align:center">
           <div style="font-size:17px;font-weight:800;color:var(--acc);font-family:var(--mono)">${fmtDurTMA(tmaTotal.avg)}</div>
           <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;margin-top:3px">Total</div>
           <div style="font-size:8px;color:var(--txt3);margin-top:1px">aberto → encerrado · n=${tmaTotal.n}</div>
+        </div>
+        <div style="background:var(--surf2);padding:9px 8px;border-radius:8px;text-align:center">
+          <div style="font-size:17px;font-weight:800;color:#a78bfa;font-family:var(--mono)">${fmtDurTMA(tmaAtrib.avg)}</div>
+          <div style="font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;margin-top:3px">Atribuição</div>
+          <div style="font-size:8px;color:var(--txt3);margin-top:1px">aberto → atribuído · n=${tmaAtrib.n}</div>
         </div>
         <div style="background:var(--surf2);padding:9px 8px;border-radius:8px;text-align:center">
           <div style="font-size:17px;font-weight:800;color:#fbbf24;font-family:var(--mono)">${fmtDurTMA(tmaDesloc.avg)}</div>
@@ -4816,6 +4866,7 @@ function renderRep(){
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Base onde a moto foi descarregada (se recolhida)">Base descarga</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">Km</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="TMA total: abertura do chamado → encerramento">TMA total</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="Atribuição: abertura do chamado → atribuído a um colaborador">Atrib.</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="Deslocamento: sai para o cliente → chega no cliente">Desloc.</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right" title="Atendimento: chega no cliente → finaliza">Atend.</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:center">Status</th>
@@ -4844,6 +4895,7 @@ function renderRep(){
             <td style="padding:8px 12px;font-family:var(--mono);font-size:10px">${esc(baseDescargaDaCorrida(r))}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${(r.totalKm||0).toFixed(1)}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${fmtDurTMA(tmaTotalSec(r))}</td>
+            <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#a78bfa">${fmtDurTMA(tempoAtribSec(r))}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#fbbf24">${fmtDurTMA(r.travelDurationSec)}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#16a34a">${fmtDurTMA(r.serviceDurationSec)}</td>
             <td style="padding:8px 12px;text-align:center;color:${stCor};font-weight:700">${esc(r.endStatus||'—')}</td>
@@ -4857,7 +4909,7 @@ function renderRep(){
 
 function exportRepCSV(){
   const rows = calcRep();
-  const headers = ['Data','Colaborador','Base','Placa','Cliente','Motivo','Controlador','Desfecho','Base descarga','Km','TMA total (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)','Chamado ID'];
+  const headers = ['Data','Colaborador','Base','Placa','Cliente','Motivo','Controlador','Desfecho','Base descarga','Km','TMA total (s)','Atribuicao (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)','Chamado ID'];
   const lines = [headers.join(';')];
   for(const r of rows){
     const c = colaboradores[r.motoristaId];
@@ -4880,6 +4932,7 @@ function exportRepCSV(){
       baseDescargaDaCorrida(r) === '—' ? '' : baseDescargaDaCorrida(r),
       (r.totalKm || 0).toFixed(2),
       tmaTotalSec(r) != null ? Math.round(tmaTotalSec(r)) : '',
+      tempoAtribSec(r) != null ? Math.round(tempoAtribSec(r)) : '',
       r.travelDurationSec ? Math.round(r.travelDurationSec) : '',
       r.serviceDurationSec ? Math.round(r.serviceDurationSec) : '',
       r.endStatus || '',
@@ -5156,6 +5209,7 @@ function openAddCh(){
   $('#addrMotivo').value = DEMO_MOTIVOS[0].m;
   $('#addrMotivoCustom').style.display = 'none';
   $('#addrMotivoCustom').value = '';
+  if($('#addrAguardando')) $('#addrAguardando').value = 'sim';
   $('#addrResult').style.display = 'none';
   // Reseta o botão (sai do estado "Geocodificando..." se ficou travado de uma vez anterior)
   const btn = $('#addrSubmit');
@@ -5172,6 +5226,7 @@ async function submitAddCh(){
   let motivo = $('#addrMotivo').value;
   if(motivo === '__custom'){ motivo = $('#addrMotivoCustom').value.trim() || 'Atendimento'; }
   const placa = $('#addrPlaca').value.trim().toUpperCase() || ('XYZ' + Math.floor(Math.random()*9000+1000));
+  const clienteAguardando = ($('#addrAguardando') ? $('#addrAguardando').value : 'sim') === 'sim';
 
   if(!endereco){ showToast('⚠ Endereço é obrigatório', true); return; }
   if(!cliente){ showToast('⚠ Cliente é obrigatório', true); return; }
@@ -5214,6 +5269,7 @@ async function submitAddCh(){
       lat, lng,
       status: 'novo',
       travada: /travada|trava/i.test(motivo),
+      clienteAguardando,
       abertoPor: currentUser ? (currentUser.nome || currentUser.email) : null,
       abertoPorEmail: currentUser ? currentUser.email : null
     };
