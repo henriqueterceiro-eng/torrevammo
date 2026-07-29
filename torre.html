@@ -891,8 +891,8 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
-const LATEST_COLAB_VERSION = 'v47 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v46 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v47 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -6778,6 +6778,8 @@ window.openProd = openProd;
 // LOG DE COLABORADORES — check-in/out + tempos + km + online/offline (por período)
 // ============================================================
 let _colabDia = {};
+let _turnosHist = {};   // {colabId: {turnoId: turno}}  histórico de check-in/out por turno
+let _logHistRows = [];  // linhas de check-in/out renderizadas (pro popup por índice)
 let logState = { dias: 1, colab: '' };
 function kmEstDaCorrida(r){
   const t = r.trajeto; const o = (Array.isArray(t) && t.length) ? t[0] : null;
@@ -6790,6 +6792,8 @@ async function openLogColab(){
   $('#logcolablist').innerHTML = '<div style="padding:30px;text-align:center;color:var(--txt2)">Carregando…</div>';
   try { const s = await firebase.database().ref('vammo/colab_dia').once('value'); _colabDia = s.val() || {}; }
   catch(e){ _colabDia = {}; }
+  try { const h = await firebase.database().ref('vammo/turnos_hist').once('value'); _turnosHist = h.val() || {}; }
+  catch(e){ _turnosHist = {}; }
   // popula select (colaboradores com corrida OU cadastro)
   const nomes = {};
   for(const r of Object.values(corridas)){ if(r && r.motoristaId) nomes[r.motoristaId] = r.motoristaNome || r.motoristaId; }
@@ -6865,13 +6869,66 @@ function renderLogColab(){
         </tr>`).join('')}
         </tbody></table>
         <div style="font-size:10px;color:var(--txt3);margin-top:10px;line-height:1.5">⏱ <b>Execução</b> = recebeu o chamado → conclusão · <b>Atendimento</b> = chegou no local → conclusão · <b>Km estim.</b> ≈ linha reta origem→destino ×1.4 · <b>Online/Quedas</b> começaram a ser medidos agora (histórico cresce a cada dia).</div>`;
-  $('#logcolablist').innerHTML = '<div style="padding:16px 20px">' + body + '</div>';
+
+  // ===== Registros de check-in/out por DIA (histórico de turnos) =====
+  _logHistRows = [];
+  const pushHist = (src) => {
+    for(const cid in (src||{})){
+      if(logState.colab && cid !== logState.colab) continue;
+      const byId = src[cid] || {};
+      // turnos_hist[cid] = {turnoId: turno} (mapa); turnos[cid] = turno direto (tem iniciadoEm/checkIn)
+      const ehTurno = byId && (byId.iniciadoEm || byId.checkIn || byId.turnoId);
+      const turnosList = ehTurno ? [byId] : Object.values(byId);
+      for(const t of turnosList){
+        if(!t || typeof t !== 'object') continue;
+        const ci = (t.checkIn && t.checkIn.ts) || t.iniciadoEm || 0;
+        if(!ci || ci < deTs || ci > ateTs) continue;
+        _logHistRows.push({ t, cid, nome: t.colabNome || (colaboradores[cid] && colaboradores[cid].nome) || cid, ci, co: (t.checkOut && t.checkOut.ts) || t.encerradoEm || null });
+      }
+    }
+  };
+  pushHist(_turnosHist);
+  if(_logHistRows.length === 0) pushHist(turnos);   // fallback: turno vivo (antes de acumular histórico)
+  _logHistRows.sort((a,b) => b.ci - a.ci);
+  const hhmm = ts => ts ? new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '—';
+  const ddmm = ts => ts ? new Date(ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) : '—';
+  const mostraColab = !logState.colab; // no modo "Todos", mostra a coluna do colaborador
+  const histTable = _logHistRows.length === 0
+    ? '<div style="color:var(--txt3);font-size:12px;padding:14px 0">Sem check-in registrado no período.</div>'
+    : `<table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="text-align:left;color:var(--txt2);font-size:9px;text-transform:uppercase;letter-spacing:0.4px;font-weight:700">
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr)">Dia</th>
+          ${mostraColab?'<th style="padding:7px 10px;border-bottom:1px solid var(--bdr)">Colaborador</th>':''}
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr)">Veículo</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:center">🟢 Check-in</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:center">🔴 Check-out</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:right">KM (ini→fim)</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--bdr);text-align:center"></th>
+        </tr></thead><tbody>
+        ${_logHistRows.map((h,i) => { const t = h.t; const aberto = !t.encerradoEm && t.ativo !== false && !(t.checkOut && t.checkOut.ts);
+          return `<tr style="border-bottom:1px solid var(--bdr)">
+          <td style="padding:7px 10px;font-family:var(--mono)">${ddmm(h.ci)}</td>
+          ${mostraColab?`<td style="padding:7px 10px">${esc(h.nome)}</td>`:''}
+          <td style="padding:7px 10px;font-family:var(--mono);font-size:10px">${esc(t.veiculoPlaca||'—')}</td>
+          <td style="padding:7px 10px;text-align:center;font-family:var(--mono);color:#4ade80">${hhmm(h.ci)}</td>
+          <td style="padding:7px 10px;text-align:center;font-family:var(--mono);color:${aberto?'#fbbf24':'#f87171'}">${aberto?'em aberto':hhmm(h.co)}</td>
+          <td style="padding:7px 10px;text-align:right;font-family:var(--mono)">${t.kmInicial!=null?Number(t.kmInicial).toLocaleString('pt-BR'):'—'}${(t.kmFinal!=null)?' → '+Number(t.kmFinal).toLocaleString('pt-BR'):''}</td>
+          <td style="padding:7px 10px;text-align:center"><button data-hist="${i}" style="background:rgba(0,180,229,0.12);border:1px solid var(--acc);color:var(--acc);padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer">🚪 ver</button></td>
+        </tr>`; }).join('')}
+        </tbody></table>`;
+  const histSection = `<div style="font-size:11px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin:20px 0 8px">🚪 Check-in / Check-out por dia${logState.colab?'':' · '+_logHistRows.length+' registro(s)'}</div>${histTable}`;
+
+  $('#logcolablist').innerHTML = '<div style="padding:16px 20px">' + body + histSection + '</div>';
   $$('#logcolablist [data-cio]').forEach(b => b.onclick = () => openCheckinout(b.dataset.cio));
+  $$('#logcolablist [data-hist]').forEach(b => b.onclick = () => { const h = _logHistRows[+b.dataset.hist]; if(h) openCheckinoutTurno(h.t, h.nome + ' · ' + ddmm(h.ci)); });
 }
 function openCheckinout(colabId){
   const t = turnos[colabId];
   const nome = (colaboradores[colabId] && colaboradores[colabId].nome) || (t && t.colabNome) || 'Colaborador';
-  if(!t){ showToast('Sem turno registrado pra ' + nome); return; }
+  openCheckinoutTurno(t, nome);
+}
+function openCheckinoutTurno(t, nome){
+  if(!t){ showToast('Sem turno registrado pra ' + (nome||'colaborador')); return; }
   const lblF = { frente:'Frente', lateral_d:'Lateral D', traseira:'Traseira', lateral_e:'Lateral E', painel:'Painel', carreta:'Carreta' };
   const bloco = (titulo, cor, dados, km, ts) => {
     if(!dados) return `<div style="flex:1;min-width:270px"><div style="font-weight:800;color:${cor};margin-bottom:6px">${titulo}</div><div style="color:var(--txt3);font-size:12px">— sem registro —</div></div>`;

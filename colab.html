@@ -793,7 +793,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v47 · 2026-07-28';
+const APP_VERSION = 'v48 · 2026-07-28';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -4776,6 +4776,8 @@ async function finalizarCheckIn(){
     pecasUsadas: [],  // preenche conforme o colab consome peças em atendimentos
     kmInicial: wizData.km,
     iniciadoEm: Date.now(),
+    turnoId: 't_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2,6), // id único do turno (histórico)
+    dia: _colDiaStr(),
     baseEntradaId: window._baseEntradaTurno || null,  // base onde fez check-in
     modo: 'normal',
     ativo: true,
@@ -4789,6 +4791,8 @@ async function finalizarCheckIn(){
     }
   };
   await db.ref('vammo/turnos/' + me.id).set(cleanForFb(turno));
+  // HISTÓRICO: um registro por turno (não sobrescreve como o nó vivo) — pro Log de colabs por dia
+  try { db.ref('vammo/turnos_hist/' + me.id + '/' + turno.turnoId).set(cleanForFb(turno)).catch(()=>{}); } catch(_){}
   turnoAtivo = turno;
   me.veiculoId = vId; me.veiculoPlaca = v.placa; me.placa = v.placa;
   me.vehicle = v.tipo === 'carro' ? (cId ? 'pickup_carreta' : 'pickup') : v.tipo;
@@ -4818,7 +4822,7 @@ async function finalizarCheckOut(){
     await db.ref('vammo/veiculos/' + turnoAtivo.carretaId).update({ atribuidoA: null, atribuidoEm: null });
   }
   // Marca turno encerrado
-  await db.ref('vammo/turnos/' + me.id).update({
+  const _checkOut = {
     ativo: false, encerradoEm: Date.now(),
     kmFinal: wizData.kmFinal,
     kmFinalAuditoria: kmAuditoria('kmFinal'),  // leitura IA × valor usado (anti-fraude)
@@ -4829,7 +4833,10 @@ async function finalizarCheckOut(){
       assinatura: wizData.assinaturaData,
       ts: Date.now()
     }
-  });
+  };
+  await db.ref('vammo/turnos/' + me.id).update(_checkOut);
+  // Espelha o check-out no histórico do turno (não sobrescrito)
+  try { if(turnoAtivo?.turnoId) db.ref('vammo/turnos_hist/' + me.id + '/' + turnoAtivo.turnoId).update(_checkOut).catch(()=>{}); } catch(_){}
   // Logout + reload
   if(sync) sync.send('motorista:logout', { id: me.id });
   // Remove o nó de telemetria pra sumir do mapa da torre na hora (não fica fantasma)
