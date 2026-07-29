@@ -45,12 +45,21 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #app{display:flex;flex-direction:column;height:100vh;width:100vw}
 
 /* NAV */
-#nav{flex:0 0 74px;display:flex;align-items:center;gap:14px;padding:0 20px;background:linear-gradient(180deg,rgba(10,22,44,0.72) 0%,rgba(7,15,31,0.6) 100%);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);border-bottom:1px solid var(--bdr2);font-size:13px;position:relative;z-index:600}
+#nav{flex:0 0 92px;display:flex;align-items:center;gap:14px;padding:0 22px;background:linear-gradient(180deg,rgba(10,22,44,0.72) 0%,rgba(7,15,31,0.6) 100%);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);border-bottom:1px solid var(--bdr2);font-size:13px;position:relative;z-index:600}
 #nav::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--acc) 25%,#7cf0ff 50%,var(--acc) 75%,transparent 100%);opacity:0.85;box-shadow:0 0 12px rgba(0,180,229,0.5)}
-.brand{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:0 20px 0 6px;margin-right:6px;border-right:1px solid var(--bdr);height:58px;gap:4px;position:relative}
-.brand .lg{height:46px;color:var(--acc);display:block;filter:drop-shadow(0 0 18px rgba(0,180,229,0.7)) drop-shadow(0 0 4px rgba(124,240,255,0.6))}
+.brand{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 22px 0 4px;margin-right:8px;border-right:1px solid var(--bdr);height:72px;gap:3px;position:relative}
+.brand::after{content:'';position:absolute;left:-10px;top:50%;transform:translateY(-50%);width:130px;height:130px;background:radial-gradient(circle, rgba(0,180,229,0.22), transparent 70%);pointer-events:none;z-index:-1;filter:blur(4px)}
+.brand .lg{height:64px;color:var(--acc);display:block;filter:drop-shadow(0 0 22px rgba(0,180,229,0.8)) drop-shadow(0 0 6px rgba(124,240,255,0.7))}
 .brand .lg svg{height:100%;width:auto;display:block}
-.brand .sub{color:var(--acc);font-weight:900;font-size:10px;letter-spacing:6px;text-transform:uppercase;padding-left:3px;text-shadow:0 0 10px rgba(0,180,229,0.6);margin-top:1px;opacity:0.9}
+.brand .sub{color:#7cf0ff;font-weight:900;font-size:10px;letter-spacing:8px;text-transform:uppercase;text-shadow:0 0 12px rgba(0,180,229,0.8);opacity:0.95}
+
+/* MODO NAVEGAÇÃO — esconde menus e o mapa toma a tela toda */
+body.navmode #nav{display:none}
+body.navmode #sidebar{display:none}
+#navmodeexit{display:none}
+body.navmode #navmodeexit{display:inline-flex}
+#navmodeexit{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:1300;align-items:center;gap:8px;background:rgba(0,180,229,0.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#001823;border:1px solid rgba(255,255,255,0.35);border-radius:24px;padding:9px 18px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 12px 34px rgba(0,0,0,0.45)}
+#navmodeexit:hover{background:#00c8ff}
 #nav .pills{display:flex;gap:6px;align-items:stretch}
 .pill{padding:6px 12px;border:1px solid var(--bdr);background:var(--surf);cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-radius:8px;color:var(--txt2);font-weight:700;transition:all 0.15s;height:38px}
 .pill:hover{background:var(--surf2);color:var(--txt);border-color:var(--bdr2)}
@@ -480,7 +489,11 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
     <button class="iconbtn" id="demobtn" title="Modo demo: crie chamados manualmente sem Slack">🧪 Demo</button>
     <button class="iconbtn" id="configbtn" title="Configurações">⚙</button>
     <button class="iconbtn" id="colaburlbtn" title="Link do app do colaborador">📱 Colab</button>
+    <button class="iconbtn" id="navmodebtn" title="Modo navegação — esconde os menus e amplia o mapa" style="border-color:var(--acc);color:var(--acc)">🗺 Ampliar</button>
   </div>
+
+  <!-- Sair do modo navegação (flutuante) -->
+  <button id="navmodeexit" onclick="toggleNavMode(false)">◀ Mostrar menus</button>
 
   <!-- GATE DE LOGIN (Google Sign-In @vammo.com) — cobre a torre até autenticar -->
   <div id="loginGate">
@@ -892,7 +905,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v47 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v48 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -6961,6 +6974,17 @@ function openCheckinoutTurno(t, nome){
 }
 window.openLogColab = openLogColab;
 
+// ===== MODO NAVEGAÇÃO — esconde menus e amplia o mapa =====
+function toggleNavMode(on){
+  const active = (on === undefined) ? !document.body.classList.contains('navmode') : !!on;
+  document.body.classList.toggle('navmode', active);
+  try { localStorage.setItem('torre_navmode', active ? '1' : ''); } catch(_){}
+  // Leaflet precisa recalcular o tamanho quando o container muda de largura
+  setTimeout(() => { try { if(map) map.invalidateSize(); } catch(_){} }, 60);
+  setTimeout(() => { try { if(map) map.invalidateSize(); } catch(_){} }, 380);
+}
+window.toggleNavMode = toggleNavMode;
+
 function init(){
   // Carrega chamados demo persistidos
   if(demoMode){
@@ -7053,6 +7077,7 @@ function init(){
 
   // Relatórios
   $('#repbtn').onclick = openRep;
+  { const nb = $('#navmodebtn'); if(nb) nb.onclick = () => toggleNavMode(true); }
   $('#logcolabbtn').onclick = openLogColab;
   $$('#logperiodo .rkp').forEach(b => b.onclick = () => { $$('#logperiodo .rkp').forEach(x => x.classList.remove('active')); b.classList.add('active'); logState.dias = +b.dataset.d; renderLogColab(); });
   { const lc = $('#logcolab'); if(lc) lc.onclick = null; }
