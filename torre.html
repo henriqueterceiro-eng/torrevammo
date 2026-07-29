@@ -45,7 +45,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 #app{display:flex;flex-direction:column;height:100vh;width:100vw}
 
 /* NAV */
-#nav{flex:0 0 92px;display:flex;align-items:center;gap:14px;padding:0 22px;background:linear-gradient(180deg,rgba(0,0,0,0.66) 0%,rgba(0,0,0,0.5) 100%);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border-bottom:1px solid var(--bdr2);font-size:13px;position:relative;z-index:600}
+#nav{flex:0 0 92px;display:flex;align-items:center;gap:14px;padding:0 22px;background:linear-gradient(180deg,rgba(0,0,0,0.8) 0%,rgba(0,0,0,0.64) 100%);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border-bottom:1px solid var(--bdr2);font-size:13px;position:relative;z-index:600}
 #nav::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--acc) 25%,#7cf0ff 50%,var(--acc) 75%,transparent 100%);opacity:0.85;box-shadow:0 0 12px rgba(0,180,229,0.5)}
 .brand{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 22px 0 4px;margin-right:8px;border-right:1px solid var(--bdr);height:72px;gap:3px;position:relative}
 .brand::after{content:'';position:absolute;left:-10px;top:50%;transform:translateY(-50%);width:130px;height:130px;background:radial-gradient(circle, rgba(0,180,229,0.22), transparent 70%);pointer-events:none;z-index:-1;filter:blur(4px)}
@@ -56,15 +56,30 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--acc);border-colo
 /* MODO NAVEGAÇÃO — esconde menus e o mapa toma a tela toda */
 body.navmode #nav{display:none}
 body.navmode #sidebar{display:none}
-#navmodeexit{display:none}
-body.navmode #navmodeexit{display:inline-flex}
-#navmodeexit{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:1300;align-items:center;gap:8px;background:rgba(0,180,229,0.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#001823;border:1px solid rgba(255,255,255,0.35);border-radius:24px;padding:9px 18px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 12px 34px rgba(0,0,0,0.45)}
-#navmodeexit:hover{background:#00c8ff}
+
+/* BOTÃO FLUTUANTE do modo navegação — canto inferior direito, grande, brilho no hover */
+#navmodefab{position:fixed;bottom:22px;right:22px;z-index:1300;display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,rgba(0,180,229,0.95),rgba(0,148,196,0.95));backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#001823;border:1px solid rgba(255,255,255,0.5);border-radius:30px;padding:15px 24px;font-weight:900;font-size:15px;letter-spacing:0.3px;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,0.5),0 0 0 1px rgba(0,180,229,0.3);transition:transform .16s ease,box-shadow .16s ease,background .16s ease}
+#navmodefab:hover{transform:translateY(-2px) scale(1.04);background:linear-gradient(135deg,#00d4ff,#00b4e5);box-shadow:0 14px 42px rgba(0,180,229,0.6),0 0 28px rgba(0,180,229,0.55),0 0 0 1px rgba(255,255,255,0.4)}
+#navmodefab .nm-exit{display:none}
+body.navmode #navmodefab .nm-enter{display:none}
+body.navmode #navmodefab .nm-exit{display:inline}
+
+/* SIDEBAR OCULTÁVEL — vira uma faixa fininha; expande ao passar o mouse */
+#sidehidebtn{flex:0 0 auto;width:30px;border:none;border-left:1px solid var(--bdr);background:transparent;color:var(--txt2);font-size:14px;font-weight:900;cursor:pointer;transition:color .15s,background .15s}
+#sidehidebtn:hover{color:var(--acc);background:rgba(0,180,229,0.12)}
+#sidehidebtn::before{content:'«'}
+body.sidehide #sidehidebtn::before{content:'📌'}
+body.sidehide #sidebar{position:absolute;left:0;top:0;bottom:0;width:18px;flex-basis:0;z-index:1150;overflow:hidden;cursor:pointer;transition:width .2s ease;background:linear-gradient(180deg,rgba(0,180,229,0.28),rgba(8,15,30,0.7));box-shadow:2px 0 18px rgba(0,0,0,0.45)}
+body.sidehide #sidebar > *{opacity:0;transition:opacity .12s}
+body.sidehide #sidebar::after{content:'›';position:absolute;top:50%;left:0;right:0;transform:translateY(-50%);text-align:center;color:#8fe9ff;font-size:15px;font-weight:900;pointer-events:none;text-shadow:0 0 8px rgba(0,180,229,0.7);transition:opacity .12s}
+body.sidehide #sidebar:hover{width:340px;background:linear-gradient(180deg,rgba(12,22,42,0.97),rgba(8,15,30,0.95))}
+body.sidehide #sidebar:hover > *{opacity:1}
+body.sidehide #sidebar:hover::after{opacity:0}
 #nav .pills{display:flex;gap:6px;align-items:stretch}
-.pill{padding:6px 12px;border:1px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.07);cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-radius:8px;color:#cdd8ea;font-weight:700;transition:all 0.15s;height:38px}
-.pill:hover{background:rgba(255,255,255,0.14);color:#fff;border-color:rgba(255,255,255,0.3)}
-.pill.active{background:rgba(0,180,229,0.16);color:#fff;border-color:var(--acc);box-shadow:inset 0 -2px 0 var(--acc),0 2px 12px rgba(0,180,229,0.25)}
-.pill .n{background:rgba(0,0,0,0.4);padding:3px 9px;border-radius:10px;font-size:13px;font-weight:800;font-family:var(--mono);min-width:24px;text-align:center;line-height:1}
+.pill{padding:6px 12px;border:1px solid rgba(0,180,229,0.4);background:rgba(0,180,229,0.1);cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-radius:8px;color:#cfe9f5;font-weight:700;transition:all 0.15s;height:38px}
+.pill:hover{background:rgba(0,180,229,0.2);color:#fff;border-color:var(--acc)}
+.pill.active{background:rgba(0,180,229,0.28);color:#fff;border-color:var(--acc);box-shadow:inset 0 -2px 0 var(--acc),0 2px 14px rgba(0,180,229,0.35)}
+.pill .n{background:rgba(0,0,0,0.45);padding:3px 9px;border-radius:10px;font-size:13px;font-weight:800;font-family:var(--mono);min-width:24px;text-align:center;line-height:1}
 .pill.active .n{background:var(--acc);color:#001823}
 .pill[data-f="novo"].active .n{background:var(--novo);color:#fff}
 .pill[data-f="em_rota"].active .n{background:var(--rota);color:#fff}
@@ -72,8 +87,8 @@ body.navmode #navmodeexit{display:inline-flex}
 .pill[data-f="cancelado"].active .n{background:var(--canc);color:#fff}
 #nav .spacer{flex:1}
 
-#nav .iconbtn{padding:7px 12px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:5px;border-radius:8px;transition:all 0.15s;background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.18);color:#e9f0fb}
-#nav .iconbtn:hover{border-color:var(--acc);background:rgba(255,255,255,0.17);color:#fff;box-shadow:0 2px 12px rgba(0,180,229,0.2)}
+#nav .iconbtn{padding:7px 12px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:5px;border-radius:8px;transition:all 0.15s;background:rgba(0,180,229,0.16);border:1px solid rgba(0,180,229,0.55);color:#8fe9ff;box-shadow:0 0 0 1px rgba(0,180,229,0.08)}
+#nav .iconbtn:hover{border-color:var(--acc);background:rgba(0,180,229,0.34);color:#fff;box-shadow:0 3px 16px rgba(0,180,229,0.35)}
 #nav .iconbtn.on{background:var(--acc);color:#001823;border-color:var(--acc);font-weight:700;box-shadow:0 0 0 1px rgba(0,180,229,0.3)}
 #nav .demo-on{background:var(--rota);color:#fff;border-color:var(--rota);font-weight:700}
 #syncind{display:flex;align-items:center;gap:6px;font-size:0;color:transparent;padding:0;height:32px;cursor:default}
@@ -489,11 +504,13 @@ body.navmode #navmodeexit{display:inline-flex}
     <button class="iconbtn" id="demobtn" title="Modo demo: crie chamados manualmente sem Slack">🧪 Demo</button>
     <button class="iconbtn" id="configbtn" title="Configurações">⚙</button>
     <button class="iconbtn" id="colaburlbtn" title="Link do app do colaborador">📱 Colab</button>
-    <button class="iconbtn" id="navmodebtn" title="Modo navegação — esconde os menus e amplia o mapa" style="border-color:var(--acc);color:var(--acc)">🗺 Ampliar</button>
   </div>
 
-  <!-- Sair do modo navegação (flutuante) -->
-  <button id="navmodeexit" onclick="toggleNavMode(false)">◀ Mostrar menus</button>
+  <!-- Modo navegação — botão flutuante grande no canto inferior direito (entra/sai) -->
+  <button id="navmodefab" onclick="toggleNavMode()" title="Modo navegação — esconde os menus e amplia o mapa">
+    <span class="nm-enter">🗺 Modo navegação</span>
+    <span class="nm-exit">◀ Mostrar menus</span>
+  </button>
 
   <!-- GATE DE LOGIN (Google Sign-In @vammo.com) — cobre a torre até autenticar -->
   <div id="loginGate">
@@ -513,6 +530,7 @@ body.navmode #navmodeexit{display:inline-flex}
       <div id="tabs">
         <div class="tab active" data-tab="chamados">Chamados <span id="tab1n">0</span></div>
         <div class="tab" data-tab="motoristas">Colaboradores <span id="tab2n">0</span></div>
+        <button id="sidehidebtn" title="Ocultar o menu lateral — passe o mouse na borda esquerda pra reabrir (ou clique no 📌 pra fixar)"></button>
       </div>
       <div id="catfilter"></div>
       <div id="ctrlfilter" style="display:none"></div>
@@ -905,7 +923,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v49 · 2026-07-28';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v50 · 2026-07-29';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -6985,6 +7003,16 @@ function toggleNavMode(on){
 }
 window.toggleNavMode = toggleNavMode;
 
+// Oculta/mostra o menu lateral (fica uma faixa fina; expande no hover). Persiste a preferência.
+function toggleSideHide(on){
+  const active = (on === undefined) ? !document.body.classList.contains('sidehide') : !!on;
+  document.body.classList.toggle('sidehide', active);
+  try { localStorage.setItem('torre_sidehide', active ? '1' : ''); } catch(_){}
+  setTimeout(() => { try { if(map) map.invalidateSize(); } catch(_){} }, 60);
+  setTimeout(() => { try { if(map) map.invalidateSize(); } catch(_){} }, 260);
+}
+window.toggleSideHide = toggleSideHide;
+
 function init(){
   // Carrega chamados demo persistidos
   if(demoMode){
@@ -7077,7 +7105,8 @@ function init(){
 
   // Relatórios
   $('#repbtn').onclick = openRep;
-  { const nb = $('#navmodebtn'); if(nb) nb.onclick = () => toggleNavMode(true); }
+  { const sh = $('#sidehidebtn'); if(sh) sh.onclick = (e) => { e.stopPropagation(); toggleSideHide(); }; }
+  try { if(localStorage.getItem('torre_sidehide') === '1') document.body.classList.add('sidehide'); } catch(_){}
   $('#logcolabbtn').onclick = openLogColab;
   $$('#logperiodo .rkp').forEach(b => b.onclick = () => { $$('#logperiodo .rkp').forEach(x => x.classList.remove('active')); b.classList.add('active'); logState.dias = +b.dataset.d; renderLogColab(); });
   { const lc = $('#logcolab'); if(lc) lc.onclick = null; }
