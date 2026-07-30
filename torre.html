@@ -233,6 +233,12 @@ body.sidehide #sidebar:hover::after{opacity:0}
 @keyframes basePulse{0%{transform:scale(1);opacity:0.5}100%{transform:scale(1.4);opacity:0}}
 .base-icon .lbl{position:absolute;top:48px;left:50%;transform:translateX(-50%);background:#fff;color:#001823;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;white-space:nowrap;border:1px solid var(--acc);font-family:var(--mono);z-index:3;letter-spacing:0.3px}
 .base-tooltip{background:rgba(255,255,255,0.96) !important;color:#001823 !important;border:1px solid var(--acc) !important;font-size:11px !important;padding:8px 12px;border-radius:8px;font-weight:500}
+/* Marker das bases PARCEIRAS (terceiros) — gota ÂMBAR com caminhão */
+.parc-icon{background:transparent !important;border:none !important}
+.parc-icon .pin{width:44px;height:54px;position:relative;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.4))}
+.parc-icon .pin .body{position:absolute;top:0;left:0;width:44px;height:44px;background:#f59e0b;border:3px solid #7a4d00;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center}
+.parc-icon .pin .body .em{transform:rotate(45deg);font-size:18px;line-height:1}
+.parc-icon .lbl{position:absolute;top:48px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#1a1200;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;white-space:nowrap;border:1px solid #7a4d00;font-family:var(--mono);z-index:3;letter-spacing:0.3px}
 .mt-icon.warn .ring{border-color:#dc2626 !important;box-shadow:0 0 0 3px rgba(220,38,38,0.4)}
 .mt-icon.warn .pulse{background:#dc2626 !important;animation:motpulse 0.9s ease-out infinite}
 .mt-icon.warn::after{content:'⚠';position:absolute;top:-8px;right:-8px;background:#dc2626;color:#fff;width:20px;height:20px;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:800;border:2px solid var(--bg);z-index:3;animation:numpulse 1s infinite}
@@ -581,6 +587,7 @@ body.sidehide #sidebar:hover::after{opacity:0}
         <button class="cdtab" data-t="carreta">🚛 Carretas</button>
         <button class="cdtab" data-t="moto">🏍 Motos</button>
         <button class="cdtab" data-t="base">🏠 Bases</button>
+        <button class="cdtab" data-t="parceiro">🤝 Parceiros</button>
         <button class="cdtab" data-t="operadores">🛡 Operadores da torre</button>
       </div>
       <button onclick="closeCad()" style="padding:6px 10px;font-size:18px;background:transparent;border:1px solid var(--bdr)">×</button>
@@ -730,6 +737,7 @@ body.sidehide #sidebar:hover::after{opacity:0}
       <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Base</label><select id="repbase" style="font-size:11px;padding:5px 8px"><option value="">Todas</option></select></div>
       <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Colaborador</label><select id="repcolab" style="font-size:11px;padding:5px 8px"><option value="">Todos</option></select></div>
       <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Veículo (placa)</label><select id="repveh" style="font-size:11px;padding:5px 8px"><option value="">Todos</option></select></div>
+      <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">🔎 Buscar placa</label><input type="text" id="repplaca" placeholder="Ex: GJE4G07" maxlength="8" style="font-size:11px;padding:5px 8px;text-transform:uppercase"></div>
       <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Status</label><select id="repstatus" style="font-size:11px;padding:5px 8px"><option value="">Todos</option><option value="concluido">Concluído</option><option value="cancelado">Cancelado</option></select></div>
     </div>
     <div style="padding:12px 20px;border-bottom:1px solid var(--bdr)" id="reptotais">—</div>
@@ -923,7 +931,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v52 · 2026-07-29';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v53 · 2026-07-30';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1105,6 +1113,7 @@ let filtro = null;
 let catFiltro = new Set(); // filtro por CATEGORIA de chamado (escurece no mapa/lista; vazio = todos acesos)
 let ctrlFiltro = new Set(); // filtro por CONTROLADOR responsável (admin) — acende só os marcados
 let selId = null;
+let _chamadoAbertoMoto = null;   // último chamado aberto (pra mostrar a moto/perguntar 1x ao abrir)
 let tab = 'chamados';
 let addMode = false;
 let pendingChamado = null;
@@ -1120,6 +1129,7 @@ let corridas = {};            // {chamadoId: ride} histórico de corridas finali
 let colaboradores = {};       // {id: colab}
 let veiculos = {};            // {id: veiculo}
 let bases = {};               // {id: base Vammo}
+let parceiros = {};           // {id: motorista parceiro (terceiro)}
 let turnos = {};              // {colabId: turno ativo}
 let globalSettings = {};      // {rangeInicioM: number, ...} — sincronizado com colab via Firebase
 let motExpanded = new Set();  // ids de motoristas com fila expandida
@@ -1260,6 +1270,10 @@ const STORE = (() => {
         const data = s.val() || {};
         if(handlers.onBasesSnapshot) handlers.onBasesSnapshot(data);
       });
+      fb.child('parceiros').on('value', s => {
+        const data = s.val() || {};
+        if(handlers.onParceirosSnapshot) handlers.onParceirosSnapshot(data);
+      });
       fb.child('turnos').on('value', s => {
         const data = s.val() || {};
         if(handlers.onTurnosSnapshot) handlers.onTurnosSnapshot(data);
@@ -1323,6 +1337,8 @@ const STORE = (() => {
       catch(e){ console.warn(e); }
     },
     deleteBase(id){ if(fb) fb.child('bases').child(id).remove().catch(e => console.warn(e)); },
+    saveParceiro(p){ if(fb && p.id){ try { fb.child('parceiros').child(p.id).set(cleanForFb(p)).catch(e => console.warn('fb saveParc:', e)); } catch(e){ console.warn(e); } } },
+    deleteParceiro(id){ if(fb) fb.child('parceiros').child(id).remove().catch(e => console.warn(e)); },
     saveOperador(o){ if(fb && o.id){ try { fb.child('operadores').child(o.id).set(cleanForFb(o)).catch(e => console.warn('fb saveOp:', e)); } catch(e){ console.warn(e); } } },
     deleteOperador(id){ if(fb) fb.child('operadores').child(id).remove().catch(e => console.warn(e)); },
     saveSetting(key, value){
@@ -1842,6 +1858,204 @@ function renderBaseMarkers(){
   for(const id in baseMarkers){
     if(!seen.has(id)){ map.removeLayer(baseMarkers[id]); delete baseMarkers[id]; }
   }
+}
+
+// ===== MOTORISTAS PARCEIROS (terceiros) — cadastro + pinos ÂMBAR no mapa =====
+let parceiroMarkers = {};
+function renderParceiroMarkers(){
+  if(!map) return;
+  const seen = new Set();
+  for(const id in parceiros){
+    const p = parceiros[id];
+    if(!p || p.ativo === false || p.lat == null || p.lng == null) continue;
+    seen.add(id);
+    const html = `<div class="pin"><div class="body"><span class="em">🚚</span></div><div class="lbl">${esc(p.nome || 'Parceiro')}</div></div>`;
+    const icon = L.divIcon({ className:'parc-icon', html, iconSize:[44,68], iconAnchor:[22,52] });
+    const tip = `<b style="color:#f59e0b">🚚 ${esc(p.nome || 'Parceiro')}</b><br>${esc(p.endereco || '')}` +
+      (p.contato ? `<br><small>Contato: ${esc(p.contato)}${p.cel ? ' · '+esc(p.cel) : ''}</small>` : '') +
+      (p.baseDescarga ? `<br><small>Descarga: ${esc(p.baseDescarga)}</small>` : '');
+    if(parceiroMarkers[id]){
+      parceiroMarkers[id].setIcon(icon); parceiroMarkers[id].setLatLng([p.lat, p.lng]); parceiroMarkers[id].setTooltipContent(tip);
+    } else {
+      const m = L.marker([p.lat, p.lng], { icon, zIndexOffset: 250 }).addTo(map);
+      m.bindTooltip(tip, { direction:'top', offset:[0,-50], className:'base-tooltip', sticky:false });
+      parceiroMarkers[id] = m;
+    }
+  }
+  for(const id in parceiroMarkers){ if(!seen.has(id)){ try{ map.removeLayer(parceiroMarkers[id]); }catch(_){} delete parceiroMarkers[id]; } }
+}
+
+function renderParceiros(){
+  $$('#cadtabs .cdtab').forEach(b => b.classList.toggle('active', b.dataset.t === 'parceiro'));
+  const list = Object.values(parceiros).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+  $('#cadcount').textContent = `${list.length} parceiro${list.length===1?'':'s'}`;
+  const opts = ['Osasco','São Bernardo','Santa Justina','Mooca'].map(b => `<option>${b}</option>`).join('');
+  const rows = list.map(p => `<div class="cdrow" style="grid-template-columns:1.1fr 1.7fr 0.9fr 0.9fr 0.9fr 62px">
+      <div><div class="cd-nm">${esc(p.nome||'?')}</div>${p.lat==null?'<div class="cd-sub" style="color:#fbbf24">⚠ sem coordenada</div>':''}</div>
+      <div style="font-size:11px;color:var(--txt2)">${esc(p.endereco||'—')}</div>
+      <div style="font-size:11px">${esc(p.contato||'—')}</div>
+      <div style="font-size:11px">${esc(p.cel||'—')}</div>
+      <div><span class="cd-pill" style="background:rgba(245,158,11,0.18);color:#ffcf7a">${esc(p.baseDescarga||'—')}</span></div>
+      <div style="text-align:right;display:flex;gap:4px;justify-content:flex-end">
+        <button onclick="editParceiro('${p.id}')" style="padding:4px 7px;font-size:10px">✏</button>
+        <button onclick="delParceiro('${p.id}')" style="padding:4px 7px;font-size:10px;color:#fca5a5">✕</button></div>
+    </div>`).join('');
+  const seedBtn = list.length === 0 ? `<button onclick="seedParceiros()" style="margin-top:10px;padding:8px 12px;font-size:11px;background:rgba(245,158,11,0.15);border:1px solid #f59e0b;color:#ffcf7a;font-weight:700;border-radius:8px">📥 Importar os 14 parceiros da lista</button>` : '';
+  $('#cadlist').innerHTML = `
+    <div style="padding:14px 20px;border-bottom:1px solid var(--bdr);background:rgba(245,158,11,0.05)">
+      <div style="font-weight:800;font-size:12px;margin-bottom:10px;color:#ffcf7a">🤝 Novo parceiro (terceiro)</div>
+      <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:8px">
+        <input id="pc_nome" placeholder="Base do terceiro *">
+        <input id="pc_end" placeholder="Endereço do terceiro *">
+        <select id="pc_desc"><option value="">Base de descarga…</option>${opts}</select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px">
+        <input id="pc_contato" placeholder="Contato">
+        <input id="pc_cel" placeholder="Cel contato">
+        <button class="primary" id="pc_save" onclick="salvarParceiro()" style="white-space:nowrap">🤝 Cadastrar + marcar no mapa</button>
+      </div>
+      <input type="hidden" id="pc_id">
+      <div id="pc_msg" style="font-size:11px;margin-top:8px;color:var(--txt2)"></div>
+      ${seedBtn}
+    </div>
+    <div class="cdrow hdr" style="grid-template-columns:1.1fr 1.7fr 0.9fr 0.9fr 0.9fr 62px">
+      <div>Base do terceiro</div><div>Endereço</div><div>Contato</div><div>Cel</div><div>Base descarga</div><div></div>
+    </div>
+    ${rows || '<div class="cd-empty"><div class="ic">🤝</div><div style="font-weight:700;color:var(--txt)">Nenhum parceiro cadastrado</div><div style="font-size:11px;margin-top:6px">Preencha o formulário acima ou importe a lista inicial.</div></div>'}`;
+}
+window.editParceiro = function(id){
+  const p = parceiros[id]; if(!p) return;
+  cadTab = 'parceiro'; renderParceiros();
+  document.getElementById('pc_id').value = id;
+  document.getElementById('pc_nome').value = p.nome||'';
+  document.getElementById('pc_end').value = p.endereco||'';
+  document.getElementById('pc_contato').value = p.contato||'';
+  document.getElementById('pc_cel').value = p.cel||'';
+  document.getElementById('pc_desc').value = p.baseDescarga||'';
+  const msg = document.getElementById('pc_msg'); msg.style.color = 'var(--acc)'; msg.textContent = 'Editando: ' + (p.nome||'');
+  document.getElementById('pc_nome').scrollIntoView({block:'center'});
+};
+window.delParceiro = function(id){
+  const p = parceiros[id]; if(!p) return;
+  if(!confirm('Remover o parceiro "'+(p.nome||'')+'"?')) return;
+  STORE.deleteParceiro(id); delete parceiros[id];
+  renderParceiros(); renderParceiroMarkers();
+  logTorre('parceiro_remove', { id, nome: p.nome||null, operador: getOperadorTorre() });
+};
+async function geocodeEndereco(end){
+  try { const gr = await fetch('/geocode?addr=' + encodeURIComponent(end));
+    if(gr.ok){ const gd = await gr.json(); if(gd && !gd.error && gd.lat != null) return { lat: gd.lat, lng: gd.lng, formatted: gd.formatted || end }; }
+  } catch(_){}
+  return null;
+}
+window.salvarParceiro = async function(){
+  const nome = document.getElementById('pc_nome').value.trim();
+  const end  = document.getElementById('pc_end').value.trim();
+  const msg  = document.getElementById('pc_msg');
+  if(!nome || !end){ msg.style.color = '#fca5a5'; msg.textContent = 'Preencha ao menos a Base do terceiro e o Endereço.'; return; }
+  const id = document.getElementById('pc_id').value || ('parc_' + Date.now().toString(36));
+  const btn = document.getElementById('pc_save'); btn.disabled = true; btn.textContent = '⏳ Geocodificando…';
+  const antigo = parceiros[id] || {};
+  const p = { id, nome, endereco: end,
+    contato: document.getElementById('pc_contato').value.trim(),
+    cel: document.getElementById('pc_cel').value.trim(),
+    baseDescarga: document.getElementById('pc_desc').value,
+    lat: antigo.lat != null ? antigo.lat : null, lng: antigo.lng != null ? antigo.lng : null,
+    tipo: 'parceiro', ativo: true, ts: antigo.ts || Date.now() };
+  const g = await geocodeEndereco(end);
+  if(g){ p.lat = g.lat; p.lng = g.lng; p.enderecoFormatado = g.formatted; }
+  btn.disabled = false; btn.textContent = '🤝 Cadastrar + marcar no mapa';
+  parceiros[id] = p; STORE.saveParceiro(p);
+  renderParceiros(); renderParceiroMarkers();
+  if(g && map){ try{ map.setView([p.lat, p.lng], 13); }catch(_){} }
+  msg.style.color = g ? '#4ade80' : '#fbbf24';
+  msg.textContent = g ? ('✓ Cadastrado e marcado no mapa ('+p.lat.toFixed(4)+', '+p.lng.toFixed(4)+')') : '✓ Cadastrado, mas não geocodificou o endereço — edite pra ajustar a localização.';
+  logTorre('parceiro_save', { id, nome, geocoded: !!g, operador: getOperadorTorre() });
+};
+const PARCEIROS_SEED = [
+ {nome:'Pedro Valentim',endereco:'Rua Santa Lídia, s/n - Carapicuíba - SP, 06360-150',contato:'Pedro Valentim',cel:'11 94700-9985',baseDescarga:'Osasco',lat:-23.535,lng:-46.836},
+ {nome:'ABC Valentim',endereco:'Rua José Portillo, 18 - Jardim Maria Lídia, São Paulo - SP, 08370-510',contato:'Pedro Valentim',cel:'11 94700-9985',baseDescarga:'São Bernardo',lat:-23.545,lng:-46.455},
+ {nome:'Extremo Sul – Valentim',endereco:'Rua do Tom Maior, 7 - Jardim Santa Margarida, São Paulo - SP, 04930-230',contato:'Pedro Valentim',cel:'11 94700-9985',baseDescarga:'Santa Justina',lat:-23.660,lng:-46.760},
+ {nome:'ZN Valentim',endereco:'Rua Carlo Pallavicino, 260 - Jardim Vivan, São Paulo - SP, 02993-110',contato:'Pedro Valentim',cel:'11 94700-9985',baseDescarga:'Osasco',lat:-23.470,lng:-46.680},
+ {nome:'DS – ABC Recuperações',endereco:'Estrada dos Fernandes, s/n - Chácara Paraíso, Ribeirão Pires - SP',contato:'Josean (DS)',cel:'11 98677-5024',baseDescarga:'São Bernardo',lat:-23.715,lng:-46.410},
+ {nome:'DS Recuperações',endereco:'Avenida Minas Gerais, s/n - Jardim Santa Helena, Poá - SP, 08554-120',contato:'Josean (DS)',cel:'11 98677-5024',baseDescarga:'Mooca',lat:-23.520,lng:-46.345},
+ {nome:'Guincho Zona Leste',endereco:'Estrada Iguatemi, 1212-B - Jardim Pedra Branca, São Paulo - SP, 08490-500',contato:'Maico',cel:'11 98310-4480',baseDescarga:'Mooca',lat:-23.580,lng:-46.415},
+ {nome:'IMI Resgate de Moto ZL',endereco:'Rua Ulisses Guimarães, s/n - Lajeado, São Paulo - SP, 08452-430',contato:'Iago',cel:'11 99964-4563',baseDescarga:'Mooca',lat:-23.540,lng:-46.400},
+ {nome:'Tatu Transporte',endereco:'Rua Comendador Alfaia Rodrigues, s/n - Jabaquara, São Paulo - SP, 04368-140',contato:'Manoel (Tatu)',cel:'11 97063-9914',baseDescarga:'São Bernardo',lat:-23.645,lng:-46.640},
+ {nome:'Thiago Queiroz',endereco:'Estrada Canal de Cocaia, s/n - Grajaú, São Paulo - SP, 04849-032',contato:'Thiago (Thiago Queiroz)',cel:'11 97991-6304',baseDescarga:'Santa Justina',lat:-23.775,lng:-46.685},
+ {nome:'Michael - Mr. Guincho',endereco:'Estr. de Itapecerica, 4439 - Conj. Hab. Instituto Adventista, São Paulo - SP, 05849-440',contato:'Michael',cel:'11 95667-7771',baseDescarga:'Mooca',lat:-23.670,lng:-46.755},
+ {nome:'Teodoro transporte',endereco:'R das Paineiras (Jd Pinheiros), 318',contato:'Tianna Brito',cel:'73 8253-4163',baseDescarga:'São Bernardo',lat:-23.560,lng:-46.700},
+ {nome:'Impacto',endereco:'Rua Maria Amélia Gouveia André, 429 - Jardim São Luiz, São Paulo - SP, 05850-250',contato:'Lauro',cel:'11 95913-4801',baseDescarga:'Santa Justina',lat:-23.660,lng:-46.735},
+ {nome:'Rodolpho Bastos',endereco:'Rua Amador Pereira, s/n - São Lucas, São Paulo - SP, 03257-181',contato:'',cel:'',baseDescarga:'São Bernardo',lat:-23.600,lng:-46.545}
+];
+window.seedParceiros = function(){
+  if(!confirm('Importar os 14 parceiros da lista inicial? (você pode editar/remover depois)')) return;
+  let n = 0;
+  PARCEIROS_SEED.forEach((s, i) => {
+    const id = 'parc_seed_' + i;
+    if(parceiros[id]) return;
+    const p = Object.assign({ id, tipo:'parceiro', ativo:true, ts: Date.now() }, s);
+    parceiros[id] = p; STORE.saveParceiro(p); n++;
+  });
+  renderParceiros(); renderParceiroMarkers();
+  showToast('🤝 ' + n + ' parceiros importados');
+  logTorre('parceiro_seed', { n, operador: getOperadorTorre() });
+};
+
+// ===== ALERTA DE OCIOSIDADE (colab com chamado atribuído parado > 20min) =====
+// Regra: chamado ATRIBUÍDO e ainda NÃO iniciado + colab online parado (sem se mover) por > 20min.
+// Reseta quando ele se move ou inicia o atendimento. Aviso pra Controlador + Admin (todos da torre).
+const IDLE_ALERT_MIN = 20;
+const IDLE_MOVE_M = 60;
+let _idleTrack = {};       // motoristaId -> {lat, lng, since}
+let _idleAlerted = {};     // motoristaId -> já avisou (não spamma)
+function checkOciosidade(){
+  const now = Date.now();
+  const assigned = chamados.filter(c => c.motoristaId && !c.iniciadoEm && (c.status === 'em_rota' || c.status === 'novo'));
+  const ativosIds = new Set();
+  const idle = [];
+  for(const c of assigned){
+    const m = motoristas[c.motoristaId];
+    if(!m) continue;
+    if(m.status === 'off' || (now - (m.lastSeen || 0)) > MOTORISTA_TTL_MS) continue;  // offline → ignora
+    ativosIds.add(c.motoristaId);
+    const prev = _idleTrack[c.motoristaId];
+    const cur = { lat: m.lat, lng: m.lng };
+    let moved = false;
+    if((m.kmh || 0) > 0) moved = true;
+    else if(!prev || prev.lat == null || cur.lat == null) moved = true;         // sem histórico/GPS → zera
+    else if(haversine(prev, cur) > IDLE_MOVE_M) moved = true;
+    if(moved){ _idleTrack[c.motoristaId] = { lat: cur.lat, lng: cur.lng, since: now }; _idleAlerted[c.motoristaId] = false; continue; }
+    const since = prev.since || now;
+    _idleTrack[c.motoristaId] = { lat: prev.lat, lng: prev.lng, since };
+    const min = Math.floor((now - since) / 60000);
+    if(min >= IDLE_ALERT_MIN){
+      idle.push({ m, c, min });
+      if(!_idleAlerted[c.motoristaId]){
+        _idleAlerted[c.motoristaId] = true;
+        showToast('⏱ ' + (m.nome || 'Colaborador').split(' ')[0] + ' parado há ' + min + 'min com chamado atribuído');
+        logTorre('ocioso_alerta', { motoristaId: c.motoristaId, nome: m.nome || null, chamadoId: c.id, cliente: c.cliente || null, min, operador: getOperadorTorre() });
+      }
+    }
+  }
+  for(const id in _idleTrack){ if(!ativosIds.has(id)){ delete _idleTrack[id]; delete _idleAlerted[id]; } }
+  renderIdleBanner(idle);
+}
+function renderIdleBanner(idle){
+  let el = document.getElementById('idlealert');
+  if(!idle || !idle.length){ if(el) el.remove(); return; }
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'idlealert';
+    el.style.cssText = 'position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:8000;background:linear-gradient(180deg,rgba(220,38,38,0.95),rgba(153,27,27,0.95));border:1px solid #fca5a5;border-radius:12px;padding:9px 14px;box-shadow:0 12px 40px rgba(0,0,0,0.5);max-width:540px;backdrop-filter:blur(8px)';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:#ffd7d7;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">⏱ Colaborador ocioso com chamado atribuído</div>` +
+    idle.map(x => `<div style="display:flex;align-items:center;gap:10px;color:#fff;font-size:12.5px;padding:3px 0">
+      <div style="flex:1"><b>${esc(x.m.nome || 'Colaborador')}</b> parado há <b>${x.min}min</b>
+        <div style="font-size:10.5px;color:#fed7d7">${esc(x.c.cliente || '?')} · ${esc(x.c.placa || 'sem placa')}</div></div>
+      <button onclick="selId='${x.c.id}';renderAll();" style="padding:4px 9px;font-size:10px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.35);color:#fff;border-radius:6px;font-weight:700;cursor:pointer">ver chamado</button>
+    </div>`).join('');
 }
 
 // Chamado concluído/cancelado some da TELA depois de 12h (não polui o mapa/lista).
@@ -2600,6 +2814,8 @@ function renderDetail(){
   const c = chamados.find(x => x.id === selId);
   if(!c){ $('#detail').classList.remove('show'); return; }
   $('#detail').classList.add('show');
+  // Ao ABRIR o chamado (troca de selId): mostra a moto (IoT) na hora e, se longe, pergunta o destino — 1x.
+  if(selId && selId !== _chamadoAbertoMoto){ _chamadoAbertoMoto = selId; onAbrirChamadoMoto(c); }
 
   const motIds = Object.keys(motoristas);
   const onlineMots = motIds.filter(id => {
@@ -2892,7 +3108,7 @@ function renderDetail(){
   };
 }
 
-function closeDetail(){ selId = null; renderAll(); }
+function closeDetail(){ selId = null; _chamadoAbertoMoto = null; renderAll(); }
 window.closeDetail = closeDetail;
 
 function updateStatus(chamadoId, newStatus){
@@ -2998,9 +3214,63 @@ async function assignWithMotoCheck(chamadoId, motoristaId){
   let ping = null;
   try { ping = await fetchMotoPing(c.placa); } catch(_){}
   if(!ping || !ping.temGps){ atribuir(chamadoId, motoristaId); return; }  // moto sem IoT → normal
+  if(c._localDecidido){ atribuir(chamadoId, motoristaId); return; }       // já decidiu ao abrir → não repergunta
   const dist = haversine({lat:c.lat,lng:c.lng}, {lat:ping.lat,lng:ping.lon});
   if(dist <= ASSIGN_MOTO_RAIO_M){ atribuir(chamadoId, motoristaId); return; }
   abrirEscolhaLocalMoto(c, motoristaId, ping, dist);                      // >100m → pergunta
+}
+
+// Ao ABRIR um chamado: busca a moto (IoT), mostra na hora e enquadra chamado+moto. Se a moto
+// estiver longe do endereço, pergunta (1x) se a corrida vai pro local da MOTO ou do CHAMADO.
+async function onAbrirChamadoMoto(c){
+  if(!c || !c.placa || c.lat == null || c.lng == null) return;
+  let ping = null;
+  try { ping = await fetchMotoPing(c.placa); } catch(_){}
+  if(!ping || !ping.temGps) return;
+  iotData[(c.placa||'').toUpperCase()] = { online: ping.online, lat: ping.lat, lon: ping.lon, lp: ping.lp };
+  renderMotoPingMarkers();                                                // mostra a 🛵 na hora
+  const dist = haversine({lat:c.lat,lng:c.lng}, {lat:ping.lat,lng:ping.lon});
+  try { if(map) map.fitBounds([[c.lat,c.lng],[ping.lat,ping.lon]], { padding:[80,80], maxZoom:15 }); } catch(_){}
+  if(dist > ASSIGN_MOTO_RAIO_M && !c._localDecidido && !c.localMoto){
+    abrirEscolhaLocalMotoAoAbrir(c, ping, dist);
+  }
+}
+
+function abrirEscolhaLocalMotoAoAbrir(c, ping, dist){
+  if(document.getElementById('escLocalAbrir')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'escLocalAbrir';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10015;padding:20px';
+  const distLbl = dist >= 1000 ? (dist/1000).toFixed(1)+'km' : Math.round(dist)+'m';
+  const idadeLbl = ping.lp ? (Math.round((Date.now()-ping.lp)/60000)+'min') : '?';
+  overlay.innerHTML = `
+    <div style="background:var(--surf);border:1px solid #fbbf24;border-radius:12px;width:100%;max-width:430px;padding:20px">
+      <h2 style="font-size:16px;margin-bottom:6px;color:#fbbf24">⚠ Moto longe do local do chamado</h2>
+      <p style="color:var(--txt2);font-size:12px;line-height:1.55;margin-bottom:16px">
+        A moto <strong style="font-family:var(--mono)">${esc(c.placa||'')}</strong> está a <strong style="color:#fbbf24">${distLbl}</strong> do endereço do chamado (<strong>${esc(c.cliente||'?')}</strong>).<br>
+        <span style="color:var(--txt3);font-size:11px">📡 último ping há ${idadeLbl} · ${ping.online?'online':'offline'}</span><br><br>
+        Onde vai ser a corrida?
+      </p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button id="escMoto2" style="padding:12px;background:rgba(0,180,229,0.15);border:1px solid var(--acc);color:var(--acc);font-weight:800;border-radius:8px;cursor:pointer;text-align:left;font-size:13px">🛵 Local da MOTO (IoT)<div style="font-weight:500;font-size:10px;color:var(--txt2);margin-top:3px">O chamado passa a apontar pra onde a moto está agora</div></button>
+        <button id="escChamado2" style="padding:12px;background:var(--surf2);border:1px solid var(--bdr);color:var(--txt);font-weight:800;border-radius:8px;cursor:pointer;text-align:left;font-size:13px">📍 Local do CHAMADO (endereço)<div style="font-weight:500;font-size:10px;color:var(--txt2);margin-top:3px">Mantém o endereço informado pelo cliente</div></button>
+        <button id="escDepois2" style="padding:9px;background:transparent;border:1px solid var(--bdr);color:var(--txt2);font-size:12px;border-radius:8px;cursor:pointer">Decidir depois</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = (e) => { if(e.target === overlay) close(); };
+  overlay.querySelector('#escDepois2').onclick = close;
+  overlay.querySelector('#escChamado2').onclick = () => { c._localDecidido = true; close(); };
+  overlay.querySelector('#escMoto2').onclick = () => {
+    c._localDecidido = true; close();
+    if(c._localChamadoLat == null){ c._localChamadoLat = c.lat; c._localChamadoLng = c.lng; }
+    c.lat = ping.lat; c.lng = ping.lon; c.localMoto = true;
+    STORE.updateChamado(c.id, { lat: ping.lat, lng: ping.lon, localMoto: true, localChamadoLat: c._localChamadoLat, localChamadoLng: c._localChamadoLng });
+    renderChamadoMarkers(); renderMotoPingMarkers();
+    showToast('🛵 Chamado atrelado ao local da moto (' + distLbl + ' do endereço)');
+    logTorre('atrela_local_moto_abrir', { chamadoId: c.id, cliente: c.cliente||null, placa: c.placa||null, distM: Math.round(dist), operador: getOperadorTorre() });
+  };
 }
 
 function abrirEscolhaLocalMoto(c, motoristaId, ping, dist){
@@ -3646,6 +3916,7 @@ function renderCad(){
   $$('#cadtabs .cdtab').forEach(b => b.classList.toggle('active', b.dataset.t === cadTab));
 
   if(cadTab === 'operadores'){ renderOperadores(); return; }
+  if(cadTab === 'parceiro'){ renderParceiros(); return; }
 
   let items = [];
   if(cadTab === 'colab'){
@@ -4837,7 +5108,7 @@ function renderRank(){
 // ============================================================
 // RELATÓRIOS — período + base + colab + veículo + status + CSV
 // ============================================================
-let repState = { periodo: 'mes', de: null, ate: null, base: '', colab: '', veh: '', status: '' };
+let repState = { periodo: 'mes', de: null, ate: null, base: '', colab: '', veh: '', status: '', placaBusca: '' };
 
 function openRep(){
   // popula selects dinamicamente
@@ -4888,6 +5159,7 @@ function calcRep(){
     .filter(r => !repState.status || r.endStatus === repState.status)
     .filter(r => !repState.colab || r.motoristaId === repState.colab)
     .filter(r => !repState.veh || r.motoristaPlaca === repState.veh)
+    .filter(r => !repState.placaBusca || (r.motoristaPlaca || '').toUpperCase().includes(repState.placaBusca.toUpperCase()))
     .filter(r => {
       if(!repState.base) return true;
       const c = colaboradores[r.motoristaId];
@@ -6202,6 +6474,11 @@ function setupStoreListeners(){
       renderBaseMarkers();
       normalizeColabBases();
     },
+    onParceirosSnapshot: (data) => {
+      parceiros = data || {};
+      if($('#cadmodal').style.display === 'flex' && cadTab === 'parceiro') renderParceiros();
+      renderParceiroMarkers();
+    },
     onTurnosSnapshot: (data) => {
       turnos = data || {};
     },
@@ -6451,7 +6728,7 @@ function checkMotoristasTTL(){
 // ===== IoT PING (onde a moto de cada chamado está pingando de verdade) =====
 // Query real = iot.hb_full (endpoint /iot_status). Por placa: último ping (lat/lon) + se pingou ≤120min.
 // A torre compara o ping com o ENDEREÇO do chamado: a moto está no local ou em outro lugar?
-let iotOn = false;
+let iotOn = true;             // IoT é PADRÃO (sempre ligado, sem botão de filtro)
 let iotData = {};              // PLACA(upper) -> { online, lat, lon, lp }
 let motoPingMarkers = {};      // chamadoId -> L.marker
 let motoPingLines = {};        // chamadoId -> L.polyline
@@ -6469,8 +6746,7 @@ async function toggleIot(){
 }
 async function carregarIotPing(){
   const placas = [...new Set(chamadosAtivos().filter(c => c.placa).map(c => (c.placa||'').toUpperCase()))];
-  const painel = document.getElementById('iotpanel');
-  if(painel){ painel.classList.add('show'); painel.innerHTML = `<div class="iohd">📡 IoT Ping das motos <span class="cls" onclick="toggleIot()">×</span></div><div class="io-empty">Consultando pings…</div>`; }
+  if(!placas.length){ iotData = {}; renderMotoPingMarkers(); return; }
   iotData = {};
   try {
     const r = await fetch('/iot_status?placas=' + encodeURIComponent(placas.join(',')));
@@ -6545,9 +6821,10 @@ function renderAll(){
   renderMot();
   renderChamadoMarkers();
   renderMotoristaMarkers();
+  renderParceiroMarkers();
   renderLegend();
   renderDetail();
-  if(iotOn){ renderMotoPingMarkers(); renderIotPanel(); }
+  if(iotOn){ renderMotoPingMarkers(); }
 }
 
 // ============== INIT ==============
@@ -7102,7 +7379,16 @@ function init(){
 
   // Tabs
   $$('.tab').forEach(el => el.onclick = () => setTab(el.dataset.tab));
-  { const ib = document.getElementById('iotbtn'); if(ib) ib.onclick = toggleIot; }
+  // IoT é PADRÃO: remove o botão de filtro e carrega os pings sozinho (atualiza a cada 60s).
+  iotOn = true;
+  { const ib = document.getElementById('iotbtn'); if(ib) ib.remove(); }
+  setTimeout(() => { if(map) carregarIotPing(); }, 1500);
+  setInterval(() => { if(map) carregarIotPing(); }, 60000);
+  // Alerta de ociosidade (colab com chamado atribuído parado > 20min)
+  setTimeout(checkOciosidade, 8000);
+  setInterval(checkOciosidade, 30000);
+  // Popup de novidades da versão (1x por operador)
+  setTimeout(mostrarNovidadesTorre, 1400);
 
   // Demo panel
   $('#demobtn').onclick = () => {
@@ -7132,7 +7418,7 @@ function init(){
     $('#cadbusca').value = '';
     renderCad();
   });
-  $('#cadnovo').onclick = () => { if(cadTab === 'operadores') openOperadorForm(null); else openCadForm(cadTab, null); };
+  $('#cadnovo').onclick = () => { if(cadTab === 'operadores') openOperadorForm(null); else if(cadTab === 'parceiro'){ const el = document.getElementById('pc_nome'); if(el){ el.focus(); el.scrollIntoView({block:'center'}); } } else openCadForm(cadTab, null); };
   $('#cadbusca').oninput = (e) => { cadBusca = e.target.value; renderCad(); };
   $$('#rkperiodo .rkp').forEach(b => b.onclick = () => {
     $$('#rkperiodo .rkp').forEach(x => x.classList.remove('active'));
@@ -7170,6 +7456,7 @@ function init(){
   $('#repbase').onchange = (e) => { repState.base = e.target.value; renderRep(); };
   $('#repcolab').onchange = (e) => { repState.colab = e.target.value; renderRep(); };
   $('#repveh').onchange = (e) => { repState.veh = e.target.value; renderRep(); };
+  { const rp = $('#repplaca'); if(rp) rp.oninput = (e) => { repState.placaBusca = (e.target.value || '').trim(); renderRep(); }; }
   $('#repstatus').onchange = (e) => { repState.status = e.target.value; renderRep(); };
   $('#repexp').onclick = exportRepCSV;
 
@@ -7244,6 +7531,36 @@ function init(){
       renderMot();
     }
   }, 15000);
+}
+
+// ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
+const NOV_VER_TORRE = 'v53';
+const NOV_ITENS_TORRE = [
+  { ic:'📡', t:'IoT sempre ligado', d:'A localização real da moto (IoT) agora é padrão no mapa — sem precisar ativar filtro. Ao abrir um chamado, a moto aparece na hora.' },
+  { ic:'🛵', t:'Moto longe do chamado', d:'Se a moto estiver longe do endereço, a torre pergunta se quer mandar o colaborador pro local da moto ou do chamado.' },
+  { ic:'⏱', t:'Alerta de ociosidade', d:'Aviso quando um colaborador com chamado atribuído fica parado por mais de 20 minutos.' },
+  { ic:'🤝', t:'Motoristas parceiros no mapa', d:'Cadastre terceiros nos Cadastros — eles aparecem no mapa com ícone âmbar de caminhão.' },
+  { ic:'🔎', t:'Busca por placa no relatório', d:'Novo campo de busca por placa na tela de relatórios.' }
+];
+function mostrarNovidadesTorre(force){
+  try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER_TORRE)) return; }catch(e){}
+  if(document.getElementById('novOverlayTorre')) return;
+  const ov = document.createElement('div');
+  ov.id = 'novOverlayTorre';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,15,0.8);backdrop-filter:blur(6px);z-index:12000;display:flex;align-items:center;justify-content:center;padding:20px';
+  const itens = NOV_ITENS_TORRE.map(i => `<li style="display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,0.04);border:1px solid rgba(125,165,215,0.16);border-radius:10px;padding:11px 13px;margin-bottom:9px;list-style:none">
+      <span style="font-size:18px">${i.ic}</span><div><b style="display:block;font-size:13.5px">${i.t}</b><span style="color:#9aa8bd;font-size:12px;line-height:1.45">${i.d}</span></div></li>`).join('');
+  ov.innerHTML = `<div style="background:linear-gradient(180deg,#0e1a30,#0b1526);border:1px solid rgba(0,180,229,0.34);border-radius:18px;max-width:460px;width:100%;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,0.6);max-height:90vh;overflow:auto">
+      <div style="text-align:center;margin-bottom:14px"><div style="font-size:38px">🎉</div>
+        <h3 style="font-size:19px;margin-top:6px">Novidades da Torre</h3>
+        <div style="color:var(--acc);font-family:var(--mono);font-size:12px;font-weight:800;margin-top:4px">versão ${NOV_VER_TORRE}</div></div>
+      <ul style="margin:12px 0;padding:0">${itens}</ul>
+      <button id="novOkTorre" style="width:100%;padding:13px;background:var(--acc);color:#001823;font-weight:800;border:none;border-radius:10px;font-size:14px;cursor:pointer">Entendi 👍</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => { try{ localStorage.setItem('novidades_vista_'+NOV_VER_TORRE,'1'); }catch(e){} ov.remove(); };
+  ov.querySelector('#novOkTorre').onclick = close;
+  ov.onclick = (e) => { if(e.target === ov) close(); };
 }
 
 if(document.readyState === 'loading'){

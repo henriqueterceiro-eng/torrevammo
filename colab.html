@@ -793,7 +793,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v48 · 2026-07-28';
+const APP_VERSION = 'v49 · 2026-07-30';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1504,7 +1504,12 @@ function buildFlow(c){
   const recolhimento = () => {
     // prova de vida da chave — todo recolhimento, com ou sem cliente
     steps.push({ id:'q_chave', label:'A moto possui chave?', tipo:'bool' });
-    if(S.q_chave === true) steps.push({ id:'foto_chave', label:'Foto da chave', tipo:'foto' });
+    if(S.q_chave === true){
+      // Moto COM chave: foto da chave e, logo depois, foto da BATERIA (obrigatória).
+      steps.push({ id:'foto_chave', label:'Foto da chave', tipo:'foto' });
+      steps.push({ id:'foto_bateria', label:'Foto da bateria (obrigatória)', tipo:'foto',
+        aviso:'🔋 Moto com chave: a foto da BATERIA é obrigatória. Tire a foto da bateria antes de concluir o recolhimento.' });
+    }
     steps.push({ id:'moto_recolhida', label:'Moto recolhida', tipo:'check' });
     steps.push({ id:'foto_embarcada', label:'Foto da moto embarcada', tipo:'foto' });
   };
@@ -2497,6 +2502,7 @@ function showApp(){
   document.getElementById('login').classList.add('hide');
   document.getElementById('app').classList.add('show');
   setTimeout(() => map && map.invalidateSize(), 100);
+  setTimeout(mostrarNovidades, 800);   // popup "novidades da versão" — 1x por operador/versão
 }
 
 function renderTopBar(){
@@ -2732,7 +2738,7 @@ function renderStepHtml(s, S){
       <span class="rot-tipo">${tipoLbl}</span>
     </label>
     ${s.tipo === 'obs' ? `<textarea placeholder="${esc(s.placeholder || 'Digite aqui')}">${esc(v || '')}</textarea>` : ''}
-    ${s.tipo === 'foto' ? `<div class="rot-foto">
+    ${s.tipo === 'foto' ? `${s.aviso ? `<div style="background:rgba(245,158,11,0.14);border:1px solid #f59e0b;color:#ffd27a;border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.4;margin:2px 0 7px">${esc(s.aviso)}</div>` : ''}<div class="rot-foto">
       <label>${v ? '🔄 Trocar foto' : '📸 Tirar foto'}<input type="file" accept="image/*" capture="environment"></label>
       ${v ? `<img src="${v}" alt="foto">` : ''}
     </div>` : ''}
@@ -5947,6 +5953,33 @@ document.getElementById('installclose').addEventListener('click', () => {
   document.getElementById('installbanner').classList.remove('show');
   localStorage.setItem('vammo_install_dismiss', String(Date.now()));
 });
+
+// ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
+const NOV_VER = 'v49';
+const NOV_ITENS = [
+  { ic:'🔋', t:'Foto da bateria no recolhimento', d:'Quando a moto tem chave, agora pedimos também a foto da bateria antes de concluir o recolhimento.' },
+  { ic:'✨', t:'Melhorias de estabilidade', d:'Ajustes no rastreamento e no fluxo de atendimento.' }
+];
+function mostrarNovidades(force){
+  try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER)) return; }catch(e){}
+  if(document.getElementById('novOverlay')) return;
+  const ov = document.createElement('div');
+  ov.id = 'novOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,15,0.78);backdrop-filter:blur(6px);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px';
+  const itens = NOV_ITENS.map(i => `<li style="display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,0.04);border:1px solid rgba(125,165,215,0.16);border-radius:10px;padding:11px 13px;margin-bottom:10px;list-style:none">
+      <span style="font-size:18px">${i.ic}</span><div><b style="display:block;font-size:13.5px">${i.t}</b><span style="color:#9aa8bd;font-size:12px">${i.d}</span></div></li>`).join('');
+  ov.innerHTML = `<div style="background:linear-gradient(180deg,#0e1a30,#0b1526);border:1px solid rgba(0,180,229,0.34);border-radius:18px;max-width:420px;width:100%;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,0.6)">
+      <div style="text-align:center;margin-bottom:16px"><div style="font-size:38px">🎉</div>
+        <h3 style="font-size:19px;margin-top:6px">Novidades da atualização</h3>
+        <div style="color:var(--acc);font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:800;margin-top:4px">versão ${NOV_VER}</div></div>
+      <ul style="margin:14px 0;padding:0">${itens}</ul>
+      <button id="novOk" style="width:100%;padding:13px;background:var(--acc);color:#001823;font-weight:800;border:none;border-radius:10px;font-size:14px;cursor:pointer">Entendi 👍</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => { try{ localStorage.setItem('novidades_vista_'+NOV_VER,'1'); }catch(e){} ov.remove(); };
+  ov.querySelector('#novOk').onclick = close;
+  ov.onclick = (e) => { if(e.target === ov) close(); };
+}
 </script>
 </body>
 </html>
