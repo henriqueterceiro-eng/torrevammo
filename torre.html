@@ -227,9 +227,9 @@ body.sidehide #sidebar:hover::after{opacity:0}
 /* Marker das bases Vammo (fixo no mapa) */
 .base-icon{background:transparent !important;border:none !important}
 .base-icon .pin{width:44px;height:54px;position:relative;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.4))}
-.base-icon .pin .body{position:absolute;top:0;left:0;width:44px;height:44px;background:#fff;border:3px solid var(--acc);border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center}
-.base-icon .pin .body svg{transform:rotate(45deg);height:18px;width:auto;color:var(--acc)}
-.base-icon .pin::after{content:'';position:absolute;top:-3px;left:-3px;width:50px;height:50px;border-radius:50%;border:2px solid rgba(0,180,229,0.3);opacity:0.5;pointer-events:none;animation:basePulse 3s ease-out infinite}
+.base-icon .pin .body{position:absolute;top:0;left:0;width:44px;height:44px;background:linear-gradient(145deg,#22d3ee 0%,#00B4E5 45%,#0096C0 100%);border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(0,180,229,0.75), inset 0 2px 5px rgba(255,255,255,0.5), inset 0 -3px 6px rgba(0,60,80,0.22)}
+.base-icon .pin .body svg{transform:rotate(45deg);height:20px;width:auto;color:#fff;filter:drop-shadow(0 1px 1px rgba(0,60,80,0.4))}
+.base-icon .pin::after{content:'';position:absolute;top:-4px;left:-4px;width:52px;height:52px;border-radius:50%;border:2px solid rgba(0,200,255,0.55);opacity:0.6;pointer-events:none;animation:basePulse 3s ease-out infinite}
 @keyframes basePulse{0%{transform:scale(1);opacity:0.5}100%{transform:scale(1.4);opacity:0}}
 .base-icon .lbl{position:absolute;top:48px;left:50%;transform:translateX(-50%);background:#fff;color:#001823;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;white-space:nowrap;border:1px solid var(--acc);font-family:var(--mono);z-index:3;letter-spacing:0.3px}
 .base-tooltip{background:rgba(255,255,255,0.96) !important;color:#001823 !important;border:1px solid var(--acc) !important;font-size:11px !important;padding:8px 12px;border-radius:8px;font-weight:500}
@@ -1892,9 +1892,9 @@ function renderParceiroMarkers(){
     const p = parceiros[id];
     if(!p || p.ativo === false || p.lat == null || p.lng == null) continue;
     seen.add(id);
-    const html = `<div class="pin"><div class="body"><span class="em">🚚</span></div><div class="lbl">${esc(p.nome || 'Parceiro')}</div></div>`;
+    const html = `<div class="pin"><div class="body"><span class="em">🤝</span></div><div class="lbl">${esc(p.nome || 'Parceiro')}</div></div>`;
     const icon = L.divIcon({ className:'parc-icon', html, iconSize:[44,68], iconAnchor:[22,52] });
-    const tip = `<b style="color:#f59e0b">🚚 ${esc(p.nome || 'Parceiro')}</b><br>${esc(p.endereco || '')}` +
+    const tip = `<b style="color:#f59e0b">🤝 ${esc(p.nome || 'Parceiro')}</b><br>${esc(p.endereco || '')}` +
       (p.contato ? `<br><small>Contato: ${esc(p.contato)}${p.cel ? ' · '+esc(p.cel) : ''}</small>` : '') +
       (p.baseDescarga ? `<br><small>Descarga: ${esc(p.baseDescarga)}</small>` : '') +
       ((p.slots && p.slots.length) ? `<br><small style="color:#ffcf7a">🏍 ${p.slots.length} moto(s) na base: ${p.slots.map(s => esc(s.placa || '—')).join(', ')}</small>` : '');
