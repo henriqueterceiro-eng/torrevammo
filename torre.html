@@ -538,9 +538,9 @@ body.sidehide #sidebar:hover::after{opacity:0}
         <div class="tab" data-tab="motoristas">Colaboradores <span id="tab2n">0</span></div>
         <button id="sidehidebtn" title="Ocultar o menu lateral — passe o mouse na borda esquerda pra reabrir (ou clique no 📌 pra fixar)"></button>
       </div>
-      <div id="origemfilter"></div>
       <div id="catfilter"></div>
       <div id="ctrlfilter" style="display:none"></div>
+      <div id="origemfilter"></div>
       <div id="listwrap"></div>
       <div id="motwrap"></div>
     </div>
@@ -1120,7 +1120,7 @@ let origemFiltro = 'todos';      // filtro de origem dos chamados: 'todos' | 'va
 function ehTerceiro(c){ return !!(c && c.terceiroId); }
 function renderOrigemFilter(){
   const el = document.getElementById('origemfilter'); if(!el) return;
-  el.style.cssText = 'display:' + (tab === 'chamados' ? 'flex' : 'none') + ';gap:6px;padding:9px 10px;flex-wrap:wrap;border-bottom:1px solid var(--bdr);background:rgba(0,0,0,0.16)';
+  el.style.cssText = 'display:' + (tab === 'chamados' ? 'flex' : 'none') + ';gap:6px;padding:9px 10px;flex-wrap:wrap;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);background:rgba(0,0,0,0.16)';
   const ativos = chamados.filter(c => !chamadoOcultoPorTempo(c) && c.status !== 'concluido' && c.status !== 'cancelado');
   const nV = ativos.filter(c => !ehTerceiro(c)).length;
   const nE = ativos.filter(c => ehTerceiro(c)).length;
