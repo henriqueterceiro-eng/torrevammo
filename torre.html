@@ -538,6 +538,7 @@ body.sidehide #sidebar:hover::after{opacity:0}
         <div class="tab" data-tab="motoristas">Colaboradores <span id="tab2n">0</span></div>
         <button id="sidehidebtn" title="Ocultar o menu lateral — passe o mouse na borda esquerda pra reabrir (ou clique no 📌 pra fixar)"></button>
       </div>
+      <div id="origemfilter"></div>
       <div id="catfilter"></div>
       <div id="ctrlfilter" style="display:none"></div>
       <div id="listwrap"></div>
@@ -554,6 +555,7 @@ body.sidehide #sidebar:hover::after{opacity:0}
         <button data-t="incidents" class="ttg" title="Acidentes / obras / engarrafamentos"><span class="ic">⚠️</span><span>Incid.</span></button>
         <button data-t="heatmap" class="ttg" title="Mapa de calor de chamados — vermelho onde tem mais chamados e/ou mais antigos"><span class="ic">🔥</span><span>Calor</span></button>
         <button id="iotbtn" class="ttg" title="IoT Ping — onde a moto de cada chamado está pingando de verdade (no endereço ou em outro lugar?)"><span class="ic">📡</span><span>IoT</span></button>
+        <button data-t="parceiros" class="ttg" title="Mostrar/ocultar as bases dos prestadores parceiros (terceiros) no mapa"><span class="ic">🤝</span><span>Prest.</span></button>
       </div>
       <div id="iotpanel"></div>
       <div id="detail"></div>
@@ -931,7 +933,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v53 · 2026-07-30';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v54 · 2026-07-30';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1114,6 +1116,18 @@ let catFiltro = new Set(); // filtro por CATEGORIA de chamado (escurece no mapa/
 let ctrlFiltro = new Set(); // filtro por CONTROLADOR responsável (admin) — acende só os marcados
 let selId = null;
 let _chamadoAbertoMoto = null;   // último chamado aberto (pra mostrar a moto/perguntar 1x ao abrir)
+let origemFiltro = 'todos';      // filtro de origem dos chamados: 'todos' | 'vammo' | 'externo'
+function ehTerceiro(c){ return !!(c && c.terceiroId); }
+function renderOrigemFilter(){
+  const el = document.getElementById('origemfilter'); if(!el) return;
+  el.style.cssText = 'display:' + (tab === 'chamados' ? 'flex' : 'none') + ';gap:5px;padding:8px 10px 2px;flex-wrap:wrap';
+  const ativos = chamados.filter(c => !chamadoOcultoPorTempo(c) && c.status !== 'concluido' && c.status !== 'cancelado');
+  const nV = ativos.filter(c => !ehTerceiro(c)).length;
+  const nE = ativos.filter(c => ehTerceiro(c)).length;
+  const seg = (k, lbl, n, cor) => `<button class="catchip${origemFiltro === k ? ' on' : ''}" data-origem="${k}"${(origemFiltro === k && cor) ? ` style="border-color:${cor};background:${cor}22;color:${cor}"` : ''}>${lbl}${n != null ? ` <span class="cn">${n}</span>` : ''}</button>`;
+  el.innerHTML = seg('todos', 'Todos', null, '') + seg('vammo', '🏍 Vammo', nV, '#00B4E5') + seg('externo', '🤝 Externos', nE, '#f59e0b');
+  el.querySelectorAll('[data-origem]').forEach(b => b.onclick = () => { origemFiltro = b.dataset.origem; renderAll(); });
+}
 let tab = 'chamados';
 let addMode = false;
 let pendingChamado = null;
@@ -1626,9 +1640,10 @@ function initMap(){
   });
 
   // Layer switcher
+  cfg.showParceiros = cfg.showParceiros !== false;   // prestadores no mapa: PADRÃO ligado
   $$('#layerswitch button').forEach(b => {
     if(b.dataset.t){
-      const flagMap = { traffic: 'showTraffic', incidents: 'showIncidents', heatmap: 'showHeatmap' };
+      const flagMap = { traffic: 'showTraffic', incidents: 'showIncidents', heatmap: 'showHeatmap', parceiros: 'showParceiros' };
       b.classList.toggle('active', !!cfg[flagMap[b.dataset.t]]);
       b.onclick = () => {
         if((b.dataset.t === 'traffic' || b.dataset.t === 'incidents') && !TT.has()){
@@ -1637,6 +1652,7 @@ function initMap(){
         if(b.dataset.t === 'traffic') toggleTraffic();
         else if(b.dataset.t === 'incidents') toggleIncidents();
         else if(b.dataset.t === 'heatmap') toggleHeatmap();
+        else if(b.dataset.t === 'parceiros') toggleParceiros();
       };
     } else {
       b.onclick = () => applyLayer(b.dataset.l);
@@ -1658,6 +1674,13 @@ function toggleTraffic(force){
   cfg.showTraffic = !!trafficLayer;
   saveCfg2(cfg);
   $$('#layerswitch button[data-t="traffic"]').forEach(b => b.classList.toggle('active', !!trafficLayer));
+}
+
+function toggleParceiros(force){
+  cfg.showParceiros = force !== undefined ? force : (cfg.showParceiros === false);
+  saveCfg2(cfg);
+  $$('#layerswitch button[data-t="parceiros"]').forEach(b => b.classList.toggle('active', cfg.showParceiros));
+  renderParceiroMarkers();
 }
 
 function toggleIncidents(force){
@@ -1865,7 +1888,7 @@ let parceiroMarkers = {};
 function renderParceiroMarkers(){
   if(!map) return;
   const seen = new Set();
-  for(const id in parceiros){
+  if(cfg.showParceiros !== false) for(const id in parceiros){
     const p = parceiros[id];
     if(!p || p.ativo === false || p.lat == null || p.lng == null) continue;
     seen.add(id);
@@ -1873,7 +1896,8 @@ function renderParceiroMarkers(){
     const icon = L.divIcon({ className:'parc-icon', html, iconSize:[44,68], iconAnchor:[22,52] });
     const tip = `<b style="color:#f59e0b">🚚 ${esc(p.nome || 'Parceiro')}</b><br>${esc(p.endereco || '')}` +
       (p.contato ? `<br><small>Contato: ${esc(p.contato)}${p.cel ? ' · '+esc(p.cel) : ''}</small>` : '') +
-      (p.baseDescarga ? `<br><small>Descarga: ${esc(p.baseDescarga)}</small>` : '');
+      (p.baseDescarga ? `<br><small>Descarga: ${esc(p.baseDescarga)}</small>` : '') +
+      ((p.slots && p.slots.length) ? `<br><small style="color:#ffcf7a">🏍 ${p.slots.length} moto(s) na base: ${p.slots.map(s => esc(s.placa || '—')).join(', ')}</small>` : '');
     if(parceiroMarkers[id]){
       parceiroMarkers[id].setIcon(icon); parceiroMarkers[id].setLatLng([p.lat, p.lng]); parceiroMarkers[id].setTooltipContent(tip);
     } else {
@@ -1891,7 +1915,7 @@ function renderParceiros(){
   $('#cadcount').textContent = `${list.length} parceiro${list.length===1?'':'s'}`;
   const opts = ['Osasco','São Bernardo','Santa Justina','Mooca'].map(b => `<option>${b}</option>`).join('');
   const rows = list.map(p => `<div class="cdrow" style="grid-template-columns:1.1fr 1.7fr 0.9fr 0.9fr 0.9fr 62px">
-      <div><div class="cd-nm">${esc(p.nome||'?')}</div>${p.lat==null?'<div class="cd-sub" style="color:#fbbf24">⚠ sem coordenada</div>':''}</div>
+      <div><div class="cd-nm">${esc(p.nome||'?')}</div>${p.lat==null?'<div class="cd-sub" style="color:#fbbf24">⚠ sem coordenada</div>':''}${(p.slots&&p.slots.length)?`<div class="cd-sub" style="color:#ffcf7a;margin-top:2px">🏍 ${p.slots.length} moto(s) na base</div><div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">${p.slots.map(s=>`<span style="font-size:9.5px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:#ffcf7a;padding:1px 5px;border-radius:6px;font-family:var(--mono)">${esc(s.placa||'—')} <a onclick="baixaParceiroSlot('${p.id}','${s.id}');event.stopPropagation()" style="cursor:pointer;color:#fca5a5" title="Dar baixa (moto saiu da base do parceiro)">✕</a></span>`).join('')}</div>`:''}</div>
       <div style="font-size:11px;color:var(--txt2)">${esc(p.endereco||'—')}</div>
       <div style="font-size:11px">${esc(p.contato||'—')}</div>
       <div style="font-size:11px">${esc(p.cel||'—')}</div>
@@ -2001,6 +2025,139 @@ window.seedParceiros = function(){
   showToast('🤝 ' + n + ' parceiros importados');
   logTorre('parceiro_seed', { n, operador: getOperadorTorre() });
 };
+window.baixaParceiroSlot = function(pid, sid){
+  const p = parceiros[pid]; if(!p || !Array.isArray(p.slots)) return;
+  const s = p.slots.find(x => x.id === sid);
+  if(!confirm('Dar baixa na moto ' + (s && s.placa ? s.placa : '') + ' da base do parceiro?\n\n(a moto saiu da base do terceiro)')) return;
+  const np = Object.assign({}, p); np.slots = p.slots.filter(x => x.id !== sid);
+  parceiros[pid] = np; STORE.saveParceiro(np);
+  renderParceiros(); renderParceiroMarkers();
+  logTorre('parceiro_baixa', { parceiroId: pid, slotId: sid, placa: (s && s.placa) || null, operador: getOperadorTorre() });
+};
+
+// ===== CHAMADOS EXTERNOS (encaminhados a PRESTADORES/terceiros) =====
+// O terceiro NÃO usa o app colab (sem GPS/fila). A torre encaminha, e o controlador
+// encerra manualmente. Ao concluir "Recolhida", a moto entra nos slots da base do parceiro.
+function atribuirTerceiro(chamadoId, terceiroId){
+  const c = chamados.find(x => x.id === chamadoId); if(!c) return;
+  if(!terceiroId){
+    c.terceiroId = null; c.terceiroNome = null;
+    if(c.status === 'em_rota') c.status = 'novo';
+    STORE.updateChamado(chamadoId, { terceiroId: null, terceiroNome: null, status: c.status });
+    logTorre('desvincula_terceiro', { chamadoId, operador: getOperadorTorre() });
+    renderAll(); return;
+  }
+  const p = parceiros[terceiroId]; if(!p) return;
+  if(c.motoristaId){ try { queueRemove(chamadoId); STORE.setAllQueues(loadQueues()); } catch(_){} }
+  const operador = getOperadorTorre();
+  c.motoristaId = null; c.motoristaNome = null; c.motoristaPlaca = null;
+  c.terceiroId = terceiroId; c.terceiroNome = p.nome || null; c.terceiroContato = p.contato || null;
+  c.status = 'em_rota';
+  c.atribuidoPor = c.atribuidoPor || operador;
+  if(!c.atribuidoEm) c.atribuidoEm = Date.now();
+  c.atribuidoTerceiroEm = Date.now();
+  STORE.updateChamado(chamadoId, { terceiroId, terceiroNome: c.terceiroNome, terceiroContato: c.terceiroContato, motoristaId: null, motoristaNome: null, motoristaPlaca: null, status: 'em_rota', atribuidoPor: c.atribuidoPor, atribuidoEm: c.atribuidoEm, atribuidoTerceiroEm: c.atribuidoTerceiroEm });
+  logTorre('atribui_terceiro', { chamadoId, terceiroId, terceiroNome: c.terceiroNome, cliente: c.cliente||null, placa: c.placa||null, operador });
+  showToast('🤝 Encaminhado para ' + (c.terceiroNome || 'terceiro'));
+  renderAll();
+}
+
+function _fileToDataUrl(file, maxW, cb){
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
+      try {
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        cb(cv.toDataURL('image/jpeg', 0.7));
+      } catch(_){ cb(reader.result); }
+    };
+    img.onerror = () => cb(reader.result);
+    img.src = reader.result;
+  };
+  reader.onerror = () => cb(null);
+  reader.readAsDataURL(file);
+}
+
+// Encerramento MINIMALISTA operado pelo controlador (sem assinatura): encontrada? → desfecho → foto/obs opcionais.
+function abrirConcluirTerceiro(chamadoId){
+  const c = chamados.find(x => x.id === chamadoId); if(!c) return;
+  if(document.getElementById('concTerc')) return;
+  const st = { encontrada: null, desfecho: null, foto: null, obs: '' };
+  const ov = document.createElement('div');
+  ov.id = 'concTerc';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10020;padding:20px';
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.onclick = (e) => { if(e.target === ov) close(); };
+  function render(){
+    const precisaDesf = st.encontrada === true && st.desfecho == null;
+    ov.innerHTML = `<div style="background:var(--surf);border:1px solid var(--conc);border-radius:14px;width:100%;max-width:400px;padding:20px;max-height:90vh;overflow:auto">
+      <h2 style="font-size:16px;margin-bottom:4px">✅ Concluir chamado externo</h2>
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:14px">${esc(c.cliente||'?')} · ${esc(c.placa||'sem placa')} · 🤝 ${esc(c.terceiroNome||'terceiro')}</div>
+      <div style="font-weight:700;font-size:12px;margin-bottom:7px">A moto foi encontrada?</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button data-enc="sim" style="flex:1;padding:10px;font-weight:700${st.encontrada===true?';outline:2px solid var(--acc)':''}">Sim</button>
+        <button data-enc="nao" style="flex:1;padding:10px;font-weight:700${st.encontrada===false?';outline:2px solid var(--novo)':''}">Não</button>
+      </div>
+      ${st.encontrada === true ? `
+        <div style="font-weight:700;font-size:12px;margin-bottom:7px">Desfecho</div>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:12px">
+          <button data-desf="recolhido" style="padding:10px;text-align:left;font-weight:700${st.desfecho==='recolhido'?';outline:2px solid var(--acc)':''}">🏍 Recolhida <span style="font-weight:500;font-size:10px;color:var(--txt2)">(vai pra base do terceiro)</span></button>
+          <button data-desf="reparado" style="padding:10px;text-align:left;font-weight:700${st.desfecho==='reparado'?';outline:2px solid var(--acc)':''}">🔧 Resolvida no local</button>
+        </div>` : ''}
+      ${st.encontrada === false ? `<div style="background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.4);color:#fca5a5;border-radius:8px;padding:9px 11px;font-size:11.5px;margin-bottom:12px">🔍 Moto não encontrada no local.</div>` : ''}
+      ${st.encontrada !== null ? `
+        <label style="font-size:11px;color:var(--txt2);font-weight:600">📷 Foto (opcional)</label>
+        <div style="margin:4px 0 10px"><input type="file" accept="image/*" id="concFoto" style="font-size:11px">${st.foto?' <span style="color:var(--conc);font-size:11px">✓ foto anexada</span>':''}</div>
+        <label style="font-size:11px;color:var(--txt2);font-weight:600">✏ Observação (opcional)</label>
+        <textarea id="concObs" placeholder="O que o terceiro reportou…" style="width:100%;margin:4px 0 12px;min-height:52px">${esc(st.obs)}</textarea>
+        <button id="concDo" class="primary" ${precisaDesf?'disabled':''} style="width:100%;padding:12px;background:var(--conc);border-color:var(--conc);color:#fff;font-weight:800${precisaDesf?';opacity:.5':''}">Concluir chamado</button>
+      ` : ''}
+      <button id="concCancel" style="width:100%;margin-top:8px;padding:8px;background:transparent;border:1px solid var(--bdr);color:var(--txt2);font-size:12px">Cancelar</button>
+    </div>`;
+    ov.querySelectorAll('[data-enc]').forEach(b => b.onclick = () => { st.encontrada = b.dataset.enc === 'sim'; st.desfecho = (st.encontrada === false) ? 'nao_encontrada' : null; render(); });
+    ov.querySelectorAll('[data-desf]').forEach(b => b.onclick = () => { st.desfecho = b.dataset.desf; render(); });
+    const fi = ov.querySelector('#concFoto'); if(fi) fi.onchange = () => { const f = fi.files[0]; if(f) _fileToDataUrl(f, 1200, (d) => { st.foto = d; render(); }); };
+    const ob = ov.querySelector('#concObs'); if(ob) ob.oninput = () => { st.obs = ob.value; };
+    const cc = ov.querySelector('#concCancel'); if(cc) cc.onclick = close;
+    const cd = ov.querySelector('#concDo'); if(cd) cd.onclick = () => {
+      if(st.desfecho == null){ showToast('Escolha o desfecho', true); return; }
+      concluirTerceiro(chamadoId, st.desfecho, { foto: st.foto, obs: (ob ? ob.value : st.obs) });
+      close();
+    };
+  }
+  render();
+}
+
+function concluirTerceiro(chamadoId, desfecho, extra){
+  const c = chamados.find(x => x.id === chamadoId); if(!c) return;
+  const ts = Date.now();
+  const rot = Object.assign({}, c.rotinaSteps || {});
+  if(desfecho === 'nao_encontrada'){ rot.moto_encontrada = false; if(extra && extra.foto) rot.foto_local_vazio = extra.foto; if(extra && extra.obs) rot.obs_nao_encontrada = extra.obs; }
+  else if(desfecho === 'recolhido'){ rot.moto_encontrada = true; rot.moto_recolhida = true; if(extra && extra.foto) rot.foto_embarcada = extra.foto; if(extra && extra.obs) rot.obs_terceiro = extra.obs; }
+  else { rot.moto_encontrada = true; rot.resolveu = true; if(extra && extra.foto) rot.foto_reparada = extra.foto; if(extra && extra.obs) rot.obs_terceiro = extra.obs; }
+  const operador = getOperadorTorre();
+  c.desfecho = desfecho; c.concluidoEm = ts; c.rotinaSteps = rot; c.fechadoPelaTorre = true; c.fechadoPor = operador;
+  STORE.updateChamado(chamadoId, { concluidoEm: ts, desfecho, rotinaSteps: rot, fechadoPelaTorre: true, fechadoPor: operador });
+  if(desfecho === 'recolhido' && c.terceiroId && parceiros[c.terceiroId]){
+    const p = Object.assign({}, parceiros[c.terceiroId]);
+    p.slots = Array.isArray(p.slots) ? p.slots.slice() : [];
+    p.slots.push({ id: 'pslot_' + ts.toString(36) + '_' + Math.floor(Math.random()*9999).toString(36), placa: c.placa || null, chamadoId, recolhidoEm: ts, clienteName: c.cliente || null });
+    parceiros[c.terceiroId] = p; STORE.saveParceiro(p);
+    STORE.updateChamado(chamadoId, { recolhidoPorParceiroId: c.terceiroId, recolhidoPorParceiroNome: p.nome || null, recolhidoEm: ts });
+    logTorre('parceiro_recolhe', { parceiroId: c.terceiroId, placa: c.placa||null, chamadoId, operador });
+    renderParceiroMarkers();
+    if($('#cadmodal').style.display === 'flex' && cadTab === 'parceiro') renderParceiros();
+  }
+  updateStatus(chamadoId, 'concluido');   // housekeeping: status/statusMap/fila/rota/sync
+  logTorre('encerramento_terceiro', { chamadoId, desfecho, terceiroId: c.terceiroId||null, cliente: c.cliente||null, placa: c.placa||null, operador });
+  showToast('✅ Chamado concluído' + (desfecho === 'recolhido' ? ' · moto na base do terceiro' : ''));
+  renderAll();
+}
 
 // ===== ALERTA DE OCIOSIDADE (colab com chamado atribuído parado > 20min) =====
 // Regra: chamado ATRIBUÍDO e ainda NÃO iniciado + colab online parado (sem se mover) por > 20min.
@@ -2451,7 +2608,8 @@ function renderPills(){
 }
 
 function filtered(){
-  return chamados.filter(c => !chamadoOcultoPorTempo(c) && (!filtro || c.status === filtro));
+  return chamados.filter(c => !chamadoOcultoPorTempo(c) && (!filtro || c.status === filtro)
+    && (origemFiltro === 'todos' || (origemFiltro === 'externo' ? ehTerceiro(c) : !ehTerceiro(c))));
 }
 
 // ===== FILTRO POR CATEGORIA (escurece os não-selecionados; não remove) =====
@@ -2534,6 +2692,7 @@ function renderList(){
       ? `<span class="b b-mot" style="background:${mot.color}">${esc(mot.nome.split(' ')[0])}</span>`
       : (motId && c.motoristaNome ? `<span class="b b-mot" style="background:#6b7280" title="Colaborador offline — segue responsável">${esc(c.motoristaNome.split(' ')[0])} ⚫</span>` : '');
     const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>`;
+    const tercBadge = ehTerceiro(c) ? `<span class="b" style="background:#f59e0b;color:#1a1200" title="Encaminhado ao prestador ${esc(c.terceiroNome||'')}">🤝 ${esc((c.terceiroNome||'Externo').split(' ')[0])}</span>` : '';
     const numTag = numMap[c.id] ? `<span style="font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800;margin-right:5px">#${numMap[c.id]}</span>` : '';
     const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : ((catDim(c) || ctrlDim(c)) ? ' style="opacity:0.3"' : '');
     return `<div class="card${sel} ${al}" data-id="${c.id}"${fadeStyle}>
@@ -2541,7 +2700,7 @@ function renderList(){
         <div class="nome">${numTag}${esc(c.cliente||'?')}</div>
         <div class="ico">${ico(c.motivo)}</div>
       </div>
-      <div class="badges">${stBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
+      <div class="badges">${stBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
       <div class="motivo">${esc(c.motivo||'—')}</div>
       ${c.endereco ? `<div class="end">📍 ${esc(c.endereco)}</div>` : ''}
       <div class="meta"><span>${esc(c.placa||'—')}</span><span>${fmtTime(c.ts)} · ${fmtElapsed(c.ts)}</span></div>
@@ -2842,6 +3001,8 @@ function renderDetail(){
   const gmaps = c.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.endereco + ', São Paulo, SP')}` : '';
 
   const _numCh = buildNumeroMap()[c.id];
+  const parcList = Object.values(parceiros).filter(p => p.ativo !== false).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+  const tercOpts = '<option value="">— selecionar terceiro —</option>' + parcList.map(p => `<option value="${p.id}"${p.id===c.terceiroId?' selected':''}>${esc(p.nome)}${p.baseDescarga?' · '+esc(p.baseDescarga):''}</option>`).join('');
   $('#detail').innerHTML = `
     <button class="x" onclick="closeDetail()">×</button>
     <h3>${_numCh ? `<span style="font-family:var(--mono);font-size:13px;background:rgba(0,180,229,0.15);color:var(--acc);padding:1px 8px;border-radius:6px;margin-right:6px;font-weight:800">#${_numCh}</span>` : ''}${ico(c.motivo)} ${esc(c.cliente||'?')}</h3>
@@ -2965,6 +3126,26 @@ function renderDetail(){
       <button id="dafinforce" style="width:100%;margin-top:8px;padding:9px;background:rgba(220,38,38,0.14);border:1px solid #dc2626;color:#fca5a5;font-size:12px;font-weight:800;border-radius:6px;cursor:pointer">🛑 Finalizar forçado pela Torre <span style="font-weight:500;opacity:0.8">(gera log)</span></button>
     ` : ''}
     ${c.finalizadoForcado ? `<div style="margin-top:8px;padding:7px 10px;background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.5);border-radius:6px;font-size:10px;color:#fca5a5;line-height:1.4">🛑 <strong>Finalizado forçado pela Torre</strong>${c.finalizadoForcadoPor?' por '+esc(c.finalizadoForcadoPor):''}${c.finalizadoForcadoEm?' · '+fmtTime(c.finalizadoForcadoEm):''}</div>` : ''}
+    ${(c.status !== 'concluido' && c.status !== 'cancelado') ? `
+      <div class="assign" style="border-top:1px dashed rgba(245,158,11,0.4);margin-top:10px;padding-top:10px">
+        ${c.terceiroId ? `
+          <div style="display:flex;align-items:center;gap:9px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:9px 11px">
+            <span style="font-size:18px">🤝</span>
+            <div style="flex:1"><div style="font-weight:800;font-size:12px;color:#ffcf7a">Externo · ${esc(c.terceiroNome||'terceiro')}</div>
+            ${(() => { const p = parceiros[c.terceiroId]; return p ? `<div style="font-size:10.5px;color:var(--txt2)">${esc(p.contato||'')}${p.cel?' · '+esc(p.cel):''}${p.baseDescarga?' · descarga: '+esc(p.baseDescarga):''}</div>` : ''; })()}</div>
+          </div>
+          <button id="daconcluir" class="primary" style="width:100%;margin-top:8px;padding:11px;background:var(--conc);border-color:var(--conc);color:#fff;font-weight:800">✅ Concluir chamado</button>
+          <button class="unassign" id="datercun" style="margin-top:6px">✕ Desvincular terceiro</button>
+        ` : `
+          <label>🤝 Encaminhar para terceiro (prestador)</label>
+          <div class="assign-row">
+            <select id="tercsel">${tercOpts}</select>
+            <button id="tercok" class="primary" style="background:#f59e0b;border-color:#f59e0b;color:#1a1200">Encaminhar</button>
+          </div>
+          ${parcList.length === 0 ? '<div style="font-size:10.5px;color:var(--txt3);margin-top:5px">Nenhum parceiro cadastrado — cadastre em 📋 Cadastros → 🤝 Parceiros.</div>' : ''}
+        `}
+      </div>
+    ` : ''}
     ${motIds.length ? `
       <div class="assign">
         <label>Atribuir a colaborador (${onlineMots.length} online)</label>
@@ -3024,6 +3205,9 @@ function renderDetail(){
     }
   };
   const ok = $('#daok'); if(ok) ok.onclick = () => assignWithMotoCheck(c.id, $('#dasel').value);
+  { const t = $('#tercok'); if(t) t.onclick = () => { const tid = $('#tercsel').value; if(tid) atribuirTerceiro(c.id, tid); }; }
+  { const t = $('#datercun'); if(t) t.onclick = () => { if(confirm('Desvincular o terceiro deste chamado?\n\nO chamado volta pra fila aberta.')) atribuirTerceiro(c.id, ''); }; }
+  { const t = $('#daconcluir'); if(t) t.onclick = () => abrirConcluirTerceiro(c.id); }
   const un = $('#daun'); if(un) un.onclick = () => {
     const motNome = curMot ? curMot.nome : 'o colaborador';
     if(!confirm(`Desatribuir "${c.cliente}" de ${motNome}?\n\nO chamado volta pra fila aberta e o colaborador é notificado.`)) return;
@@ -5853,6 +6037,7 @@ function setTab(t){
   $('#listwrap').style.display = t === 'chamados' ? 'block' : 'none';
   { const cf = $('#catfilter'); if(cf) cf.style.display = t === 'chamados' ? 'flex' : 'none'; }
   $('#motwrap').classList.toggle('show', t === 'motoristas');
+  { const of = $('#origemfilter'); if(of) of.style.display = t === 'chamados' ? 'flex' : 'none'; }
 }
 
 // ============== TOAST ==============
@@ -6815,6 +7000,7 @@ function renderMotoPingMarkers(){
 
 function renderAll(){
   renderPills();
+  renderOrigemFilter();
   renderCatFilter();
   renderCtrlFilter();
   renderList();
@@ -7534,13 +7720,13 @@ function init(){
 }
 
 // ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
-const NOV_VER_TORRE = 'v53';
+const NOV_VER_TORRE = 'v54';
 const NOV_ITENS_TORRE = [
-  { ic:'📡', t:'IoT sempre ligado', d:'A localização real da moto (IoT) agora é padrão no mapa — sem precisar ativar filtro. Ao abrir um chamado, a moto aparece na hora.' },
-  { ic:'🛵', t:'Moto longe do chamado', d:'Se a moto estiver longe do endereço, a torre pergunta se quer mandar o colaborador pro local da moto ou do chamado.' },
-  { ic:'⏱', t:'Alerta de ociosidade', d:'Aviso quando um colaborador com chamado atribuído fica parado por mais de 20 minutos.' },
-  { ic:'🤝', t:'Motoristas parceiros no mapa', d:'Cadastre terceiros nos Cadastros — eles aparecem no mapa com ícone âmbar de caminhão.' },
-  { ic:'🔎', t:'Busca por placa no relatório', d:'Novo campo de busca por placa na tela de relatórios.' }
+  { ic:'🤝', t:'Chamados para prestadores (Externos)', d:'Encaminhe um chamado a um terceiro pelo detalhe. Filtro Todos / Vammo / Externos na lista da esquerda.' },
+  { ic:'✅', t:'Concluir chamado externo', d:'O controlador encerra o chamado do terceiro num fluxo rápido (encontrada → desfecho → foto/obs).' },
+  { ic:'🏍', t:'Base do parceiro', d:'Motos recolhidas por um terceiro entram na base dele (veja no pino âmbar e no cadastro do parceiro).' },
+  { ic:'🗺️', t:'Filtro de Prestadores no mapa', d:'Botão 🤝 Prest. no canto direito liga/desliga as bases dos parceiros.' },
+  { ic:'📡', t:'IoT padrão + alerta de ociosidade', d:'A moto aparece ao abrir o chamado; aviso quando um colaborador fica parado com chamado atribuído.' }
 ];
 function mostrarNovidadesTorre(force){
   try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER_TORRE)) return; }catch(e){}
