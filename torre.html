@@ -1120,7 +1120,7 @@ let origemFiltro = 'todos';      // filtro de origem dos chamados: 'todos' | 'va
 function ehTerceiro(c){ return !!(c && c.terceiroId); }
 function renderOrigemFilter(){
   const el = document.getElementById('origemfilter'); if(!el) return;
-  el.style.cssText = 'display:' + (tab === 'chamados' ? 'flex' : 'none') + ';gap:5px;padding:8px 10px 2px;flex-wrap:wrap';
+  el.style.cssText = 'display:' + (tab === 'chamados' ? 'flex' : 'none') + ';gap:6px;padding:9px 10px;flex-wrap:wrap;border-bottom:1px solid var(--bdr);background:rgba(0,0,0,0.16)';
   const ativos = chamados.filter(c => !chamadoOcultoPorTempo(c) && c.status !== 'concluido' && c.status !== 'cancelado');
   const nV = ativos.filter(c => !ehTerceiro(c)).length;
   const nE = ativos.filter(c => ehTerceiro(c)).length;
