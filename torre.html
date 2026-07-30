@@ -227,8 +227,8 @@ body.sidehide #sidebar:hover::after{opacity:0}
 /* Marker das bases Vammo (fixo no mapa) */
 .base-icon{background:transparent !important;border:none !important}
 .base-icon .pin{position:relative;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 5px 9px rgba(0,0,0,0.5))}
-.base-icon .badge{background:linear-gradient(145deg,#22d3ee 0%,#00B4E5 46%,#0096C0 100%);border:2.5px solid #fff;border-radius:12px;padding:6px 12px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;box-shadow:0 0 16px rgba(0,180,229,0.75), inset 0 2px 5px rgba(255,255,255,0.5), inset 0 -3px 6px rgba(0,60,80,0.2)}
-.base-icon .badge img{height:12px;width:auto;display:block;filter:drop-shadow(0 1px 1px rgba(0,60,80,0.45))}
+.base-icon .badge{background:linear-gradient(145deg,#22d3ee 0%,#00B4E5 46%,#0096C0 100%);border:2.5px solid #fff;border-radius:12px;padding:6px 12px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;width:min-content;min-width:56px;box-shadow:0 0 16px rgba(0,180,229,0.75), inset 0 2px 5px rgba(255,255,255,0.5), inset 0 -3px 6px rgba(0,60,80,0.2)}
+.base-icon .badge img{width:100%;height:auto;max-height:15px;display:block;object-fit:contain;filter:drop-shadow(0 1px 1px rgba(0,60,80,0.45))}
 .base-icon .badge .bn{font-size:9px;font-weight:800;color:#fff;font-family:var(--mono);letter-spacing:0.4px;line-height:1;text-shadow:0 1px 2px rgba(0,60,80,0.5);white-space:nowrap}
 .base-icon .tip{width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:11px solid #fff;margin-top:-1px}
 .base-tooltip{background:rgba(255,255,255,0.96) !important;color:#001823 !important;border:1px solid var(--acc) !important;font-size:11px !important;padding:8px 12px;border-radius:8px;font-weight:500}
