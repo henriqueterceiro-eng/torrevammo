@@ -227,10 +227,10 @@ body.sidehide #sidebar:hover::after{opacity:0}
 /* Marker das bases Vammo (fixo no mapa) */
 .base-icon{background:transparent !important;border:none !important}
 .base-icon .pin{position:relative;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 5px 9px rgba(0,0,0,0.5))}
-.base-icon .badge{background:linear-gradient(145deg,#22d3ee 0%,#00B4E5 46%,#0096C0 100%);border:2.5px solid #fff;border-radius:12px;padding:6px 12px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;width:min-content;min-width:56px;box-shadow:0 0 16px rgba(0,180,229,0.75), inset 0 2px 5px rgba(255,255,255,0.5), inset 0 -3px 6px rgba(0,60,80,0.2)}
-.base-icon .badge img{width:100%;height:auto;max-height:15px;display:block;object-fit:contain;filter:drop-shadow(0 1px 1px rgba(0,60,80,0.45))}
-.base-icon .badge .bn{font-size:9px;font-weight:800;color:#fff;font-family:var(--mono);letter-spacing:0.4px;line-height:1;text-shadow:0 1px 2px rgba(0,60,80,0.5);white-space:nowrap}
-.base-icon .tip{width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:11px solid #fff;margin-top:-1px}
+.base-icon .badge{background:linear-gradient(145deg,#22d3ee 0%,#00B4E5 46%,#0096C0 100%);border:2px solid #fff;border-radius:9px;padding:4px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;width:80px;box-shadow:0 0 11px rgba(0,180,229,0.6), inset 0 1px 3px rgba(255,255,255,0.45)}
+.base-icon .badge img{height:10px;width:auto;max-width:62px;display:block;object-fit:contain;filter:drop-shadow(0 1px 1px rgba(0,60,80,0.4))}
+.base-icon .badge .bn{font-size:8px;font-weight:800;color:#fff;font-family:var(--mono);letter-spacing:0.2px;line-height:1;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,60,80,0.5)}
+.base-icon .tip{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid #fff;margin-top:-1px}
 .base-tooltip{background:rgba(255,255,255,0.96) !important;color:#001823 !important;border:1px solid var(--acc) !important;font-size:11px !important;padding:8px 12px;border-radius:8px;font-weight:500}
 /* Marker das bases PARCEIRAS (terceiros) — gota ÂMBAR com caminhão */
 .parc-icon{background:transparent !important;border:none !important}
@@ -1864,7 +1864,7 @@ function renderBaseMarkers(){
     </div>`;
     const icon = L.divIcon({
       className: 'base-icon',
-      html, iconSize:[104,52], iconAnchor:[52,48]
+      html, iconSize:[92,44], iconAnchor:[46,39]
     });
     const tipText = `<b style="color:var(--acc)">🏠 ${esc(b.nome || 'Base Vammo')}</b><br>${esc(b.endereco || '')}${b.capacidade ? `<br><small>Capacidade: ${b.capacidade} motos</small>` : ''}`;
     if(baseMarkers[id]){
