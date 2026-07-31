@@ -818,7 +818,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v53 · 2026-07-31';
+const APP_VERSION = 'v54 · 2026-07-31';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1395,15 +1395,15 @@ function rideFinalize(status, desfecho){
     }
   } catch(e){ console.warn('save ride fail:', e); }
   console.log('[ride] finalizada nota=', currentRide.nota.final, 'km=', currentRide.totalKm);
-  // Tally do dia pro HUB ocioso (chamados hoje + nota média) — local, offline-friendly.
-  try {
+  // Tally do dia pro HUB ocioso — SÓ chamados FINALIZADOS (concluído). Cancelado/desatribuído NÃO conta (nem a nota).
+  if(currentRide.endStatus === 'concluido'){ try {
     const _h = new Date().toISOString().slice(0,10);
     let _t = JSON.parse(localStorage.getItem('vammo_colab_dia')||'{}');
     if(_t.dia !== _h) _t = { dia:_h, n:0, notaSoma:0, notaN:0 };
     _t.n++;
     if(currentRide.nota && typeof currentRide.nota.final === 'number'){ _t.notaSoma += currentRide.nota.final; _t.notaN++; }
     localStorage.setItem('vammo_colab_dia', JSON.stringify(_t));
-  } catch(_){}
+  } catch(_){} }
   currentRide = null;
 }
 
@@ -1559,13 +1559,13 @@ function buildFlow(c){
     } else recolhimento();
   };
 
-  // LOGÍSTICA: sem cliente
-  if(fx === 'logistica'){ recolhimento(); return steps; }
-
-  // GATE do cliente — primeiro em TODO atendimento
+  // GATE do cliente — primeiro em TODO atendimento (inclui logística, pra poder marcar ausente)
   steps.push({ id:'cliente_local', label:'Cliente está no local?', tipo:'bool' });
   if(S.cliente_local === undefined) return steps;
   const presente = S.cliente_local === true;
+
+  // LOGÍSTICA: movimento da moto (com ou sem cliente) → recolhimento
+  if(fx === 'logistica'){ recolhimento(); return steps; }
 
   if(fx === 'acidente'){
     // acidente: verificar estado da MOTO sempre (mesmo cliente ausente)
@@ -2598,8 +2598,9 @@ function renderIdleHub(){
   const hoje = new Date().toISOString().slice(0,10);
   const n = (t.dia === hoje) ? (t.n||0) : 0;
   const nota = (t.dia === hoje && t.notaN) ? (t.notaSoma/t.notaN) : null;
-  const v = (turnoAtivo && turnoAtivo.veiculoId && _turnoVeiculos) ? _turnoVeiculos[turnoAtivo.veiculoId] : null;
-  const veic = v ? (esc(v.placa||'?') + (v.modelo ? ' · ' + esc(v.modelo) : '')) : (turnoAtivo ? 'sem veículo' : '—');
+  const vObj = (turnoAtivo && turnoAtivo.veiculoId && _turnoVeiculos) ? _turnoVeiculos[turnoAtivo.veiculoId] : null;
+  const placaV = (me && (me.placa || me.veiculoPlaca)) || (turnoAtivo && turnoAtivo.veiculoPlaca) || (vObj && vObj.placa) || '';
+  const veic = placaV ? (esc(placaV) + (vObj && vObj.modelo ? ' · ' + esc(vObj.modelo) : '')) : '—';
   const nome = (me && me.nome) ? esc(me.nome.split(' ')[0]) : 'Colaborador';
   el.innerHTML = `
     <div class="hub">
