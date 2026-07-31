@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview · Imagem do local (Street View) — Vammo Torre</title>
+<style>
+  :root{--acc:#00B4E5;--bg:#0b1220;--surf:#131f33;--bdr:#22344f;--txt:#e8eef6;--txt2:#9fb0c6}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:20px;line-height:1.5}
+  .wrap{max-width:720px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--txt2);font-size:13px;margin-bottom:18px}
+  .row{display:flex;gap:8px;margin-bottom:10px}
+  input{flex:1;padding:12px;border-radius:9px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt);font-size:14px}
+  button{padding:12px 16px;border-radius:9px;border:none;background:var(--acc);color:#001823;font-weight:800;font-size:14px;cursor:pointer}
+  .samples{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+  .samples button{background:var(--surf);color:var(--txt2);border:1px solid var(--bdr);font-weight:600;font-size:12px;padding:7px 11px}
+  .toggle{display:flex;gap:6px;margin:10px 0}
+  .toggle button{background:var(--surf);color:var(--txt2);border:1px solid var(--bdr);font-weight:700;font-size:12px;padding:7px 12px}
+  .toggle button.on{background:var(--acc);color:#001823;border-color:var(--acc)}
+  .imgbox{background:var(--surf);border:1px solid var(--bdr);border-radius:12px;overflow:hidden;min-height:120px;display:flex;align-items:center;justify-content:center}
+  .imgbox img{width:100%;display:block}
+  .meta{font-size:12px;color:var(--txt2);margin:8px 2px 20px}
+  .meta b{color:var(--acc)}
+  .card{background:var(--surf);border:1px solid var(--bdr);border-radius:14px;padding:16px;margin-top:8px}
+  .card .cli{font-weight:800;font-size:16px}
+  .card .mt{display:inline-block;background:rgba(0,180,229,.15);color:var(--acc);font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;margin-left:6px}
+  .card .end{color:var(--txt2);font-size:13px;margin:8px 0}
+  .card .verlocal{display:block;width:100%;text-align:center;background:#1f6feb;color:#fff;padding:11px;border-radius:9px;font-weight:800;margin-top:8px;text-decoration:none}
+  .hint{color:var(--txt2);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📍 Imagem do local no chamado</h1>
+  <div class="sub">Preview — foto do Street View (fallback satélite) a partir da lat/lng do chamado. Nada disso está no app do colab ainda; é só pra você aprovar o visual.</div>
+
+  <div class="row">
+    <input id="addr" placeholder="Digite um endereço (ex: Av. Paulista, 1578, São Paulo)" />
+    <button onclick="buscar()">Ver o local</button>
+  </div>
+  <div class="samples" id="samples"></div>
+
+  <div class="toggle" id="toggle" style="display:none">
+    <button data-m="auto" class="on">🏙 Automático</button>
+    <button data-m="streetview">📷 Street View</button>
+    <button data-m="map">🛰 Satélite</button>
+  </div>
+
+  <div class="imgbox" id="imgbox"><span class="hint">Digite um endereço ou escolha um exemplo acima.</span></div>
+  <div class="meta" id="meta"></div>
+
+  <div id="cardwrap" style="display:none">
+    <div class="hint" style="margin-bottom:6px">↓ Como ficaria no card do colab:</div>
+    <div class="card">
+      <div><span class="cli">Cliente exemplo</span><span class="mt">Acidente</span></div>
+      <div class="end">📍 <span id="cardend">—</span></div>
+      <a class="verlocal" id="cardimg" href="#" onclick="return false">📷 Ver o local antes de chegar</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SAMPLES = [
+    { n:'Av. Paulista, 1578', a:'Av. Paulista, 1578, São Paulo' },
+    { n:'Mercadão SP', a:'Mercado Municipal de São Paulo' },
+    { n:'Base Mooca (Henry Ford 506)', a:'Av. Henry Ford, 506, São Paulo' },
+    { n:'Largo da Batata', a:'Largo da Batata, Pinheiros, São Paulo' },
+  ];
+  let cur = null; // {lat,lng,end}
+  let mode = 'auto';
+
+  const $ = s => document.querySelector(s);
+  SAMPLES.forEach(s => {
+    const b = document.createElement('button');
+    b.textContent = s.n;
+    b.onclick = () => { $('#addr').value = s.a; buscar(); };
+    $('#samples').appendChild(b);
+  });
+  $('#toggle').querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      mode = b.dataset.m;
+      $('#toggle').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      if(cur) render();
+    };
+  });
+  $('#addr').addEventListener('keydown', e => { if(e.key === 'Enter') buscar(); });
+
+  async function buscar(){
+    const addr = $('#addr').value.trim();
+    if(!addr) return;
+    $('#imgbox').innerHTML = '<span class="hint">Geocodificando…</span>';
+    try {
+      const g = await fetch('/geocode?addr=' + encodeURIComponent(addr)).then(r => r.json());
+      if(!g || g.error || g.lat == null){ $('#imgbox').innerHTML = '<span class="hint">Endereço não encontrado.</span>'; return; }
+      cur = { lat: g.lat, lng: g.lng, end: g.formatted || addr };
+      render();
+    } catch(e){ $('#imgbox').innerHTML = '<span class="hint">Erro no geocode.</span>'; }
+  }
+
+  function render(){
+    if(!cur) return;
+    const src = `/streetview?lat=${cur.lat}&lng=${cur.lng}&mode=${mode}&cb=${Date.now()}`;
+    $('#imgbox').innerHTML = `<img src="${src}" alt="local" onerror="this.parentNode.innerHTML='<span class=hint>Sem imagem pra esse ponto.</span>'">`;
+    $('#meta').innerHTML = `<b>${cur.end}</b><br>${cur.lat.toFixed(6)}, ${cur.lng.toFixed(6)} · modo: ${mode}`;
+    $('#toggle').style.display = 'flex';
+    $('#cardwrap').style.display = 'block';
+    $('#cardend').textContent = cur.end;
+    $('#cardimg').onclick = () => { window.open(src, '_blank'); return false; };
+  }
+</script>
+</body>
+</html>
