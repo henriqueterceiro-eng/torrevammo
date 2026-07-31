@@ -932,7 +932,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v54 · 2026-07-30';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v55 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2232,6 +2232,7 @@ function renderChamadoMarkers(){
   for(const c of chamados){
     if(!c.lat || !c.lng) continue;
     if(chamadoOcultoPorTempo(c)) continue;   // concluído/cancelado há +12h → não plota (limpo abaixo)
+    if(c.status === 'cancelado') continue;   // cancelado NUNCA vai pro mapa (some na hora, não polui)
     seen.add(c.id);
     const al = alertCls(c);
     const isSel = c.id === selId;
@@ -2239,9 +2240,9 @@ function renderChamadoMarkers(){
     const color = statusColor(c.status);
     const ord = orderMap[c.id];
     const num = numMap[c.id];
-    // Badge = NÚMERO DIÁRIO do chamado (reinicia todo dia). Pulsa se é o PRÓXIMO da fila do colab.
+    // Pino LIMPO (menos poluído): cor = status, número dentro. Sem emoji do motivo (fica no card/popup).
     const numHtml = num ? `<div class="qnum${(ord && ord.order===1)?' first':''}" title="Chamado #${num} do dia">${num}</div>` : '';
-    const html = `<div class="pin">${numHtml}<div class="body" style="background:${color}"><div class="em">${ico(c.motivo)}</div></div></div>`;
+    const html = `<div class="pin">${numHtml}<div class="body" style="background:${color}"></div></div>`;
     const icon = L.divIcon({ className: cls, html, iconSize:[34,42], iconAnchor:[17,40] });
     if(chamadoMarkers[c.id]){
       chamadoMarkers[c.id].setIcon(icon);
