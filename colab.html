@@ -253,6 +253,10 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #chamadocard .arrivedbanner .ti .l1{font-size:14px}
 #chamadocard .arrivedbanner .ti .l2{font-size:11px;opacity:0.9;font-weight:500;margin-top:2px}
 @keyframes slideIn{from{transform:scale(0.95);opacity:0}to{transform:scale(1);opacity:1}}
+#chamadocard .aguarda-banner{display:flex;align-items:center;gap:9px;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-weight:800;font-size:14.5px}
+#chamadocard .aguarda-banner .ic{font-size:20px;line-height:1}
+#chamadocard .aguarda-banner.sim{background:rgba(16,185,129,0.16);border:1.5px solid #16a34a;color:#4ade80}
+#chamadocard .aguarda-banner.nao{background:rgba(239,68,68,0.16);border:1.5px solid #ef4444;color:#fca5a5}
 
 /* GPS Status overlay */
 #gpsstatus{position:absolute;top:12px;left:12px;background:rgba(10,20,40,0.9);padding:8px 12px;border-radius:8px;font-size:11px;color:var(--txt2);display:flex;align-items:center;gap:6px;z-index:500;backdrop-filter:blur(8px)}
@@ -793,7 +797,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v49 · 2026-07-30';
+const APP_VERSION = 'v50 · 2026-07-31';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1395,7 +1399,10 @@ const ROTINAS = {
   'acidente':[
     { id:'cliente_ok', label:'Verificar estado do cliente', tipo:'check' },
     { id:'moto_ok',    label:'Verificar estado da moto', tipo:'check' },
-    { id:'fotos',      label:'Foto geral dos danos', tipo:'foto' },
+    { id:'foto_dano1', label:'Foto dos danos 1', tipo:'foto' },
+    { id:'foto_dano2', label:'Foto dos danos 2', tipo:'foto' },
+    { id:'foto_dano3', label:'Foto dos danos 3', tipo:'foto' },
+    { id:'foto_dano4', label:'Foto dos danos 4 (opcional)', tipo:'foto', opcional:true },
     { id:'bo',         label:'BO ou declaração (se aplicável)', tipo:'obs', placeholder:'Nº BO ou observação · digite "n/a" se não houver' },
     { id:'decisao',    label:'Continuar ou rebocar?', tipo:'obs', placeholder:'Ex: rebocar até oficina X' },
     { id:'foto_final', label:'Foto da retirada/entrega', tipo:'foto' }
@@ -1779,7 +1786,7 @@ function setupSlideConfirm(container, onConfirm){
 function rotinaCompleta(chamado){
   const steps = buildFlow(chamado);
   const S = chamado.rotinaSteps || {};
-  return steps.length > 0 && steps.every(s => stepDone(s, S));
+  return steps.length > 0 && steps.every(s => s.opcional || stepDone(s, S));
 }
 
 function iconFromMotivo(motivo){
@@ -2656,6 +2663,13 @@ function renderChamadoCard(){
   const _distLblMoto = _motoDistEnd != null ? (_motoDistEnd >= 1000 ? (_motoDistEnd/1000).toFixed(1)+'km' : Math.round(_motoDistEnd)+'m') : '';
   const _gmapsMoto = _motoLoc ? `https://www.google.com/maps/dir/?api=1&destination=${_motoLoc.lat},${_motoLoc.lng}&travelmode=driving&dir_action=navigate` : '';
 
+  // Cliente aguardando no local? — vem do chamado (torre/CX). Destaque no topo do card.
+  const _aguardaSim = c.clienteAguardando === true || c.clienteAguardando === 'sim';
+  const _aguardaNao = c.clienteAguardando === false || c.clienteAguardando === 'nao';
+  const aguardaBanner = (_aguardaSim || _aguardaNao)
+    ? `<div class="aguarda-banner ${_aguardaSim ? 'sim' : 'nao'}"><span class="ic">${_aguardaSim ? '✅' : '❌'}</span><span class="tx">${_aguardaSim ? 'Cliente AGUARDANDO no local' : 'Cliente NÃO está no local'}</span></div>`
+    : '';
+
   el.innerHTML = `
     ${queueHead}
     ${arrivedBanner}
@@ -2668,6 +2682,7 @@ function renderChamadoCard(){
       </div>
       ${statusLbl}
     </div>
+    ${aguardaBanner}
     ${c.endereco ? `<div class="row"><div class="lbl">📍</div><div class="val">${esc(c.endereco)}</div></div>` : ''}
     ${_motoLonge ? `<div class="row"><div class="lbl">🛵</div><div class="val" style="color:#fbbf24"><b>Moto a ${_distLblMoto} do endereço</b> (IoT) — dá pra iniciar no endereço OU onde a moto está.</div></div>` : ''}
     ${c.placa ? `<div class="row"><div class="lbl">🏍</div><div class="val">${esc(c.placa)}</div></div>` : ''}
@@ -2705,13 +2720,14 @@ function renderChamadoCard(){
 function renderRotinaHtml(c){
   const steps = buildFlow(c);
   const S = c.rotinaSteps = c.rotinaSteps || {};
-  const done = steps.filter(s => stepDone(s, S)).length;
-  const pct = steps.length ? Math.round(done / steps.length * 100) : 0;
+  const req = steps.filter(s => !s.opcional);
+  const done = req.filter(s => stepDone(s, S)).length;
+  const pct = req.length ? Math.round(done / req.length * 100) : 0;
   const fx = fluxoDoMotivo(c.motivo);
   const titulo = fx === 'logistica' ? '🚚 Movimentação da moto'
     : (S.cliente_local === false ? '📦 Recolhimento da moto' : '🔧 Rotina do atendimento');
   return `<div class="rotina-box">
-    <div class="rot-tit">${titulo}<span class="ct">${done}/${steps.length}</span></div>
+    <div class="rot-tit">${titulo}<span class="ct">${done}/${req.length}</span></div>
     <div class="rot-prog"><div class="rot-prog-bar" style="width:${pct}%"></div></div>
     ${steps.map(s => renderStepHtml(s, S)).join('')}
   </div>`;
@@ -5955,10 +5971,10 @@ document.getElementById('installclose').addEventListener('click', () => {
 });
 
 // ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
-const NOV_VER = 'v49';
+const NOV_VER = 'v50';
 const NOV_ITENS = [
-  { ic:'🔋', t:'Foto da bateria no recolhimento', d:'Quando a moto tem chave, agora pedimos também a foto da bateria antes de concluir o recolhimento.' },
-  { ic:'✨', t:'Melhorias de estabilidade', d:'Ajustes no rastreamento e no fluxo de atendimento.' }
+  { ic:'🙋', t:'Cliente aguardando no local', d:'Ao receber um chamado, agora aparece um aviso destacado — verde (cliente AGUARDANDO no local) ou vermelho (cliente NÃO está no local) — logo abaixo do nome.' },
+  { ic:'📸', t:'Mais fotos no acidente', d:'Nos atendimentos de ACIDENTE agora dá pra tirar até 4 fotos dos danos (3 obrigatórias) — antes era só 1.' }
 ];
 function mostrarNovidades(force){
   try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER)) return; }catch(e){}
