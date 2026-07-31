@@ -930,7 +930,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v57 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v58 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1309,8 +1309,19 @@ const STORE = (() => {
     ready(){ return initialized; },
     saveChamado(ch){
       if(!fb) return;
-      try { fb.child('chamados').child(ch.id).set(cleanForFb(ch)).catch(e => console.warn('fb saveChamado:', e)); }
-      catch(e){ console.warn('fb saveChamado throw:', e); }
+      const write = () => {
+        try { fb.child('chamados').child(ch.id).set(cleanForFb(ch)).catch(e => console.warn('fb saveChamado:', e)); }
+        catch(e){ console.warn('fb saveChamado throw:', e); }
+      };
+      if(ch.seq != null){ write(); return; }
+      // Número ÚNICO + SEQUENCIAL: contador global atômico no Firebase (transação → sem colisão entre
+      // operadores). Persiste em ch.seq → estável e igual em todas as torres. Ver chamadoNum/#.
+      try {
+        fb.child('counters').child('chamadoSeq').transaction(n => (n || 0) + 1, (err, committed, snap) => {
+          if(committed && snap && snap.val() != null) ch.seq = snap.val();
+          write();
+        });
+      } catch(e){ console.warn('fb seq throw:', e); write(); }
     },
     updateChamado(id, patch){
       if(!fb) return;
@@ -2687,7 +2698,8 @@ function renderList(){
       : (motId && c.motoristaNome ? `<span class="b b-mot" style="background:#6b7280" title="Colaborador offline — segue responsável">${esc(c.motoristaNome.split(' ')[0])} ⚫</span>` : '');
     const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>`;
     const tercBadge = ehTerceiro(c) ? `<span class="b" style="background:#f59e0b;color:#1a1200" title="Encaminhado ao prestador ${esc(c.terceiroNome||'')}">🤝 ${esc((c.terceiroNome||'Externo').split(' ')[0])}</span>` : '';
-    const numTag = numMap[c.id] ? `<span style="font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800;margin-right:5px">#${numMap[c.id]}</span>` : '';
+    const _num = c.seq != null ? c.seq : numMap[c.id];
+    const numTag = _num ? `<span style="font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800;margin-right:5px">#${_num}</span>` : '';
     const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : ((catDim(c) || ctrlDim(c)) ? ' style="opacity:0.3"' : '');
     return `<div class="card${sel} ${al}" data-id="${c.id}"${fadeStyle}>
       <div class="row1">
@@ -2994,7 +3006,7 @@ function renderDetail(){
 
   const gmaps = c.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.endereco + ', São Paulo, SP')}` : '';
 
-  const _numCh = buildNumeroMap()[c.id];
+  const _numCh = c.seq != null ? c.seq : buildNumeroMap()[c.id];
   const parcList = Object.values(parceiros).filter(p => p.ativo !== false).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
   const tercOpts = '<option value="">— selecionar terceiro —</option>' + parcList.map(p => `<option value="${p.id}"${p.id===c.terceiroId?' selected':''}>${esc(p.nome)}${p.baseDescarga?' · '+esc(p.baseDescarga):''}</option>`).join('');
   $('#detail').innerHTML = `
@@ -5337,7 +5349,7 @@ function calcRep(){
     .filter(r => !repState.status || r.endStatus === repState.status)
     .filter(r => !repState.colab || r.motoristaId === repState.colab)
     .filter(r => !repState.veh || r.motoristaPlaca === repState.veh)
-    .filter(r => !repState.placaBusca || (r.motoristaPlaca || '').toUpperCase().includes(repState.placaBusca.toUpperCase()))
+    .filter(r => { if(!repState.placaBusca) return true; const ch = chamados.find(x => x.id === r.chamadoId); return ((ch && ch.placa) || '').toUpperCase().includes(repState.placaBusca.toUpperCase()); })
     .filter(r => {
       if(!repState.base) return true;
       const c = colaboradores[r.motoristaId];
@@ -5555,7 +5567,7 @@ function renderRep(){
           const stCor = r.endStatus === 'concluido' ? '#16a34a' : r.endStatus === 'cancelado' ? '#dc2626' : 'var(--txt3)';
           const dest = destinoDaCorrida(r);
           const ch = chamados.find(x => x.id === r.chamadoId);
-          const numId = numMap[r.chamadoId];
+          const numId = (ch && ch.seq != null) ? ch.seq : numMap[r.chamadoId];
           const vinc = vinculoDaCorrida(r);
           const exec = execInfoDaCorrida(r);
           const rs2 = r.rotinaSteps || {};
@@ -5576,7 +5588,7 @@ function renderRep(){
             <td style="padding:8px 12px">${esc(r.motoristaNome||'?')}</td>
             <td style="padding:8px 12px"><span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:${vinc==='Terceirizado'?'rgba(245,158,11,0.2)':'rgba(0,180,229,0.15)'};color:${vinc==='Terceirizado'?'#fbbf24':'var(--acc)'}">${vinc}</span></td>
             <td style="padding:8px 12px">${esc(baseN)}</td>
-            <td style="padding:8px 12px;font-family:var(--mono)">${esc(r.motoristaPlaca||'—')}</td>
+            <td style="padding:8px 12px;font-family:var(--mono)" title="Placa da moto do cliente">${esc((ch && ch.placa)||'—')}</td>
             <td style="padding:8px 12px">${esc(r.cliente||'—')}</td>
             <td style="padding:8px 12px;font-size:10px;max-width:200px">${esc((ch && ch.endereco) || r.endereco || '—')}</td>
             <td style="padding:8px 12px;font-size:10px">${exec.diff ? `<a href="${exec.url}" target="_blank" style="color:#fbbf24">📍 outro local</a>` : (exec.txt==='—' ? '<span style="color:var(--txt3)">—</span>' : '<span style="color:var(--txt3)">mesmo local</span>')}</td>
@@ -5604,13 +5616,14 @@ function renderRep(){
 function exportRepCSV(){
   const rows = calcRep();
   const numMap = buildNumeroMap();
-  const headers = ['ID (nº dia)','Chamado ID','Data','Colaborador','Vinculo','Base','Placa','Cliente','Endereco chamado','Endereco execucao (link)','Assinado','Pago no local','Motivo','Controlador','Desfecho','Base descarga','Km','TMA total (s)','Atribuicao (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)'];
+  const headers = ['Nº chamado','Chamado ID','Data','Colaborador','Vinculo','Base','Placa','Cliente','Endereco chamado','Endereco execucao (link)','Assinado','Pago no local','Motivo','Controlador','Desfecho','Base descarga','Km','TMA total (s)','Atribuicao (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)'];
   const lines = [headers.join(';')];
   for(const r of rows){
     const c = colaboradores[r.motoristaId];
     const ch = chamados.find(x => x.id === r.chamadoId);
     const d = new Date(r.completedTs);
     const exec = execInfoDaCorrida(r);
+    const numId = (ch && ch.seq != null) ? ch.seq : numMap[r.chamadoId];
     const csvCell = (v) => {
       if(v == null) return '';
       let s = String(v).replace(/"/g, '""');
@@ -5618,13 +5631,13 @@ function exportRepCSV(){
       return s;
     };
     lines.push([
-      numMap[r.chamadoId] ? '#'+numMap[r.chamadoId] : '',
+      numId ? '#'+numId : '',
       r.chamadoId || '',
       d.toISOString(),
       r.motoristaNome || '',
       vinculoDaCorrida(r),
       c?.base || '',
-      r.motoristaPlaca || '',
+      (ch && ch.placa) || '',
       r.cliente || '',
       (ch && ch.endereco) || r.endereco || '',
       exec.diff ? exec.url : '',
