@@ -946,7 +946,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v64 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v65 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2725,7 +2725,7 @@ function renderList(){
     const motBadge = mot
       ? `<span class="b b-mot" style="background:${mot.color}">${esc(mot.nome.split(' ')[0])}</span>`
       : (motId && c.motoristaNome ? `<span class="b b-mot" style="background:#6b7280" title="Colaborador offline — segue responsável">${esc(c.motoristaNome.split(' ')[0])} ⚫</span>` : '');
-    const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>`;
+    const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : (c.status||'novo').toUpperCase()}</span>`;
     const tercBadge = ehTerceiro(c) ? `<span class="b" style="background:#f59e0b;color:#1a1200" title="Encaminhado ao prestador ${esc(c.terceiroNome||'')}">🤝 ${esc((c.terceiroNome||'Externo').split(' ')[0])}</span>` : '';
     const _num = c.seq != null ? c.seq : numMap[c.id];
     const numTag = _num ? `<span style="font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800;margin-right:5px">#${_num}</span>` : '';
@@ -3043,7 +3043,7 @@ function renderDetail(){
     <h3>${_numCh ? `<span style="font-family:var(--mono);font-size:13px;background:rgba(0,180,229,0.15);color:var(--acc);padding:1px 8px;border-radius:6px;margin-right:6px;font-weight:800">#${_numCh}</span>` : ''}${ico(c.motivo)} ${esc(c.cliente||'?')}</h3>
     <div class="mtv">${esc(c.motivo||'—')}</div>
     <div>
-      <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : c.status.toUpperCase()}</span>
+      <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : (c.status||'novo').toUpperCase()}</span>
       <span style="margin-left:8px;color:var(--txt2);font-size:11px">⏱ ${fmtElapsed(c.ts)}</span>
       ${c.travada?'<span class="b b-trav" style="margin-left:6px">⚠ TRAV</span>':''}
       ${c.clienteAguardando === true ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : (c.clienteAguardando === false ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}
@@ -4858,7 +4858,7 @@ function renderMotDetail(){
               <div style="font-weight:700">${esc(c.cliente || '?')}</div>
               <div style="font-size:10px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.motivo || '')}${c.endereco ? ' · ' + esc(c.endereco.split(',')[0]) : ''}</div>
             </div>
-            <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':'conc'}" style="font-size:9px;padding:2px 6px">${c.status==='em_rota'?'ROTA':c.status.toUpperCase()}</span>
+            <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':'conc'}" style="font-size:9px;padding:2px 6px">${c.status==='em_rota'?'ROTA':(c.status||'novo').toUpperCase()}</span>
           </div>
         `).join('')}
     </div>
@@ -6728,6 +6728,8 @@ function setupStoreListeners(){
       }
       window._chamadosSeen = new Set(ids);
       window._initialSyncDone = true;
+      // Blindagem: chamado sem status quebrava .status.toUpperCase() no render (travava lista/filtros/cliques).
+      for(const _c of byTs){ if(_c && !_c.status) _c.status = 'novo'; }
       chamados = byTs;
       // Sync caches locais
       saveDemoChamados(byTs);
