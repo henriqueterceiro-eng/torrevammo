@@ -197,15 +197,13 @@ body.sidehide #sidebar:hover::after{opacity:0}
 
 /* Markers */
 .cm-icon{background:transparent !important;border:none !important}
-.cm-icon .pin{width:34px;height:42px;position:relative;filter:drop-shadow(0 3px 4px rgba(0,0,0,0.5))}
-.cm-icon .pin .body{position:absolute;top:0;left:0;width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;border:2px solid #fff}
-.cm-icon .pin .em{transform:rotate(45deg);font-size:16px}
-.cm-icon .pin .qnum{position:absolute;top:-6px;right:-6px;width:22px;height:22px;background:#fff;color:#001823;border-radius:50%;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--acc);z-index:2;font-family:var(--mono)}
-.cm-icon .pin .qnum.first{background:var(--acc);color:#001823;border-color:#fff;animation:numpulse 1.5s ease-out infinite}
-@keyframes numpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
-.cm-icon.sel .pin .body{box-shadow:0 0 0 3px var(--acc),0 0 0 5px #fff}
-.cm-icon.warn .pin .body::after{content:'';position:absolute;inset:-6px;border-radius:50% 50% 50% 0;border:2px solid #f59e0b;opacity:0.7;animation:pulse 1.6s infinite}
-.cm-icon.crit .pin .body::after{content:'';position:absolute;inset:-6px;border-radius:50% 50% 50% 0;border:2px solid var(--novo);animation:pulse 0.8s infinite}
+.cm-icon .pin{position:relative;width:22px;height:34px;filter:drop-shadow(0 3px 3px rgba(0,0,0,0.45))}
+.cm-icon .pin .needle{position:absolute;top:15px;left:10px;width:2px;height:18px;background:linear-gradient(#c8cfda,#586172);border-radius:0 0 1px 1px}
+.cm-icon .pin .head{position:absolute;top:0;left:1px;width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,0.95);box-sizing:border-box;box-shadow:inset -2px -3px 5px rgba(0,0,0,0.28)}
+.cm-icon .pin .head::after{content:'';position:absolute;top:2.5px;left:3.5px;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.72)}
+.cm-icon.sel .pin .head{box-shadow:0 0 0 3px var(--acc),0 0 0 5px #fff}
+.cm-icon.warn .pin .head::before{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid #f59e0b;opacity:0.75;animation:pulse 1.6s infinite}
+.cm-icon.crit .pin .head::before{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--novo);animation:pulse 0.8s infinite}
 
 .mt-icon{background:transparent !important;border:none !important}
 .mt-icon .marker{width:46px;height:46px;position:relative}
@@ -932,7 +930,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v55 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v56 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2227,8 +2225,6 @@ function chamadoOcultoPorTempo(c){
 
 function renderChamadoMarkers(){
   const seen = new Set();
-  const orderMap = buildOrderMap();
-  const numMap = buildNumeroMap();
   for(const c of chamados){
     if(!c.lat || !c.lng) continue;
     if(chamadoOcultoPorTempo(c)) continue;   // concluído/cancelado há +12h → não plota (limpo abaixo)
@@ -2237,13 +2233,10 @@ function renderChamadoMarkers(){
     const al = alertCls(c);
     const isSel = c.id === selId;
     const cls = `cm-icon ${al} ${isSel?'sel':''}`;
-    const color = statusColor(c.status);
-    const ord = orderMap[c.id];
-    const num = numMap[c.id];
-    // Pino LIMPO (menos poluído): cor = status, número dentro. Sem emoji do motivo (fica no card/popup).
-    const numHtml = num ? `<div class="qnum${(ord && ord.order===1)?' first':''}" title="Chamado #${num} do dia">${num}</div>` : '';
-    const html = `<div class="pin">${numHtml}<div class="body" style="background:${color}"></div></div>`;
-    const icon = L.divIcon({ className: cls, html, iconSize:[34,42], iconAnchor:[17,40] });
+    const color = catColor(c.motivo);   // cor por TIPO do chamado (casa com os filtros de categoria)
+    // Pushpin pequeno e limpo: cabeça (cor = tipo) + agulha. Só marca o spot; motivo/número no card.
+    const html = `<div class="pin"><span class="needle"></span><span class="head" style="background:${color}"></span></div>`;
+    const icon = L.divIcon({ className: cls, html, iconSize:[22,34], iconAnchor:[11,33] });
     if(chamadoMarkers[c.id]){
       chamadoMarkers[c.id].setIcon(icon);
       chamadoMarkers[c.id].setLatLng([c.lat, c.lng]);
@@ -2627,6 +2620,8 @@ function categoriaDoMotivo(motivo){
   if(/acidente|pneu|roda|bateria|freio|manete|não liga|nao liga|não anda|nao anda|erro|eletr|travad|chave|igni|retrovisor|paralama|caixa de dire|garfo|guid|pedal/.test(m)) return 'socorro';
   return 'outros'; // inclui 'Outros' e 'Time de Pronta Resposta'
 }
+// Cor do pino no mapa = TIPO (categoria) do chamado. Ver CATS.
+function catColor(motivo){ const c = CATS.find(x => x.k === categoriaDoMotivo(motivo)); return c ? c.cor : '#6b7280'; }
 function catDim(c){ return catFiltro.size > 0 && !catFiltro.has(categoriaDoMotivo(c.motivo)); }
 function catCounts(){
   const c = { socorro:0, recolhimento:0, logistica:0, outros:0 };
