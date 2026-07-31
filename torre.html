@@ -946,7 +946,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v62 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v63 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -6381,7 +6381,7 @@ function setupSyncListeners(){
       id: data.id,
       nome: data.nome,
       placa: data.placa,
-      color: data.color || '#00B4E5',
+      color: corColab(data.id),
       status: data.status || 'online',
       lastSeen: Date.now()
     };
@@ -6807,6 +6807,10 @@ document.addEventListener('visibilitychange', () => {
 // ============== TTL CHECK ==============
 // Aplica telemetria (posição/heartbeat) ao motorista — chamada tanto pelo evento
 // BroadcastChannel quanto pelo listener do nó vammo/motoristas (cross-device).
+// Cor de linha ÚNICA por colaborador (marker + rota + trail) — evita as linhas se misturarem
+// quando dois colabs têm rotas parecidas (antes muitos caíam no ciano default). Determinística por id.
+const PALETA_COLAB = ['#00B4E5','#f59e0b','#a855f7','#22c55e','#ef4444','#ec4899','#14b8a6','#eab308','#6366f1','#f97316','#84cc16','#e11d48','#8b5cf6','#0ea5e9','#d946ef','#fb7185'];
+function corColab(id){ let h=0; const s=String(id||''); for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return PALETA_COLAB[h % PALETA_COLAB.length]; }
 function applyMotoristaTelemetry(data, opts){
   opts = opts || {};
   if(!data || !data.id) return;
@@ -6834,13 +6838,13 @@ function applyMotoristaTelemetry(data, opts){
   if(!motoristas[data.id]){
     motoristas[data.id] = {
       id: data.id, nome: data.nome, placa: data.placa,
-      color: data.color || '#00B4E5', status: data.status || 'online', activeCount: 0
+      color: corColab(data.id), status: data.status || 'online', activeCount: 0
     };
   }
   const m = motoristas[data.id];
   if(data.nome != null) m.nome = data.nome;
   if(data.placa != null) m.placa = data.placa;
-  if(data.color != null) m.color = data.color;
+  m.color = corColab(data.id);   // cor ÚNICA por colab (paleta) — ignora a cor default que vinha do app
   const hasGeo = data.lat != null && data.lng != null;
   if(hasGeo){ m.lat = data.lat; m.lng = data.lng; }
   m.status = data.status || m.status;

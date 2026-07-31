@@ -257,6 +257,11 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #chamadocard .aguarda-banner .ic{font-size:20px;line-height:1}
 #chamadocard .aguarda-banner.sim{background:rgba(16,185,129,0.16);border:1.5px solid #16a34a;color:#4ade80}
 #chamadocard .aguarda-banner.nao{background:rgba(239,68,68,0.16);border:1.5px solid #ef4444;color:#fca5a5}
+#chamadocard .local-shot{margin:12px 0 2px}
+#chamadocard .local-shot .ls-cap{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#9fb0c6;margin-bottom:6px}
+#chamadocard .local-shot .ls-img{position:relative;display:block;border-radius:11px;overflow:hidden;border:1px solid #2b3d5c;line-height:0}
+#chamadocard .local-shot .ls-img img{width:100%;display:block}
+#chamadocard .local-shot .ls-tag{position:absolute;left:8px;bottom:8px;background:rgba(6,12,22,.8);color:#fff;font-size:11px;font-weight:600;padding:4px 8px;border-radius:7px}
 
 /* GPS Status overlay */
 #gpsstatus{position:absolute;top:12px;left:12px;background:rgba(10,20,40,0.9);padding:8px 12px;border-radius:8px;font-size:11px;color:var(--txt2);display:flex;align-items:center;gap:6px;z-index:500;backdrop-filter:blur(8px)}
@@ -797,7 +802,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v50 · 2026-07-31';
+const APP_VERSION = 'v51 · 2026-07-31';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2687,6 +2692,13 @@ function renderChamadoCard(){
     ${_motoLonge ? `<div class="row"><div class="lbl">🛵</div><div class="val" style="color:#fbbf24"><b>Moto a ${_distLblMoto} do endereço</b> (IoT) — dá pra iniciar no endereço OU onde a moto está.</div></div>` : ''}
     ${c.placa ? `<div class="row"><div class="lbl">🏍</div><div class="val">${esc(c.placa)}</div></div>` : ''}
     ${c.comentario ? `<div class="row"><div class="lbl">💬</div><div class="val">${esc(c.comentario)}</div></div>` : ''}
+    ${(c.lat && c.lng) ? `<div class="local-shot">
+      <div class="ls-cap">📷 Local do atendimento</div>
+      <a class="ls-img" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${c.lat},${c.lng}" target="_blank" rel="noopener">
+        <img src="/streetview?lat=${c.lat}&lng=${c.lng}" alt="Local do chamado" loading="lazy" onerror="const b=this.closest('.local-shot'); if(b) b.remove();">
+        <span class="ls-tag">📍 toque pra ver o local</span>
+      </a>
+    </div>` : ''}
     ${routeBlock}
     <a class="nav-primary" href="${gmaps}" target="_blank" rel="noopener">🧭 Navegar até o cliente (GPS)</a>
     ${_motoLonge ? `<a class="nav-primary" href="${_gmapsMoto}" target="_blank" rel="noopener" style="background:#f59e0b;margin-top:8px">🛵 Navegar até a MOTO (${_distLblMoto})</a>` : ''}
