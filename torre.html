@@ -930,7 +930,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v56 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v57 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2233,8 +2233,8 @@ function renderChamadoMarkers(){
     const al = alertCls(c);
     const isSel = c.id === selId;
     const cls = `cm-icon ${al} ${isSel?'sel':''}`;
-    const color = catColor(c.motivo);   // cor por TIPO do chamado (casa com os filtros de categoria)
-    // Pushpin pequeno e limpo: cabeça (cor = tipo) + agulha. Só marca o spot; motivo/número no card.
+    const color = statusColor(c.status);   // cor por STATUS (iguais às pills do topo): novo=vermelho, em_rota=amarelo, concluído=verde
+    // Pushpin pequeno e limpo: cabeça (cor = status) + agulha. Só marca o spot; motivo/número no card.
     const html = `<div class="pin"><span class="needle"></span><span class="head" style="background:${color}"></span></div>`;
     const icon = L.divIcon({ className: cls, html, iconSize:[22,34], iconAnchor:[11,33] });
     if(chamadoMarkers[c.id]){
@@ -2620,8 +2620,6 @@ function categoriaDoMotivo(motivo){
   if(/acidente|pneu|roda|bateria|freio|manete|não liga|nao liga|não anda|nao anda|erro|eletr|travad|chave|igni|retrovisor|paralama|caixa de dire|garfo|guid|pedal/.test(m)) return 'socorro';
   return 'outros'; // inclui 'Outros' e 'Time de Pronta Resposta'
 }
-// Cor do pino no mapa = TIPO (categoria) do chamado. Ver CATS.
-function catColor(motivo){ const c = CATS.find(x => x.k === categoriaDoMotivo(motivo)); return c ? c.cor : '#6b7280'; }
 function catDim(c){ return catFiltro.size > 0 && !catFiltro.has(categoriaDoMotivo(c.motivo)); }
 function catCounts(){
   const c = { socorro:0, recolhimento:0, logistica:0, outros:0 };
