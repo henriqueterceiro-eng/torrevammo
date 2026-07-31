@@ -826,8 +826,10 @@ body.sidehide #sidebar:hover::after{opacity:0}
       <div class="mplate-top"><span class="mplate-logo">◈ MERCOSUL</span><span class="mplate-br">BRASIL</span><span class="mplate-flag">🇧🇷</span></div>
       <input type="text" id="addrPlaca" class="mplate-in" placeholder="ABC1D23" maxlength="8" autocomplete="off" spellcheck="false">
     </div>
-    <div id="addrMotoInfo" style="text-align:center;font-size:11px;color:var(--txt2);min-height:15px;margin:5px 0 12px"></div>
+    <div id="addrMotoInfo" style="text-align:center;font-size:11px;color:var(--txt2);min-height:15px;margin:5px 0 8px"></div>
+    <div id="addrPlacaHint" style="text-align:center;font-size:12px;color:var(--acc);font-weight:700;margin:0 0 12px">👆 Digite a placa da moto aí em cima pra começar — a gente puxa o cliente.<br><a href="#" id="addrSemPlaca" style="color:var(--txt2);text-decoration:underline;font-weight:600;font-size:11px">não tenho a placa →</a></div>
 
+    <div id="addrRest" style="display:none">
     <label style="display:block;font-size:11px;color:var(--txt2);margin-top:8px;margin-bottom:4px;font-weight:600">Endereço completo</label>
     <input type="text" id="addrEndereco" placeholder="Ex: Av. Paulista, 1578, São Paulo">
 
@@ -859,6 +861,7 @@ body.sidehide #sidebar:hover::after{opacity:0}
     </select>
 
     <div id="addrResult" style="margin-top:14px;padding:10px;background:var(--surf2);border-radius:6px;font-size:11px;color:var(--txt2);display:none"></div>
+    </div><!-- /#addrRest -->
 
     <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
       <button onclick="closeAddCh()">Cancelar</button>
@@ -943,7 +946,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v60 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v61 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5553,10 +5556,12 @@ function renderRep(){
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Base</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Placa</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Cliente</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Cliente estava aguardando no local?">Aguardando</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Endereço do chamado</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Local onde o atendimento foi executado, se diferente do endereço do chamado">Execução</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Motivo</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Controlador responsável: quem atribuiu / abriu o chamado (ou analista do CX)">Controlador</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Analista responsável pela abertura do chamado">Aberto por</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Desfecho do atendimento">Desfecho</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Base onde a moto foi descarregada (se recolhida)">Base descarga</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">Km</th>
@@ -5603,10 +5608,12 @@ function renderRep(){
             <td style="padding:8px 12px">${esc(baseN)}</td>
             <td style="padding:8px 12px;font-family:var(--mono)" title="Placa da moto do cliente">${esc((ch && ch.placa)||'—')}</td>
             <td style="padding:8px 12px">${esc(r.cliente||'—')}</td>
+            <td style="padding:8px 12px;text-align:center">${(ch && ch.clienteAguardando != null) ? (ch.clienteAguardando ? '✅ Sim' : '❌ Não') : '—'}</td>
             <td style="padding:8px 12px;font-size:10px;max-width:200px">${esc((ch && ch.endereco) || r.endereco || '—')}</td>
             <td style="padding:8px 12px;font-size:10px">${exec.diff ? `<a href="${exec.url}" target="_blank" style="color:#fbbf24">📍 outro local</a>` : (exec.txt==='—' ? '<span style="color:var(--txt3)">—</span>' : '<span style="color:var(--txt3)">mesmo local</span>')}</td>
             <td style="padding:8px 12px">${esc(motivoDaCorrida(r))}</td>
             <td style="padding:8px 12px">${esc(controladorDaCorrida(r))}</td>
+            <td style="padding:8px 12px">${esc((ch && (ch.abertoPor || ch.analista)) || '—')}</td>
             <td style="padding:8px 12px;color:${dest.cor};font-weight:600">${esc(dest.txt)}</td>
             <td style="padding:8px 12px;font-family:var(--mono);font-size:10px">${esc(baseDescargaDaCorrida(r))}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${(r.totalKm||0).toFixed(1)}</td>
@@ -5629,7 +5636,7 @@ function renderRep(){
 function exportRepCSV(){
   const rows = calcRep();
   const numMap = buildNumeroMap();
-  const headers = ['Nº chamado','Chamado ID','Data','Colaborador','Vinculo','Base','Placa','Cliente','Endereco chamado','Endereco execucao (link)','Assinado','Pago no local','Motivo','Controlador','Desfecho','Base descarga','Km','TMA total (s)','Atribuicao (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)'];
+  const headers = ['Nº chamado','Chamado ID','Data','Colaborador','Vinculo','Base','Placa','Cliente','Cliente aguardando','Endereco chamado','Endereco execucao (link)','Assinado','Pago no local','Motivo','Controlador','Aberto por','Desfecho','Base descarga','Km','TMA total (s)','Atribuicao (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)'];
   const lines = [headers.join(';')];
   for(const r of rows){
     const c = colaboradores[r.motoristaId];
@@ -5652,12 +5659,14 @@ function exportRepCSV(){
       c?.base || '',
       (ch && ch.placa) || '',
       r.cliente || '',
+      (ch && ch.clienteAguardando != null) ? (ch.clienteAguardando ? 'Sim' : 'Nao') : '',
       (ch && ch.endereco) || r.endereco || '',
       exec.diff ? exec.url : '',
       (r.assinatura || (ch && ch.assinatura)) ? 'sim' : 'nao',
       (r.pagamentoNoLocal || (ch && ch.pagamentoNoLocal)) ? 'sim' : 'nao',
       motivoDaCorrida(r),
       controladorDaCorrida(r),
+      (ch && (ch.abertoPor || ch.analista)) || '',
       destinoDaCorrida(r).txt.replace(/^[^\wÀ-ÿ]+/, '').trim(),
       baseDescargaDaCorrida(r) === '—' ? '' : baseDescargaDaCorrida(r),
       (r.totalKm || 0).toFixed(2),
@@ -5942,17 +5951,22 @@ function _wireAddrPlacaLookup(){
     _addrLookupTimer = setTimeout(() => buscarMotoBackoffice(placa), 450);
   };
 }
+function _revelarAddrRest(){
+  const r = $('#addrRest'); if(r) r.style.display = 'block';
+  const h = $('#addrPlacaHint'); if(h) h.style.display = 'none';
+}
 async function buscarMotoBackoffice(placa){
   const res = $('#addrMotoInfo');
   if(res){ res.style.display = 'block'; res.innerHTML = '🔎 Buscando a moto no Backoffice…'; }
   try {
     const r = await fetch('/api/moto_lookup?placa=' + encodeURIComponent(placa));
     const d = await r.json();
-    if(!d || !d.found){ if(res) res.innerHTML = '<span style="color:var(--txt3)">Placa não encontrada no Backoffice — preencha manualmente.</span>'; return; }
+    if(!d || !d.found){ if(res) res.innerHTML = '<span style="color:var(--txt3)">Placa não encontrada no Backoffice — preencha manualmente.</span>'; _revelarAddrRest(); return; }
     d._searched = placa; _addrLookup = d;
     const cli = $('#addrCliente'); if(cli && !cli.value.trim() && d.cliente) cli.value = d.cliente;
     const tel = $('#addrTel');     if(tel && !tel.value.trim() && d.telefone) tel.value = d.telefone;
     if(res) res.innerHTML = `🏍 <strong style="color:var(--acc)">${esc(d.modelo||'moto')}</strong> · 👤 ${esc(d.cliente||'?')}${d.telefone?' · 📞 '+esc(d.telefone):''}<br><small>preenchido do Backoffice${d.backofficeUrl?` · <a href="${esc(d.backofficeUrl)}" target="_blank" style="color:var(--acc)">abrir perfil ↗</a>`:''}</small>`;
+    _revelarAddrRest();
   } catch(e){ if(res) res.innerHTML = '<span style="color:var(--txt3)">Erro ao buscar no Backoffice.</span>'; }
 }
 function openAddCh(){
@@ -5962,6 +5976,9 @@ function openAddCh(){
   _addrLookup = null;
   $('#addrPlaca').value = '';
   { const _mi = $('#addrMotoInfo'); if(_mi) _mi.innerHTML = ''; }
+  { const _r = $('#addrRest'); if(_r) _r.style.display = 'none'; }
+  { const _h = $('#addrPlacaHint'); if(_h) _h.style.display = 'block'; }
+  { const _sp = $('#addrSemPlaca'); if(_sp) _sp.onclick = (ev) => { ev.preventDefault(); _revelarAddrRest(); const e = $('#addrEndereco'); if(e) setTimeout(()=>e.focus(),50); }; }
   _wireAddrPlacaLookup();
   // motivos OFICIAIS (mesmos do CX) + opção de digitar
   $('#addrMotivo').innerHTML = DEMO_MOTIVOS.map(o => `<option value="${esc(o.m)}">${esc(o.m)}</option>`).join('') + '<option value="__custom">✏ Outro (digitar)</option>';
