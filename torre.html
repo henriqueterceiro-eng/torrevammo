@@ -204,6 +204,13 @@ body.sidehide #sidebar:hover::after{opacity:0}
 .cm-icon.sel .pin .head{box-shadow:0 0 0 3px var(--acc),0 0 0 5px #fff}
 .cm-icon.warn .pin .head::before{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid #f59e0b;opacity:0.75;animation:pulse 1.6s infinite}
 .cm-icon.crit .pin .head::before{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--novo);animation:pulse 0.8s infinite}
+/* Placa Mercosul estilizada (input de placa no chamado manual) */
+.mplate{max-width:230px;margin:0 auto;border:2.5px solid #111;border-radius:9px;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.35)}
+.mplate-top{display:flex;align-items:center;justify-content:space-between;background:#003da5;color:#fff;padding:2px 9px;font-size:9px;font-weight:800;letter-spacing:.5px;line-height:1.5}
+.mplate-top .mplate-br{letter-spacing:2px}
+.mplate-top .mplate-flag{font-size:11px;line-height:1}
+.mplate-in{width:100%;box-sizing:border-box;border:none;outline:none;background:#fff;color:#111;text-align:center;text-transform:uppercase;font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:30px;letter-spacing:5px;padding:8px 6px 9px}
+.mplate-in::placeholder{color:#c9cdd4;letter-spacing:5px}
 
 .mt-icon{background:transparent !important;border:none !important}
 .mt-icon .marker{width:46px;height:46px;position:relative}
@@ -813,7 +820,13 @@ body.sidehide #sidebar:hover::after{opacity:0}
 <div id="addch" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;z-index:10000">
   <div style="background:var(--surf);border:1px solid var(--bdr2);padding:24px;border-radius:12px;width:480px;max-width:92vw">
     <h2 style="font-size:18px;margin-bottom:4px">✍ Novo chamado por endereço</h2>
-    <div style="font-size:12px;color:var(--txt2);margin-bottom:16px">Digite o endereço e a gente geocodifica via Google (endereço → mapa)</div>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px">Digite a <b>placa</b> — puxamos cliente e telefone do Backoffice. Depois o endereço (geocodifica via Google).</div>
+
+    <div class="mplate">
+      <div class="mplate-top"><span class="mplate-logo">◈ MERCOSUL</span><span class="mplate-br">BRASIL</span><span class="mplate-flag">🇧🇷</span></div>
+      <input type="text" id="addrPlaca" class="mplate-in" placeholder="ABC1D23" maxlength="8" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="addrMotoInfo" style="text-align:center;font-size:11px;color:var(--txt2);min-height:15px;margin:5px 0 12px"></div>
 
     <label style="display:block;font-size:11px;color:var(--txt2);margin-top:8px;margin-bottom:4px;font-weight:600">Endereço completo</label>
     <input type="text" id="addrEndereco" placeholder="Ex: Av. Paulista, 1578, São Paulo">
@@ -838,9 +851,6 @@ body.sidehide #sidebar:hover::after{opacity:0}
       <option value="__custom">✏ Outro (digitar)</option>
     </select>
     <input type="text" id="addrMotivoCustom" placeholder="Descreva o motivo" style="display:none;margin-top:6px">
-
-    <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Placa (opcional)</label>
-    <input type="text" id="addrPlaca" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase">
 
     <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Cliente aguardando no local?</label>
     <select id="addrAguardando">
@@ -933,7 +943,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v59 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v60 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5933,7 +5943,7 @@ function _wireAddrPlacaLookup(){
   };
 }
 async function buscarMotoBackoffice(placa){
-  const res = $('#addrResult');
+  const res = $('#addrMotoInfo');
   if(res){ res.style.display = 'block'; res.innerHTML = '🔎 Buscando a moto no Backoffice…'; }
   try {
     const r = await fetch('/api/moto_lookup?placa=' + encodeURIComponent(placa));
@@ -5951,6 +5961,7 @@ function openAddCh(){
   $('#addrTel').value = '';
   _addrLookup = null;
   $('#addrPlaca').value = '';
+  { const _mi = $('#addrMotoInfo'); if(_mi) _mi.innerHTML = ''; }
   _wireAddrPlacaLookup();
   // motivos OFICIAIS (mesmos do CX) + opção de digitar
   $('#addrMotivo').innerHTML = DEMO_MOTIVOS.map(o => `<option value="${esc(o.m)}">${esc(o.m)}</option>`).join('') + '<option value="__custom">✏ Outro (digitar)</option>';
@@ -7766,13 +7777,13 @@ function init(){
 }
 
 // ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
-const NOV_VER_TORRE = 'v54';
+const NOV_VER_TORRE = 'v60';
 const NOV_ITENS_TORRE = [
-  { ic:'🤝', t:'Chamados para prestadores (Externos)', d:'Encaminhe um chamado a um terceiro pelo detalhe. Filtro Todos / Vammo / Externos na lista da esquerda.' },
-  { ic:'✅', t:'Concluir chamado externo', d:'O controlador encerra o chamado do terceiro num fluxo rápido (encontrada → desfecho → foto/obs).' },
-  { ic:'🏍', t:'Base do parceiro', d:'Motos recolhidas por um terceiro entram na base dele (veja no pino âmbar e no cadastro do parceiro).' },
-  { ic:'🗺️', t:'Filtro de Prestadores no mapa', d:'Botão 🤝 Prest. no canto direito liga/desliga as bases dos parceiros.' },
-  { ic:'📡', t:'IoT padrão + alerta de ociosidade', d:'A moto aparece ao abrir o chamado; aviso quando um colaborador fica parado com chamado atribuído.' }
+  { ic:'🏍', t:'Placa puxa tudo do Backoffice', d:'No “Adicionar por endereço”, a placa agora fica no topo (com cara de placa Mercosul). Digite a placa e a gente preenche cliente, telefone e modelo da moto automaticamente — o telefone vira WhatsApp pro motorista.' },
+  { ic:'🆔', t:'Nº do chamado único e sequencial', d:'Cada chamado tem um número único e sequencial (contador global). Acabaram os “#1” duplicados e fora de ordem.' },
+  { ic:'📍', t:'Pinos novos no mapa', d:'Pino menor e mais limpo, cor por status: 🔴 aberto · 🟠 em rota · 🟢 concluído. Menos poluído com muitos chamados.' },
+  { ic:'🗑️', t:'Cancelado some na hora', d:'Chamado cancelado sai do mapa imediatamente (continua na lista/relatórios).' },
+  { ic:'📋', t:'Relatório com a placa certa', d:'A busca e a coluna “Placa” do relatório mostram a placa da MOTO do cliente — não mais a do guincho.' }
 ];
 function mostrarNovidadesTorre(force){
   try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER_TORRE)) return; }catch(e){}
