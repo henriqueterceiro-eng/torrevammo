@@ -946,7 +946,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v63 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v64 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2674,6 +2674,19 @@ function renderList(){
   const items = filtered();
   $('#tab1n').textContent = '(' + items.length + ')';
   if(!items.length){
+    // Existem chamados ativos mas o filtro atual esconde tudo? Avisa + oferece limpar (não é deleção).
+    const ativosTotal = chamados.filter(c => !chamadoOcultoPorTempo(c) && c.status !== 'concluido' && c.status !== 'cancelado').length;
+    const temFiltro = !!filtro || origemFiltro !== 'todos' || (catFiltro && catFiltro.size > 0) || (ctrlFiltro && ctrlFiltro.size > 0);
+    if(ativosTotal > 0 && temFiltro){
+      $('#listwrap').innerHTML = `<div style="padding:26px 20px;text-align:center;color:var(--txt2)">
+        <div style="font-size:34px;opacity:0.5">🔎</div>
+        <div style="margin-top:8px;font-size:12.5px;line-height:1.5"><b style="color:var(--txt)">${ativosTotal}</b> chamado(s) ativo(s) — escondido(s) pelo filtro atual.</div>
+        <button id="limparFiltrosBtn" style="margin-top:12px;padding:9px 16px;background:var(--acc);color:#001823;border:none;border-radius:9px;font-weight:800;font-size:12px;cursor:pointer">✕ Limpar filtros</button>
+      </div>`;
+      const _lb = document.getElementById('limparFiltrosBtn');
+      if(_lb) _lb.onclick = () => { filtro = null; origemFiltro = 'todos'; if(catFiltro) catFiltro.clear(); if(ctrlFiltro) ctrlFiltro.clear(); renderAll(); };
+      return;
+    }
     $('#listwrap').innerHTML = `<div style="padding:30px;text-align:center;color:var(--txt2)">
       <div style="font-size:36px;opacity:0.4">📋</div>
       <div style="margin-top:8px;font-size:12px">Nenhum chamado${filtro?' neste filtro':''}</div>
