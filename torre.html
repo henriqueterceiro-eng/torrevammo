@@ -821,6 +821,9 @@ body.sidehide #sidebar:hover::after{opacity:0}
     <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Cliente</label>
     <input type="text" id="addrCliente" placeholder="Nome do cliente">
 
+    <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Telefone <small style="color:var(--txt3)">(vira WhatsApp pro motorista)</small></label>
+    <input type="text" id="addrTel" placeholder="(11) 99999-9999">
+
     <label style="display:block;font-size:11px;color:var(--txt2);margin-top:10px;margin-bottom:4px;font-weight:600">Motivo</label>
     <select id="addrMotivo">
       <option value="Moto não liga">🔌 Moto não liga</option>
@@ -930,7 +933,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v58 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v59 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -5916,10 +5919,39 @@ function exportFrotaCSV(){
   showToast(`⬇ Exportado ${items.length} veículo(s)`);
 }
 
+// ===== Lookup Backoffice: placa da moto → cliente + telefone + modelo (pré-preenche o chamado) =====
+let _addrLookup = null;      // resultado do /api/moto_lookup (pra anexar backofficeUrl/modelo no chamado)
+let _addrLookupTimer = null;
+function _wireAddrPlacaLookup(){
+  const inp = $('#addrPlaca'); if(!inp) return;
+  inp.oninput = () => {
+    clearTimeout(_addrLookupTimer);
+    _addrLookup = null;
+    const placa = inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if(placa.length < 7) return;   // placa Mercosul/antiga = 7
+    _addrLookupTimer = setTimeout(() => buscarMotoBackoffice(placa), 450);
+  };
+}
+async function buscarMotoBackoffice(placa){
+  const res = $('#addrResult');
+  if(res){ res.style.display = 'block'; res.innerHTML = '🔎 Buscando a moto no Backoffice…'; }
+  try {
+    const r = await fetch('/api/moto_lookup?placa=' + encodeURIComponent(placa));
+    const d = await r.json();
+    if(!d || !d.found){ if(res) res.innerHTML = '<span style="color:var(--txt3)">Placa não encontrada no Backoffice — preencha manualmente.</span>'; return; }
+    d._searched = placa; _addrLookup = d;
+    const cli = $('#addrCliente'); if(cli && !cli.value.trim() && d.cliente) cli.value = d.cliente;
+    const tel = $('#addrTel');     if(tel && !tel.value.trim() && d.telefone) tel.value = d.telefone;
+    if(res) res.innerHTML = `🏍 <strong style="color:var(--acc)">${esc(d.modelo||'moto')}</strong> · 👤 ${esc(d.cliente||'?')}${d.telefone?' · 📞 '+esc(d.telefone):''}<br><small>preenchido do Backoffice${d.backofficeUrl?` · <a href="${esc(d.backofficeUrl)}" target="_blank" style="color:var(--acc)">abrir perfil ↗</a>`:''}</small>`;
+  } catch(e){ if(res) res.innerHTML = '<span style="color:var(--txt3)">Erro ao buscar no Backoffice.</span>'; }
+}
 function openAddCh(){
   $('#addrEndereco').value = '';
   $('#addrCliente').value = '';
+  $('#addrTel').value = '';
+  _addrLookup = null;
   $('#addrPlaca').value = '';
+  _wireAddrPlacaLookup();
   // motivos OFICIAIS (mesmos do CX) + opção de digitar
   $('#addrMotivo').innerHTML = DEMO_MOTIVOS.map(o => `<option value="${esc(o.m)}">${esc(o.m)}</option>`).join('') + '<option value="__custom">✏ Outro (digitar)</option>';
   $('#addrMotivo').value = DEMO_MOTIVOS[0].m;
@@ -5986,9 +6018,16 @@ async function submitAddCh(){
       status: 'novo',
       travada: /travada|trava/i.test(motivo),
       clienteAguardando,
+      telefone: (($('#addrTel') && $('#addrTel').value.trim()) || null),
       abertoPor: currentUser ? (currentUser.nome || currentUser.email) : null,
       abertoPorEmail: currentUser ? currentUser.email : null
     };
+    // Dados do Backoffice (se a placa digitada bateu no lookup): WhatsApp + perfil + modelo no card/detalhe
+    if(_addrLookup && _addrLookup._searched === placa){
+      if(_addrLookup.backofficeUrl) ch.backofficeUrl = _addrLookup.backofficeUrl;
+      if(_addrLookup.modelo) ch.motoModelo = _addrLookup.modelo;
+      if(_addrLookup.user_id) ch.clienteUserId = _addrLookup.user_id;
+    }
     const list = loadDemoChamados();
     list.unshift(ch);
     saveDemoChamados(list);
