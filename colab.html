@@ -272,7 +272,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #gpsstatus.warn .ind{background:#fbbf24;box-shadow:0 0 6px #fbbf24}
 
 /* Recenter */
-#recenter{position:absolute;bottom:24px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid var(--bdr);box-shadow:0 4px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:22px;z-index:500;color:var(--acc)}
+#recenter{position:absolute;bottom:24px;right:16px;height:42px;padding:0 15px;border-radius:21px;background:var(--surf);border:1px solid var(--bdr);box-shadow:0 4px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;gap:7px;font-size:18px;font-weight:800;z-index:500;color:var(--acc)}
 
 /* ===== CARD CHAMADO ===== */
 #chamadocard{flex:0 0 auto;background:var(--surf);border-top:2px solid var(--acc);padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));max-height:50vh;overflow:auto;display:none;animation:slideUp 0.3s ease-out}
@@ -319,12 +319,24 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #chamadocard .prox .pdist{font-size:10px;color:var(--acc);font-weight:700;font-family:'IBM Plex Mono',monospace;flex:0 0 auto}
 
 /* ===== Empty state ===== */
-#empty{position:absolute;left:0;right:0;bottom:24px;text-align:center;color:var(--txt2);font-size:12px;pointer-events:none;z-index:400}
+#empty{position:absolute;left:12px;right:120px;bottom:24px;z-index:400;pointer-events:none}
 #empty.hide{display:none}
-#empty .ic{font-size:32px;margin-bottom:6px;opacity:0.5}
+#empty .hub{background:rgba(13,23,42,0.93);backdrop-filter:blur(10px);border:1px solid var(--bdr);border-radius:16px;padding:15px 16px;box-shadow:0 12px 34px rgba(0,0,0,0.5);pointer-events:auto}
+#empty .hub-hi{font-size:16px;font-weight:800;color:var(--txt)}
+#empty .hub-status{display:flex;align-items:center;gap:7px;font-size:12px;color:#4ade80;font-weight:700;margin-top:3px}
+#empty .hub-status .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;animation:hubpulse 1.6s infinite}
+@keyframes hubpulse{0%,100%{opacity:1}50%{opacity:0.35}}
+#empty .hub-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}
+#empty .hub-stat{background:var(--surf2);border:1px solid var(--bdr);border-radius:11px;padding:9px 6px;text-align:center}
+#empty .hub-stat .v{font-size:23px;font-weight:800;color:var(--acc);font-family:'IBM Plex Mono',monospace;line-height:1.1}
+#empty .hub-stat .k{font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;margin-top:3px}
+#empty .hub-veic{display:flex;align-items:center;gap:10px;background:var(--surf2);border:1px solid var(--bdr);border-radius:11px;padding:9px 12px}
+#empty .hub-veic .ic{font-size:20px}
+#empty .hub-veic .vk{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.4px;font-weight:700}
+#empty .hub-veic .vv{font-size:13px;font-weight:800;color:var(--txt);font-family:'IBM Plex Mono',monospace}
 
 /* ===== Toast ===== */
-#toast{position:fixed;top:max(60px,env(safe-area-inset-top));left:50%;transform:translateX(-50%) translateY(-200%);background:var(--acc);color:#001823;padding:12px 18px;border-radius:30px;font-weight:700;font-size:13px;z-index:1000;box-shadow:0 8px 32px rgba(0,180,229,0.4);transition:transform 0.3s ease-out;max-width:90vw}
+#toast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 64px);left:50%;transform:translateX(-50%) translateY(-180px);background:var(--acc);color:#001823;padding:12px 18px;border-radius:30px;font-weight:700;font-size:13px;z-index:2000;box-shadow:0 8px 32px rgba(0,180,229,0.4);transition:transform 0.3s ease-out;max-width:90vw}
 #toast.show{transform:translateX(-50%) translateY(0)}
 #toast.err{background:var(--novo);color:#fff}
 
@@ -449,9 +461,9 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
   <div id="map">
     <div id="mapcanvas"></div>
     <div id="gpsstatus"><span class="ind"></span><span id="gpstxt">Buscando GPS…</span></div>
-    <button id="recenter" title="Centralizar em mim">📍</button>
-    <button id="basebtn" title="Ir até uma base Vammo" style="position:absolute;bottom:84px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid var(--acc);box-shadow:0 4px 12px rgba(0,180,229,0.4);display:flex;align-items:center;justify-content:center;font-size:22px;z-index:500;color:var(--acc)">🏠</button>
-    <button id="docsbtn" onclick="(typeof abrirDocsModal==='function')?abrirDocsModal():alert('⚠ App nao atualizou ainda. Feche COMPLETAMENTE o app (tire da pilha de apps abertos) e abra de novo.')" title="Documentos (CNH + CRLV) — pra blitz" style="position:absolute;bottom:144px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--surf);border:1px solid #fbbf24;box-shadow:0 4px 12px rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;font-size:20px;z-index:500;color:#fbbf24">📄</button>
+    <button id="recenter" title="Centralizar em mim">📍 <span style="font-size:12.5px">Eu</span></button>
+    <button id="basebtn" title="Ir até uma base Vammo" style="position:absolute;bottom:80px;right:16px;height:42px;padding:0 15px;border-radius:21px;background:var(--surf);border:1px solid var(--acc);box-shadow:0 4px 12px rgba(0,180,229,0.4);display:flex;align-items:center;justify-content:center;gap:7px;font-size:18px;font-weight:800;z-index:500;color:var(--acc)">🏠 <span style="font-size:12.5px">Base</span></button>
+    <button id="docsbtn" onclick="(typeof abrirDocsModal==='function')?abrirDocsModal():alert('⚠ App nao atualizou ainda. Feche COMPLETAMENTE o app (tire da pilha de apps abertos) e abra de novo.')" title="Documentos (CNH + CRLV) — pra blitz" style="position:absolute;bottom:132px;right:16px;height:42px;padding:0 15px;border-radius:21px;background:var(--surf);border:1px solid #fbbf24;box-shadow:0 4px 12px rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;gap:7px;font-size:17px;font-weight:800;z-index:500;color:#fbbf24">📄 <span style="font-size:12.5px">Docs</span></button>
     <div id="destinoBanner" style="display:none;position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;background:linear-gradient(135deg,#7c2d12,#dc2626);color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 6px 20px rgba(220,38,38,0.5);z-index:550;display:none;align-items:center;gap:10px">
       <div style="font-size:22px">🔴</div>
       <div style="flex:1;line-height:1.3;min-width:0">
@@ -802,7 +814,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v51 · 2026-07-31';
+const APP_VERSION = 'v52 · 2026-07-31';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1379,6 +1391,15 @@ function rideFinalize(status, desfecho){
     }
   } catch(e){ console.warn('save ride fail:', e); }
   console.log('[ride] finalizada nota=', currentRide.nota.final, 'km=', currentRide.totalKm);
+  // Tally do dia pro HUB ocioso (chamados hoje + nota média) — local, offline-friendly.
+  try {
+    const _h = new Date().toISOString().slice(0,10);
+    let _t = JSON.parse(localStorage.getItem('vammo_colab_dia')||'{}');
+    if(_t.dia !== _h) _t = { dia:_h, n:0, notaSoma:0, notaN:0 };
+    _t.n++;
+    if(currentRide.nota && typeof currentRide.nota.final === 'number'){ _t.notaSoma += currentRide.nota.final; _t.notaN++; }
+    localStorage.setItem('vammo_colab_dia', JSON.stringify(_t));
+  } catch(_){}
   currentRide = null;
 }
 
@@ -2566,11 +2587,33 @@ function renderDestinoBanner(){
   }
 }
 
+// HUB do colab quando está OCIOSO (fora de chamado): saudação + chamados do dia + nota + veículo.
+function renderIdleHub(){
+  const el = document.getElementById('empty'); if(!el) return;
+  let t = {}; try { t = JSON.parse(localStorage.getItem('vammo_colab_dia')||'{}'); } catch(_){}
+  const hoje = new Date().toISOString().slice(0,10);
+  const n = (t.dia === hoje) ? (t.n||0) : 0;
+  const nota = (t.dia === hoje && t.notaN) ? (t.notaSoma/t.notaN) : null;
+  const v = (turnoAtivo && turnoAtivo.veiculoId && _turnoVeiculos) ? _turnoVeiculos[turnoAtivo.veiculoId] : null;
+  const veic = v ? (esc(v.placa||'?') + (v.modelo ? ' · ' + esc(v.modelo) : '')) : (turnoAtivo ? 'sem veículo' : '—');
+  const nome = (me && me.nome) ? esc(me.nome.split(' ')[0]) : 'Colaborador';
+  el.innerHTML = `
+    <div class="hub">
+      <div class="hub-hi">👋 Olá, ${nome}</div>
+      <div class="hub-status"><span class="dot"></span> Online · aguardando chamado</div>
+      <div class="hub-grid">
+        <div class="hub-stat"><div class="v">${n}</div><div class="k">chamados hoje</div></div>
+        <div class="hub-stat"><div class="v">${nota != null ? nota.toFixed(1) : '—'}</div><div class="k">nota média</div></div>
+      </div>
+      <div class="hub-veic"><span class="ic">🚚</span><div><div class="vk">Veículo logado</div><div class="vv">${veic}</div></div></div>
+    </div>`;
+}
 function renderChamadoCard(){
   const el = document.getElementById('chamadocard');
   const empty = document.getElementById('empty');
   if(fila.length === 0){
     el.classList.remove('show');
+    renderIdleHub();
     empty.classList.remove('hide');
     return;
   }
@@ -5983,10 +6026,11 @@ document.getElementById('installclose').addEventListener('click', () => {
 });
 
 // ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
-const NOV_VER = 'v50';
+const NOV_VER = 'v51';
 const NOV_ITENS = [
-  { ic:'🙋', t:'Cliente aguardando no local', d:'Ao receber um chamado, agora aparece um aviso destacado — verde (cliente AGUARDANDO no local) ou vermelho (cliente NÃO está no local) — logo abaixo do nome.' },
-  { ic:'📸', t:'Mais fotos no acidente', d:'Nos atendimentos de ACIDENTE agora dá pra tirar até 4 fotos dos danos (3 obrigatórias) — antes era só 1.' }
+  { ic:'🏠', t:'Sua central quando está livre', d:'Enquanto aguarda chamado, você vê seus chamados do dia, sua nota média e o veículo logado.' },
+  { ic:'🔎', t:'Botões com nome', d:'Os atalhos do canto agora mostram pra que servem: 🏠 Base · 📄 Docs · 📍 Eu.' },
+  { ic:'📸', t:'Acidente com até 4 fotos', d:'Nos atendimentos de ACIDENTE dá pra tirar até 4 fotos dos danos (3 obrigatórias).' }
 ];
 function mostrarNovidades(force){
   try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER)) return; }catch(e){}
