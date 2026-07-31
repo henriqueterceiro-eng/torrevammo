@@ -510,7 +510,7 @@ body.sidehide #sidebar:hover::after{opacity:0}
     <button class="iconbtn" id="repbtn" title="Relatórios de Chamados — filtráveis e exportáveis">📈 Chamados</button>
     <button class="iconbtn" id="logcolabbtn" title="Log de colaboradores — check-in/out, tempos, km, online/ocioso">👣 Log de colabs</button>
     <button class="iconbtn" id="rkmbtn" title="Ranking mensal dos colaboradores">🏆 Mensal</button>
-    <button class="iconbtn" id="frotabtn" title="Revisão de frota — veículos pendentes">🔧 Frota</button>
+    <button class="iconbtn" id="frotabtn" title="Revisão de frota — veículos pendentes">🔧 Frota <span id="frotabadge" style="display:none;background:var(--novo);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:800;margin-left:2px"></span></button>
     <button class="iconbtn" id="demobtn" title="Modo demo: crie chamados manualmente sem Slack">🧪 Demo</button>
     <button class="iconbtn" id="configbtn" title="Configurações">⚙</button>
     <button class="iconbtn" id="colaburlbtn" title="Link do app do colaborador">📱 Colab</button>
@@ -946,7 +946,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v61 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v62 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -4423,7 +4423,8 @@ function openCadForm(tab, id){
       </div>
       <div style="margin:8px 0 4px;padding:6px 10px;background:var(--surf2);border-left:3px solid var(--acc);font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:var(--txt2);font-weight:700">Operação</div>
       <div class="cdform-grid3">
-        <div class="cdform-field"><label>Último km registrado</label><input id="f_km" type="number" min="0" placeholder="123456" value="${item?.ultimoKm ?? ''}"></div>
+        <div class="cdform-field"><label>Último km registrado <small style="color:var(--txt3)">(auto do check-in/out)</small></label><input id="f_km" type="number" min="0" placeholder="123456" value="${item?.ultimoKm ?? ''}"></div>
+        <div class="cdform-field"><label>Próximo km de revisão <small style="color:var(--txt3)">(avisa ao chegar perto)</small></label><input id="f_kmrev" type="number" min="0" placeholder="ex: 20000" value="${item?.kmRevisao ?? ''}"></div>
         <div class="cdform-field"><label>Slots de motos <small style="color:var(--txt3)">${tab==='moto'?'(motos não levam)':tab==='carreta'?'(quantas motos cabem)':'(0 — carreta carrega)'}</small></label><input id="f_slots" type="number" min="0" max="20" placeholder="${tab==='carreta'?'2':tab==='moto'?'0':'0'}" value="${item?.slots ?? (tab==='carreta'?2:0)}"></div>
         <div class="cdform-field"><label>Município licenciamento</label><input id="f_municipio" type="text" placeholder="São Paulo / SP" value="${esc(item?.municipio || '')}"></div>
       </div>
@@ -4553,6 +4554,7 @@ function openCadForm(tab, id){
         // Operação
         ultimoKm: km || null,
         ultimoKmTs: (item?.ultimoKm !== km) ? Date.now() : (item?.ultimoKmTs || Date.now()),
+        kmRevisao: +$('#f_kmrev').value || null,
         slots,
         municipio: $('#f_municipio').value.trim(),
         baseId: $('#f_baseid') ? $('#f_baseid').value || null : (item?.baseId || null),
@@ -5832,6 +5834,22 @@ function exportRkmCSV(){
 // ============================================================
 let frotaState = { tipo: 'todos' };
 
+// Badge de alerta na torre: nº de veículos vencidos/perto da revisão por KM.
+function atualizarFrotaBadge(){
+  const b = document.getElementById('frotabadge'); if(!b) return;
+  let vencida = 0, perto = 0;
+  for(const id in veiculos){
+    const fl = evalRegrasRevisao(veiculos[id]).flags;
+    if(fl.includes('revisao-vencida')) vencida++;
+    else if(fl.includes('revisao-perto')) perto++;
+  }
+  const n = vencida + perto;
+  if(!n){ b.style.display = 'none'; return; }
+  b.style.display = 'inline-block';
+  b.textContent = n;
+  b.style.background = vencida > 0 ? 'var(--novo)' : 'var(--rota)';
+  b.title = `${vencida} veículo(s) com revisão VENCIDA · ${perto} perto do km de revisão`;
+}
 function openFrota(){ $('#frotamodal').style.display = 'flex'; renderFrota(); }
 function closeFrota(){ $('#frotamodal').style.display = 'none'; }
 window.closeFrota = closeFrota;
@@ -5853,10 +5871,15 @@ function evalRegrasRevisao(v){
   // Regra: sem documento
   if(!v.docUrl){ flags.push('sem-doc'); motivos.push('Sem documento (CRLV)'); }
 
-  // [TODO: aqui você vai cadastrar as regras customizadas]
-  // ex: revisão por intervalo de km, validade do seguro, etc.
+  // Regra: revisão por KM — avisa ao aproximar/passar do próximo km de revisão cadastrado
+  const REV_KM_BUFFER = 500;
+  if(v.kmRevisao && v.ultimoKm != null){
+    const faltam = v.kmRevisao - v.ultimoKm;
+    if(faltam <= 0){ flags.push('revisao-vencida'); motivos.push(`Revisão VENCIDA — ${Math.abs(faltam).toLocaleString('pt-BR')} km além do alvo (${v.kmRevisao.toLocaleString('pt-BR')} km)`); }
+    else if(faltam <= REV_KM_BUFFER){ flags.push('revisao-perto'); motivos.push(`Revisão em ${faltam.toLocaleString('pt-BR')} km (alvo ${v.kmRevisao.toLocaleString('pt-BR')} km)`); }
+  }
 
-  const severity = flags.includes('sem-doc') ? 'crit' : flags.length > 0 ? 'warn' : 'ok';
+  const severity = (flags.includes('sem-doc') || flags.includes('revisao-vencida')) ? 'crit' : flags.length > 0 ? 'warn' : 'ok';
   return { flags, severity, motivos };
 }
 
@@ -6726,6 +6749,7 @@ function setupStoreListeners(){
     onVeiculosSnapshot: (data) => {
       veiculos = data || {};
       if($('#cadmodal').style.display === 'flex') renderCad();
+      atualizarFrotaBadge();
     },
     onBasesSnapshot: (data) => {
       bases = data || {};
