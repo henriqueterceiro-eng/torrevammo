@@ -143,11 +143,10 @@ body.sidehide #sidebar:hover::after{opacity:0}
 .card.aguard.sel{border-left:4px solid #22c55e}
 .b-aguard{background:#16a34a;color:#fff;font-weight:800;box-shadow:0 0 0 1px rgba(255,255,255,0.25)}
 .card .transf{color:#c4b5fd;font-size:10.5px;margin-top:3px;line-height:1.35;font-weight:600}
-/* Seleção em massa (botão direito) */
-.card .mcheck{position:absolute;top:8px;right:9px;width:20px;height:20px;border-radius:6px;border:2px solid var(--txt3);background:var(--surf);display:none;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;z-index:3}
-body.selmode .card{cursor:copy}
+/* Seleção em massa (botão "Selecionar" + caixinhas) */
+.card .mcheck{position:absolute;top:11px;left:10px;width:20px;height:20px;border-radius:6px;border:2px solid var(--txt3);background:var(--surf);display:none;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;z-index:3}
+body.selmode .card{cursor:copy;padding-left:40px}
 body.selmode .card .mcheck{display:flex}
-body.selmode .card .ico{display:none}
 .card.mchecked{background:rgba(0,180,229,0.16);box-shadow:inset 0 0 0 2px var(--acc)}
 .card.mchecked .mcheck{background:var(--acc);border-color:var(--acc);color:#001823}
 #massbar{position:sticky;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(6,20,34,0.6),var(--surf) 40%);border-top:1px solid var(--acc);padding:10px 12px;display:none;flex-direction:column;gap:8px;box-shadow:0 -6px 20px rgba(0,0,0,0.5);z-index:20}
@@ -976,7 +975,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v66 · 2026-08-03';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v67 · 2026-08-03';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1160,7 +1159,7 @@ let ctrlFiltro = new Set(); // filtro por CONTROLADOR responsável (admin) — a
 let selId = null;
 let _chamadoAbertoMoto = null;   // último chamado aberto (pra mostrar a moto/perguntar 1x ao abrir)
 let origemFiltro = 'todos';      // filtro de origem dos chamados: 'todos' | 'vammo' | 'externo'
-// ATRIBUIÇÃO EM MASSA — modo seleção (entra por clique-direito num card)
+// ATRIBUIÇÃO EM MASSA — modo seleção (entra pelo botão "Selecionar" na barra de chamados)
 let selMode = false;
 const selSet = new Set();        // ids dos chamados marcados
 function ehTerceiro(c){ return !!(c && c.terceiroId); }
@@ -1171,8 +1170,10 @@ function renderOrigemFilter(){
   const nV = ativos.filter(c => !ehTerceiro(c)).length;
   const nE = ativos.filter(c => ehTerceiro(c)).length;
   const seg = (k, lbl, n, cor) => `<button class="catchip${origemFiltro === k ? ' on' : ''}" data-origem="${k}"${(origemFiltro === k && cor) ? ` style="border-color:${cor};background:${cor}22;color:${cor}"` : ''}>${lbl}${n != null ? ` <span class="cn">${n}</span>` : ''}</button>`;
-  el.innerHTML = seg('todos', 'Todos', null, '') + seg('vammo', '🏍 Vammo', nV, '#00B4E5') + seg('externo', '🤝 Externos', nE, '#f59e0b');
+  const selBtn = `<button id="selmassbtn" class="catchip" title="Selecionar vários chamados pra atribuir de uma vez" style="margin-left:auto${selMode?';border-color:var(--acc);background:rgba(0,180,229,0.22);color:var(--acc);font-weight:800':''}">${selMode?'✕ Cancelar seleção':'☑ Selecionar'}</button>`;
+  el.innerHTML = seg('todos', 'Todos', null, '') + seg('vammo', '🏍 Vammo', nV, '#00B4E5') + seg('externo', '🤝 Externos', nE, '#f59e0b') + selBtn;
   el.querySelectorAll('[data-origem]').forEach(b => b.onclick = () => { origemFiltro = b.dataset.origem; renderAll(); });
+  { const smb = el.querySelector('#selmassbtn'); if(smb) smb.onclick = toggleSelMode; }
 }
 let tab = 'chamados';
 let addMode = false;
@@ -2734,29 +2735,36 @@ function transfInfo(c){
   return `🏁 <b>${esc(s||'—')}</b> &nbsp;→&nbsp; 🎯 <b>${esc(e||'—')}</b>`;
 }
 
-// ===== ATRIBUIÇÃO EM MASSA (clique-direito) =====
+// ===== ATRIBUIÇÃO EM MASSA (botão Selecionar + caixinhas) =====
 function selElegivel(id){ const c = chamados.find(x => x.id === id); return c && c.status !== 'concluido' && c.status !== 'cancelado'; }
 function enterSelMode(id){
   selMode = true; document.body.classList.add('selmode');
   if(id) selSet.add(id);
-  renderList();
+  renderOrigemFilter(); renderList();
 }
 function exitSelMode(){
   selMode = false; document.body.classList.remove('selmode'); selSet.clear();
-  renderList();
+  renderOrigemFilter(); renderList();
 }
+function toggleSelMode(){ if(selMode) exitSelMode(); else enterSelMode(); }
 function toggleSel(id){
   if(!selElegivel(id)) return;
   if(selSet.has(id)) selSet.delete(id); else selSet.add(id);
-  if(selSet.size === 0){ exitSelMode(); return; }
+  renderList();   // permanece no modo mesmo com 0 marcados — sai só pelo botão Cancelar
+}
+function selecionarTodosVisiveis(){
+  let add = 0;
+  filtered().forEach(c => { if(selElegivel(c.id) && !selSet.has(c.id)){ selSet.add(c.id); add++; } });
+  if(!add){ // já estavam todos marcados → desmarca os visíveis (vira "limpar")
+    filtered().forEach(c => selSet.delete(c.id));
+  }
   renderList();
 }
 function renderMassBar(){
   const bar = document.getElementById('massbar'); if(!bar) return;
   if(!selMode || tab !== 'chamados'){ bar.classList.remove('on'); bar.innerHTML = ''; return; }
-  // Poda ids que saíram da lista/foram concluídos
+  // Poda ids que saíram da lista/foram concluídos (não sai do modo — isso é só pelo botão Cancelar)
   for(const id of [...selSet]){ if(!selElegivel(id)) selSet.delete(id); }
-  if(selSet.size === 0){ selMode = false; document.body.classList.remove('selmode'); bar.classList.remove('on'); bar.innerHTML = ''; return; }
   const n = selSet.size;
   const nAguard = [...selSet].filter(id => chamadoPrioritario(chamados.find(x => x.id === id))).length;
   const parcList = Object.values(parceiros).filter(p => p.ativo !== false).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
@@ -2764,22 +2772,28 @@ function renderMassBar(){
   const onlineMots = motIds.filter(id => (motoristas[id] && motoristas[id].lat));
   const tercOpt = parcList.map(p => `<option value="t:${p.id}">🤝 ${esc(p.nome)}${p.baseDescarga?' · '+esc(p.baseDescarga):''}</option>`).join('');
   const motOpt = motIds.map(id => { const m = motoristas[id]; const on = onlineMots.includes(id); return `<option value="m:${id}">${on?'🟢':'⚫'} ${esc(m.nome)}${m.placa?' ('+esc(m.placa)+')':''}${m.isFull?' 🔒':''}</option>`; }).join('');
+  const totVis = filtered().filter(c => selElegivel(c.id)).length;
+  const todosMarcados = totVis > 0 && n >= totVis;
   bar.innerHTML = `
     <div class="mbtop">
-      <span class="mbcount">☑ ${n} selecionado${n>1?'s':''}${nAguard?` · 🙋 ${nAguard} aguardando`:''}</span>
-      <button class="mbx" id="mbclose">✕ Sair</button>
+      <span class="mbcount">${n ? `☑ ${n} selecionado${n>1?'s':''}${nAguard?` · 🙋 ${nAguard} aguardando`:''}` : '<span style="color:var(--txt2);font-weight:600">👆 clique nos chamados pra marcar</span>'}</span>
+      <button class="mbx" id="mbclose">✕ Cancelar</button>
     </div>
     <select id="mbtarget">
       <option value="">— atribuir todos a… —</option>
       ${parcList.length?`<optgroup label="🤝 Prestadores (terceiros)">${tercOpt}</optgroup>`:''}
       ${motIds.length?`<optgroup label="👷 Colaboradores">${motOpt}</optgroup>`:''}
     </select>
-    <button class="mbgo" id="mbgo" disabled>Atribuir ${n} chamado${n>1?'s':''}</button>`;
+    <div style="display:flex;gap:8px">
+      <button class="mbx" id="mbselall" style="flex:0 0 auto;white-space:nowrap"${totVis?'':' disabled'}>${todosMarcados?'▢ Limpar':'☑ Todos ('+totVis+')'}</button>
+      <button class="mbgo" id="mbgo" style="flex:1" disabled>Atribuir${n?` ${n}`:''}</button>
+    </div>`;
   bar.classList.add('on');
   const sel = document.getElementById('mbtarget');
   const go = document.getElementById('mbgo');
   document.getElementById('mbclose').onclick = exitSelMode;
-  sel.onchange = () => { go.disabled = !sel.value; };
+  { const sa = document.getElementById('mbselall'); if(sa) sa.onclick = selecionarTodosVisiveis; }
+  sel.onchange = () => { go.disabled = !sel.value || selSet.size === 0; };
   go.onclick = () => {
     const v = sel.value; if(!v) return;
     const kind = v.slice(0,1) === 't' ? 'terceiro' : 'colab';
@@ -2839,9 +2853,9 @@ function renderList(){
   }
   const orderMap = buildOrderMap();
   const numMap = buildNumeroMap();
-  // Dica discreta do gesto de seleção em massa (some no modo seleção)
-  const hintMassa = (!selMode && items.filter(x => selElegivel(x.id)).length >= 2)
-    ? `<div style="padding:6px 12px;font-size:10px;color:var(--txt3);border-bottom:1px solid var(--bdr);background:rgba(0,0,0,0.12)">🖱️ <b style="color:var(--txt2)">Clique-direito</b> num chamado pra selecionar vários e atribuir de uma vez</div>` : '';
+  // No modo seleção, uma faixa no topo reforça o que fazer
+  const hintMassa = selMode
+    ? `<div style="padding:7px 12px;font-size:11px;color:var(--acc);border-bottom:1px solid var(--acc);background:rgba(0,180,229,0.1);font-weight:700">☑ Modo seleção — clique nos chamados pra marcar; depois escolha o destino embaixo</div>` : '';
   $('#listwrap').innerHTML = hintMassa + items.map(c => {
     const sel = c.id === selId ? ' sel' : '';
     const al = alertCls(c);
@@ -2894,8 +2908,6 @@ function renderList(){
     </div>`;
   }).join('');
   $$('#listwrap .card').forEach(el => {
-    // Clique-direito em qualquer card → entra no modo seleção em massa e marca este
-    el.oncontextmenu = (e) => { e.preventDefault(); if(!selElegivel(el.dataset.id)) return; if(!selMode) enterSelMode(el.dataset.id); else toggleSel(el.dataset.id); };
     el.onclick = () => {
       if(selMode){ toggleSel(el.dataset.id); return; }   // no modo seleção, clique marca/desmarca
       selId = el.dataset.id;
