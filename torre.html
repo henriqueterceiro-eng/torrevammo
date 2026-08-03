@@ -138,6 +138,26 @@ body.sidehide #sidebar:hover::after{opacity:0}
 .card .motivo{color:var(--txt);font-size:11px;margin-top:3px;line-height:1.3}
 .card .end{color:var(--txt2);font-size:10px;margin-top:3px;line-height:1.3}
 .card .meta{display:flex;justify-content:space-between;color:var(--txt3);font-size:10px;margin-top:4px;font-family:var(--mono)}
+/* Cliente AGUARDANDO no local — destaque forte (prioridade máxima de atendimento) */
+.card.aguard{border-left:4px solid #22c55e;background:linear-gradient(90deg,rgba(34,197,94,0.14),transparent 60%)}
+.card.aguard.sel{border-left:4px solid #22c55e}
+.b-aguard{background:#16a34a;color:#fff;font-weight:800;box-shadow:0 0 0 1px rgba(255,255,255,0.25)}
+.card .transf{color:#c4b5fd;font-size:10.5px;margin-top:3px;line-height:1.35;font-weight:600}
+/* Seleção em massa (botão direito) */
+.card .mcheck{position:absolute;top:8px;right:9px;width:20px;height:20px;border-radius:6px;border:2px solid var(--txt3);background:var(--surf);display:none;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;z-index:3}
+body.selmode .card{cursor:copy}
+body.selmode .card .mcheck{display:flex}
+body.selmode .card .ico{display:none}
+.card.mchecked{background:rgba(0,180,229,0.16);box-shadow:inset 0 0 0 2px var(--acc)}
+.card.mchecked .mcheck{background:var(--acc);border-color:var(--acc);color:#001823}
+#massbar{position:sticky;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(6,20,34,0.6),var(--surf) 40%);border-top:1px solid var(--acc);padding:10px 12px;display:none;flex-direction:column;gap:8px;box-shadow:0 -6px 20px rgba(0,0,0,0.5);z-index:20}
+#massbar.on{display:flex}
+#massbar .mbtop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#massbar .mbcount{font-weight:800;font-size:13px;color:var(--acc)}
+#massbar .mbx{background:transparent;border:1px solid var(--bdr);color:var(--txt2);border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer}
+#massbar select{width:100%;padding:9px;border-radius:8px;font-size:12px}
+#massbar .mbgo{width:100%;padding:11px;background:var(--acc);color:#001823;border:none;border-radius:9px;font-weight:900;font-size:13px;cursor:pointer}
+#massbar .mbgo:disabled{opacity:0.45;cursor:not-allowed}
 
 /* Motoristas */
 #motwrap{flex:1;overflow:auto;display:none;flex-direction:column;background:transparent}
@@ -546,6 +566,7 @@ body.sidehide #sidebar:hover::after{opacity:0}
       <div id="ctrlfilter" style="display:none"></div>
       <div id="origemfilter"></div>
       <div id="listwrap"></div>
+      <div id="massbar"></div>
       <div id="motwrap"></div>
     </div>
 
@@ -860,6 +881,15 @@ body.sidehide #sidebar:hover::after{opacity:0}
       <option value="nao">❌ Não — cliente não está no local</option>
     </select>
 
+    <!-- Transferência entre bases: origem → destino (aparece só p/ motivo de deslocamento/logística) -->
+    <div id="addrTransfWrap" style="display:none;margin-top:12px;padding:11px;border:1px solid rgba(139,92,246,0.5);background:rgba(139,92,246,0.08);border-radius:9px">
+      <div style="font-size:11px;color:#c4b5fd;font-weight:800;margin-bottom:8px">🚚 Transferência entre bases</div>
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:600">🏁 Base de saída <small style="color:var(--txt3)">(de onde sai a moto)</small></label>
+      <select id="addrBaseSaida"><option value="">— selecionar —</option></select>
+      <label style="display:block;font-size:11px;color:var(--txt2);margin-top:9px;margin-bottom:4px;font-weight:600">🎯 Base de entrega <small style="color:var(--txt3)">(destino final)</small></label>
+      <select id="addrBaseEntrega"><option value="">— selecionar —</option></select>
+    </div>
+
     <div id="addrResult" style="margin-top:14px;padding:10px;background:var(--surf2);border-radius:6px;font-size:11px;color:var(--txt2);display:none"></div>
     </div><!-- /#addrRest -->
 
@@ -946,7 +976,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v65 · 2026-07-31';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v66 · 2026-08-03';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1130,6 +1160,9 @@ let ctrlFiltro = new Set(); // filtro por CONTROLADOR responsável (admin) — a
 let selId = null;
 let _chamadoAbertoMoto = null;   // último chamado aberto (pra mostrar a moto/perguntar 1x ao abrir)
 let origemFiltro = 'todos';      // filtro de origem dos chamados: 'todos' | 'vammo' | 'externo'
+// ATRIBUIÇÃO EM MASSA — modo seleção (entra por clique-direito num card)
+let selMode = false;
+const selSet = new Set();        // ids dos chamados marcados
 function ehTerceiro(c){ return !!(c && c.terceiroId); }
 function renderOrigemFilter(){
   const el = document.getElementById('origemfilter'); if(!el) return;
@@ -1209,7 +1242,25 @@ function pruneQueues(){
 function queueAdd(motoristaId, chamadoId){
   const q = loadQueues();
   q[motoristaId] = q[motoristaId] || [];
-  if(!q[motoristaId].includes(chamadoId)) q[motoristaId].push(chamadoId);
+  const arr = q[motoristaId];
+  if(!arr.includes(chamadoId)){
+    const cNew = chamados.find(x => x.id === chamadoId);
+    if(cNew && chamadoPrioritario(cNew)){
+      // Cliente aguardando no local = prioridade: entra à frente dos não-prioritários.
+      // Não passa à frente de: paradas onde o colab JÁ CHEGOU (atendimento em curso) nem de
+      // outros prioritários já na fila (mantém a ordem de chegada entre prioritários).
+      let idx = 0;
+      while(idx < arr.length){
+        const cc = chamados.find(x => x.id === arr[idx]);
+        const ativoChegou = cc && cc.arrived && cc.status !== 'concluido' && cc.status !== 'cancelado';
+        if(ativoChegou || chamadoPrioritario(cc)){ idx++; continue; }
+        break;
+      }
+      arr.splice(idx, 0, chamadoId);
+    } else {
+      arr.push(chamadoId);
+    }
+  }
   saveQueues(q);
   return q;
 }
@@ -2063,7 +2114,7 @@ window.baixaParceiroSlot = function(pid, sid){
 // ===== CHAMADOS EXTERNOS (encaminhados a PRESTADORES/terceiros) =====
 // O terceiro NÃO usa o app colab (sem GPS/fila). A torre encaminha, e o controlador
 // encerra manualmente. Ao concluir "Recolhida", a moto entra nos slots da base do parceiro.
-function atribuirTerceiro(chamadoId, terceiroId){
+function atribuirTerceiro(chamadoId, terceiroId, batch){
   const c = chamados.find(x => x.id === chamadoId); if(!c) return;
   if(!terceiroId){
     c.terceiroId = null; c.terceiroNome = null;
@@ -2083,8 +2134,7 @@ function atribuirTerceiro(chamadoId, terceiroId){
   c.atribuidoTerceiroEm = Date.now();
   STORE.updateChamado(chamadoId, { terceiroId, terceiroNome: c.terceiroNome, terceiroContato: c.terceiroContato, motoristaId: null, motoristaNome: null, motoristaPlaca: null, status: 'em_rota', atribuidoPor: c.atribuidoPor, atribuidoEm: c.atribuidoEm, atribuidoTerceiroEm: c.atribuidoTerceiroEm });
   logTorre('atribui_terceiro', { chamadoId, terceiroId, terceiroNome: c.terceiroNome, cliente: c.cliente||null, placa: c.placa||null, operador });
-  showToast('🤝 Encaminhado para ' + (c.terceiroNome || 'terceiro'));
-  renderAll();
+  if(!batch){ showToast('🤝 Encaminhado para ' + (c.terceiroNome || 'terceiro')); renderAll(); }
 }
 
 function _fileToDataUrl(file, maxW, cb){
@@ -2670,9 +2720,102 @@ function renderCatFilter(){
   });
 }
 
+// ===== PRIORIDADE (cliente aguardando no local) =====
+// Chamado com cliente aguardando no local tem prioridade na fila/roteirização.
+function chamadoPrioritario(c){ return !!(c && c.clienteAguardando === true && c.status !== 'concluido' && c.status !== 'cancelado'); }
+
+// ===== TRANSFERÊNCIA ENTRE BASES (saída → entrega) =====
+function _baseNome(idOuNome){ if(!idOuNome) return ''; const b = bases[idOuNome]; return (b && b.nome) || String(idOuNome); }
+function ehTransferencia(c){ return !!(c && (c.baseSaida || c.baseEntrega || categoriaDoMotivo(c.motivo) === 'logistica')); }
+// Linha "🏁 Saída → 🎯 Entrega" pro card/detalhe (só quando há ao menos uma base definida)
+function transfInfo(c){
+  if(!c || (!c.baseSaida && !c.baseEntrega)) return '';
+  const s = _baseNome(c.baseSaida), e = _baseNome(c.baseEntrega);
+  return `🏁 <b>${esc(s||'—')}</b> &nbsp;→&nbsp; 🎯 <b>${esc(e||'—')}</b>`;
+}
+
+// ===== ATRIBUIÇÃO EM MASSA (clique-direito) =====
+function selElegivel(id){ const c = chamados.find(x => x.id === id); return c && c.status !== 'concluido' && c.status !== 'cancelado'; }
+function enterSelMode(id){
+  selMode = true; document.body.classList.add('selmode');
+  if(id) selSet.add(id);
+  renderList();
+}
+function exitSelMode(){
+  selMode = false; document.body.classList.remove('selmode'); selSet.clear();
+  renderList();
+}
+function toggleSel(id){
+  if(!selElegivel(id)) return;
+  if(selSet.has(id)) selSet.delete(id); else selSet.add(id);
+  if(selSet.size === 0){ exitSelMode(); return; }
+  renderList();
+}
+function renderMassBar(){
+  const bar = document.getElementById('massbar'); if(!bar) return;
+  if(!selMode || tab !== 'chamados'){ bar.classList.remove('on'); bar.innerHTML = ''; return; }
+  // Poda ids que saíram da lista/foram concluídos
+  for(const id of [...selSet]){ if(!selElegivel(id)) selSet.delete(id); }
+  if(selSet.size === 0){ selMode = false; document.body.classList.remove('selmode'); bar.classList.remove('on'); bar.innerHTML = ''; return; }
+  const n = selSet.size;
+  const nAguard = [...selSet].filter(id => chamadoPrioritario(chamados.find(x => x.id === id))).length;
+  const parcList = Object.values(parceiros).filter(p => p.ativo !== false).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+  const motIds = Object.keys(motoristas);
+  const onlineMots = motIds.filter(id => (motoristas[id] && motoristas[id].lat));
+  const tercOpt = parcList.map(p => `<option value="t:${p.id}">🤝 ${esc(p.nome)}${p.baseDescarga?' · '+esc(p.baseDescarga):''}</option>`).join('');
+  const motOpt = motIds.map(id => { const m = motoristas[id]; const on = onlineMots.includes(id); return `<option value="m:${id}">${on?'🟢':'⚫'} ${esc(m.nome)}${m.placa?' ('+esc(m.placa)+')':''}${m.isFull?' 🔒':''}</option>`; }).join('');
+  bar.innerHTML = `
+    <div class="mbtop">
+      <span class="mbcount">☑ ${n} selecionado${n>1?'s':''}${nAguard?` · 🙋 ${nAguard} aguardando`:''}</span>
+      <button class="mbx" id="mbclose">✕ Sair</button>
+    </div>
+    <select id="mbtarget">
+      <option value="">— atribuir todos a… —</option>
+      ${parcList.length?`<optgroup label="🤝 Prestadores (terceiros)">${tercOpt}</optgroup>`:''}
+      ${motIds.length?`<optgroup label="👷 Colaboradores">${motOpt}</optgroup>`:''}
+    </select>
+    <button class="mbgo" id="mbgo" disabled>Atribuir ${n} chamado${n>1?'s':''}</button>`;
+  bar.classList.add('on');
+  const sel = document.getElementById('mbtarget');
+  const go = document.getElementById('mbgo');
+  document.getElementById('mbclose').onclick = exitSelMode;
+  sel.onchange = () => { go.disabled = !sel.value; };
+  go.onclick = () => {
+    const v = sel.value; if(!v) return;
+    const kind = v.slice(0,1) === 't' ? 'terceiro' : 'colab';
+    atribuirMassa(kind, v.slice(2));
+  };
+}
+function atribuirMassa(kind, targetId){
+  const ids = [...selSet].filter(selElegivel);
+  if(!ids.length || !targetId) return;
+  const alvoNome = kind === 'terceiro'
+    ? ((parceiros[targetId] && parceiros[targetId].nome) || 'terceiro')
+    : ((motoristas[targetId] && motoristas[targetId].nome) || 'colaborador');
+  if(!confirm(`Atribuir ${ids.length} chamado(s) a ${alvoNome}?`)) return;
+  let ok = 0;
+  // Prioriza: chamados com cliente aguardando entram primeiro na fila do colab
+  const ordenados = ids.slice().sort((a,b) => {
+    const pa = chamadoPrioritario(chamados.find(x => x.id === a)) ? 0 : 1;
+    const pb = chamadoPrioritario(chamados.find(x => x.id === b)) ? 0 : 1;
+    return pa - pb;
+  });
+  ordenados.forEach(id => {
+    if(kind === 'terceiro') atribuirTerceiro(id, targetId, true);
+    else atribuir(id, targetId, true);
+    ok++;
+  });
+  logTorre('atribui_massa', { kind, targetId, alvo: alvoNome, ids: ordenados, n: ok, operador: getOperadorTorre() });
+  showToast(`✅ ${ok} chamado(s) → ${alvoNome}`);
+  exitSelMode();       // já chama renderList; recountMotoristas p/ badges de fila
+  recountMotoristas();
+  renderAll();
+}
+
 function renderList(){
   const items = filtered();
   $('#tab1n').textContent = '(' + items.length + ')';
+  renderMassBar();
   if(!items.length){
     // Existem chamados ativos mas o filtro atual esconde tudo? Avisa + oferece limpar (não é deleção).
     const ativosTotal = chamados.filter(c => !chamadoOcultoPorTempo(c) && c.status !== 'concluido' && c.status !== 'cancelado').length;
@@ -2696,7 +2839,10 @@ function renderList(){
   }
   const orderMap = buildOrderMap();
   const numMap = buildNumeroMap();
-  $('#listwrap').innerHTML = items.map(c => {
+  // Dica discreta do gesto de seleção em massa (some no modo seleção)
+  const hintMassa = (!selMode && items.filter(x => selElegivel(x.id)).length >= 2)
+    ? `<div style="padding:6px 12px;font-size:10px;color:var(--txt3);border-bottom:1px solid var(--bdr);background:rgba(0,0,0,0.12)">🖱️ <b style="color:var(--txt2)">Clique-direito</b> num chamado pra selecionar vários e atribuir de uma vez</div>` : '';
+  $('#listwrap').innerHTML = hintMassa + items.map(c => {
     const sel = c.id === selId ? ' sel' : '';
     const al = alertCls(c);
     const motId = c.motoristaId;
@@ -2727,25 +2873,36 @@ function renderList(){
       : (motId && c.motoristaNome ? `<span class="b b-mot" style="background:#6b7280" title="Colaborador offline — segue responsável">${esc(c.motoristaNome.split(' ')[0])} ⚫</span>` : '');
     const stBadge = `<span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : (c.status||'novo').toUpperCase()}</span>`;
     const tercBadge = ehTerceiro(c) ? `<span class="b" style="background:#f59e0b;color:#1a1200" title="Encaminhado ao prestador ${esc(c.terceiroNome||'')}">🤝 ${esc((c.terceiroNome||'Externo').split(' ')[0])}</span>` : '';
+    const aguard = chamadoPrioritario(c);
+    const aguardBadge = aguard ? `<span class="b b-aguard" title="Cliente aguardando no local — prioridade">🙋 AGUARDANDO</span>` : '';
+    const transfLine = transfInfo(c);
     const _num = c.seq != null ? c.seq : numMap[c.id];
     const numTag = _num ? `<span style="font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800;margin-right:5px">#${_num}</span>` : '';
     const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : ((catDim(c) || ctrlDim(c)) ? ' style="opacity:0.3"' : '');
-    return `<div class="card${sel} ${al}" data-id="${c.id}"${fadeStyle}>
+    const checkedCls = selSet.has(c.id) ? ' mchecked' : '';
+    return `<div class="card${sel} ${al}${aguard?' aguard':''}${checkedCls}" data-id="${c.id}"${fadeStyle}>
+      <div class="mcheck">${selSet.has(c.id)?'✓':''}</div>
       <div class="row1">
         <div class="nome">${numTag}${esc(c.cliente||'?')}</div>
         <div class="ico">${ico(c.motivo)}</div>
       </div>
-      <div class="badges">${stBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
+      <div class="badges">${aguardBadge}${stBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
       <div class="motivo">${esc(c.motivo||'—')}</div>
+      ${transfLine ? `<div class="transf">${transfLine}</div>` : ''}
       ${c.endereco ? `<div class="end">📍 ${esc(c.endereco)}</div>` : ''}
       <div class="meta"><span>${esc(c.placa||'—')}</span><span>${fmtTime(c.ts)} · ${fmtElapsed(c.ts)}</span></div>
     </div>`;
   }).join('');
-  $$('#listwrap .card').forEach(el => el.onclick = () => {
-    selId = el.dataset.id;
-    const c = chamados.find(x => x.id === selId);
-    if(c && c.lat) map.setView([c.lat, c.lng], 15);
-    renderAll();
+  $$('#listwrap .card').forEach(el => {
+    // Clique-direito em qualquer card → entra no modo seleção em massa e marca este
+    el.oncontextmenu = (e) => { e.preventDefault(); if(!selElegivel(el.dataset.id)) return; if(!selMode) enterSelMode(el.dataset.id); else toggleSel(el.dataset.id); };
+    el.onclick = () => {
+      if(selMode){ toggleSel(el.dataset.id); return; }   // no modo seleção, clique marca/desmarca
+      selId = el.dataset.id;
+      const c = chamados.find(x => x.id === selId);
+      if(c && c.lat) map.setView([c.lat, c.lng], 15);
+      renderAll();
+    };
   });
 }
 
@@ -2989,8 +3146,16 @@ async function otimizarFila(motoristaId, btn){
     const newQueue = newOrder.map(i => idsValid[i]);
     // Mantém no fim os que não tinham GPS (não otimizáveis)
     const rest = fila.filter(id => !idsValid.includes(id));
+    // PRIORIDADE: cliente aguardando no local vem primeiro (partição estável — mantém a ordem
+    // ótima de distância dentro de cada grupo). O TomTom minimiza km; aqui garantimos que
+    // ninguém que está esperando no local fique atrás de quem não está.
+    const _prioFirst = (ids) => {
+      const p = [], np = [];
+      ids.forEach(id => (chamadoPrioritario(chamados.find(x => x.id === id)) ? p : np).push(id));
+      return [...p, ...np];
+    };
     const qs = loadQueues();
-    qs[motoristaId] = [...newQueue, ...rest];
+    qs[motoristaId] = _prioFirst([...newQueue, ...rest]);
     saveQueues(qs);
     STORE.setAllQueues(qs);
     sync.send('chamado:reordenar', { motoristaId, order: qs[motoristaId] });
@@ -3048,6 +3213,15 @@ function renderDetail(){
       ${c.travada?'<span class="b b-trav" style="margin-left:6px">⚠ TRAV</span>':''}
       ${c.clienteAguardando === true ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : (c.clienteAguardando === false ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}
     </div>
+    ${chamadoPrioritario(c) ? `<div style="margin-top:10px;padding:9px 12px;background:linear-gradient(135deg,rgba(34,197,94,0.22),rgba(34,197,94,0.08));border:1px solid #22c55e;border-radius:9px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">🙋</span>
+      <div style="flex:1;min-width:0"><div style="font-size:9px;color:#4ade80;font-weight:800;text-transform:uppercase;letter-spacing:0.5px">Cliente aguardando no local</div>
+      <div style="font-size:12px;font-weight:700;line-height:1.25">Prioridade na fila — entra na frente na roteirização</div></div>
+    </div>` : ''}
+    ${transfInfo(c) ? `<div style="margin-top:10px;padding:10px 12px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.5);border-radius:9px">
+      <div style="font-size:9px;color:#c4b5fd;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🚚 Transferência entre bases</div>
+      <div style="font-size:13px;font-weight:700;line-height:1.3">${transfInfo(c)}</div>
+    </div>` : ''}
     ${(() => {
       // DESTAQUE: controlador responsável pelo chamado (quem atribuiu > quem abriu > analista CX)
       const resp = c.atribuidoPor || c.abertoPor || c.analista || null;
@@ -3530,7 +3704,7 @@ function abrirEscolhaLocalMoto(c, motoristaId, ping, dist){
   };
 }
 
-function atribuir(chamadoId, motoristaId){
+function atribuir(chamadoId, motoristaId, batch){
   const c = chamados.find(x => x.id === chamadoId);
   if(!c) return;
   const a = loadAsgn();
@@ -3604,8 +3778,8 @@ function atribuir(chamadoId, motoristaId){
       ts: c.ts   // abertura do chamado — o colab usa pro TMA total (abertura → encerramento)
     });
     const q = loadQueues();
-    const pos = q[motoristaId] ? q[motoristaId].length : 1;
-    showToast(`📲 ${motoristas[motoristaId].nome}${pos>1?` · ponto ${pos} da fila`:''}`);
+    const pos = (q[motoristaId] || []).indexOf(chamadoId) + 1;
+    if(!batch) showToast(`📲 ${motoristas[motoristaId].nome}${pos>1?` · ponto ${pos} da fila`:''}${chamadoPrioritario(c)?' · 🙋 prioridade':''}`);
     updateRouteFor(motoristaId);
   } else {
     const oldMot = a[chamadoId];
@@ -3627,7 +3801,7 @@ function atribuir(chamadoId, motoristaId){
     }
   }
   recountMotoristas();
-  renderAll();
+  if(!batch) renderAll();
 }
 
 // Reordenar fila de um motorista (drag, ou ↑↓)
@@ -6022,6 +6196,9 @@ function openAddCh(){
   $('#addrMotivoCustom').style.display = 'none';
   $('#addrMotivoCustom').value = '';
   if($('#addrAguardando')) $('#addrAguardando').value = 'sim';
+  // Bases (transferência): popula os dois selects + mostra/esconde conforme o motivo
+  _preencherBasesSelect();
+  _addrToggleTransf();
   $('#addrResult').style.display = 'none';
   // Reseta o botão (sai do estado "Geocodificando..." se ficou travado de uma vez anterior)
   const btn = $('#addrSubmit');
@@ -6032,13 +6209,38 @@ function openAddCh(){
 function closeAddCh(){ $('#addch').style.display = 'none'; }
 window.closeAddCh = closeAddCh;
 
+// Popula os selects de base (saída/entrega) da transferência com as bases Vammo ativas
+function _preencherBasesSelect(){
+  const opts = '<option value="">— selecionar —</option>' +
+    Object.entries(bases)
+      .filter(([id,b]) => b && b.nome && b.ativo !== false)
+      .sort((a,b) => (a[1].nome||'').localeCompare(b[1].nome||''))
+      .map(([id,b]) => `<option value="${id}">${esc(b.nome)}</option>`).join('');
+  const s = $('#addrBaseSaida'), e = $('#addrBaseEntrega');
+  if(s) s.innerHTML = opts;
+  if(e) e.innerHTML = opts;
+}
+// Mostra os campos de base só quando o motivo é de deslocamento/transferência (categoria logística)
+function _addrToggleTransf(){
+  const w = $('#addrTransfWrap'); if(!w) return;
+  let motivo = $('#addrMotivo') ? $('#addrMotivo').value : '';
+  if(motivo === '__custom') motivo = ($('#addrMotivoCustom') && $('#addrMotivoCustom').value) || 'deslocamento';
+  w.style.display = (categoriaDoMotivo(motivo) === 'logistica') ? 'block' : 'none';
+}
+
 async function submitAddCh(){
   const endereco = $('#addrEndereco').value.trim();
-  const cliente = $('#addrCliente').value.trim();
+  let cliente = $('#addrCliente').value.trim();
   let motivo = $('#addrMotivo').value;
   if(motivo === '__custom'){ motivo = $('#addrMotivoCustom').value.trim() || 'Atendimento'; }
   const placa = $('#addrPlaca').value.trim().toUpperCase() || ('XYZ' + Math.floor(Math.random()*9000+1000));
   const clienteAguardando = ($('#addrAguardando') ? $('#addrAguardando').value : 'sim') === 'sim';
+  const ehTransf = categoriaDoMotivo(motivo) === 'logistica';
+  const baseSaida = ehTransf && $('#addrBaseSaida') ? ($('#addrBaseSaida').value || null) : null;
+  const baseEntrega = ehTransf && $('#addrBaseEntrega') ? ($('#addrBaseEntrega').value || null) : null;
+  if(ehTransf && (!baseSaida || !baseEntrega)){ showToast('⚠ Transferência: informe a base de saída e a de entrega', true); return; }
+  // Numa transferência entre bases não há "cliente" — rotula pela origem→destino se ficou em branco
+  if(ehTransf && !cliente) cliente = `Transferência: ${_baseNome(baseSaida)} → ${_baseNome(baseEntrega)}`;
 
   if(!endereco){ showToast('⚠ Endereço é obrigatório', true); return; }
   if(!cliente){ showToast('⚠ Cliente é obrigatório', true); return; }
@@ -6086,6 +6288,9 @@ async function submitAddCh(){
       abertoPor: currentUser ? (currentUser.nome || currentUser.email) : null,
       abertoPorEmail: currentUser ? currentUser.email : null
     };
+    // Transferência entre bases: guarda origem e destino (ids das bases)
+    if(baseSaida) ch.baseSaida = baseSaida;
+    if(baseEntrega) ch.baseEntrega = baseEntrega;
     // Dados do Backoffice (se a placa digitada bateu no lookup): WhatsApp + perfil + modelo no card/detalhe
     if(_addrLookup && _addrLookup._searched === placa){
       if(_addrLookup.backofficeUrl) ch.backofficeUrl = _addrLookup.backofficeUrl;
@@ -7785,7 +7990,9 @@ function init(){
   $('#addrMotivo').onchange = (e) => {
     $('#addrMotivoCustom').style.display = e.target.value === '__custom' ? 'block' : 'none';
     if(e.target.value === '__custom') setTimeout(() => $('#addrMotivoCustom').focus(), 50);
+    _addrToggleTransf();
   };
+  $('#addrMotivoCustom').addEventListener('input', _addrToggleTransf);
   $('#addrSubmit').onclick = submitAddCh;
   $('#addrEndereco').addEventListener('keydown', (e) => {
     if(e.key === 'Enter'){ e.preventDefault(); submitAddCh(); }
