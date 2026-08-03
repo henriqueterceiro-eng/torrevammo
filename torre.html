@@ -8044,13 +8044,11 @@ function init(){
 }
 
 // ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
-const NOV_VER_TORRE = 'v60';
+const NOV_VER_TORRE = 'v66';
 const NOV_ITENS_TORRE = [
-  { ic:'🏍', t:'Placa puxa tudo do Backoffice', d:'No “Adicionar por endereço”, a placa agora fica no topo (com cara de placa Mercosul). Digite a placa e a gente preenche cliente, telefone e modelo da moto automaticamente — o telefone vira WhatsApp pro motorista.' },
-  { ic:'🆔', t:'Nº do chamado único e sequencial', d:'Cada chamado tem um número único e sequencial (contador global). Acabaram os “#1” duplicados e fora de ordem.' },
-  { ic:'📍', t:'Pinos novos no mapa', d:'Pino menor e mais limpo, cor por status: 🔴 aberto · 🟠 em rota · 🟢 concluído. Menos poluído com muitos chamados.' },
-  { ic:'🗑️', t:'Cancelado some na hora', d:'Chamado cancelado sai do mapa imediatamente (continua na lista/relatórios).' },
-  { ic:'📋', t:'Relatório com a placa certa', d:'A busca e a coluna “Placa” do relatório mostram a placa da MOTO do cliente — não mais a do guincho.' }
+  { ic:'🖱️', t:'Atribuição em massa', d:'Clique com o botão DIREITO num chamado pra entrar no modo seleção, marque vários e atribua todos de uma vez — a um colaborador ou a um prestador.' },
+  { ic:'🙋', t:'Prioridade pra cliente aguardando', d:'Chamado com cliente aguardando no local ganha borda verde + selo AGUARDANDO e entra na FRENTE da fila e da roteirização.' },
+  { ic:'🔄', t:'Transferência entre bases', d:'Nos motivos de deslocamento/logística, informe Base de saída → Base de entrega. O chamado mostra a rota origem → destino no card e no detalhe.' }
 ];
 function mostrarNovidadesTorre(force){
   try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER_TORRE)) return; }catch(e){}
