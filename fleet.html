@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Vammo · Central de Fleet</title>
+<link rel="icon" href="/icon-192.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<style>
+:root{
+  --bg:#070e1b; --surf:#0d1a2e; --surf2:#132540; --bdr:#1e3352;
+  --bdr2:#274468; --acc:#00B4E5; --acc2:#0a95c0;
+  --txt:#e9f4fb; --txt2:#9db2c9; --txt3:#5f7591;
+  --novo:#ef4444; --aceito:#f59e0b; --atrib:#a855f7; --rota:#00B4E5; --base:#22c55e; --conc:#64748b;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:
+  radial-gradient(1100px 500px at 82% -8%, rgba(0,180,229,0.10), transparent),
+  radial-gradient(900px 500px at 5% 110%, rgba(34,197,94,0.06), transparent),
+  var(--bg);
+  color:var(--txt);display:flex;flex-direction:column;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none}
+::-webkit-scrollbar{height:10px;width:10px}
+::-webkit-scrollbar-thumb{background:#22405f;border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ===== HEADER ===== */
+#top{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:11px 18px;background:linear-gradient(180deg,rgba(13,26,46,0.9),rgba(7,14,27,0.7));border-bottom:1px solid var(--bdr2);backdrop-filter:blur(14px);z-index:20}
+#top .logo{color:var(--acc);line-height:0;flex:0 0 auto}
+#top .logo svg{width:104px;height:auto;display:block}
+#top .sub{font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--txt2);border-left:1px solid var(--bdr2);padding-left:14px}
+#top .sub b{color:var(--acc)}
+#top .spacer{flex:1}
+#top .stat{display:flex;gap:14px;align-items:center;font-size:11px;color:var(--txt2);font-family:var(--mono)}
+#top .stat b{color:var(--txt);font-size:15px}
+#syncdot{width:9px;height:9px;border-radius:50%;background:#f59e0b;box-shadow:0 0 8px currentColor;display:inline-block}
+#syncdot.on{background:#22c55e}
+.btn-open{display:flex;align-items:center;gap:7px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#041824;font-weight:800;font-size:13px;padding:9px 16px;border-radius:10px;box-shadow:0 4px 16px rgba(0,180,229,0.35);transition:transform .1s}
+.btn-open:hover{transform:translateY(-1px)}
+.btn-open:active{transform:translateY(0)}
+#userchip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.05);border:1px solid var(--bdr2);border-radius:20px;padding:3px 5px 3px 3px}
+#userchip img{width:26px;height:26px;border-radius:50%}
+#userchip .un{font-size:11px;font-weight:700;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#userchip .lo{background:transparent;border:none;color:var(--txt3);font-size:14px;padding:0 4px}
+#userchip .lo:hover{color:var(--novo)}
+
+/* ===== BOARD ===== */
+#board{flex:1;min-height:0;display:flex;gap:14px;padding:16px 18px;overflow-x:auto;overflow-y:hidden;align-items:stretch}
+.col{flex:0 0 300px;display:flex;flex-direction:column;min-height:0;background:linear-gradient(180deg,rgba(19,37,64,0.5),rgba(13,26,46,0.35));border:1px solid var(--bdr);border-radius:14px;overflow:hidden}
+.col .ch{flex:0 0 auto;display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid var(--bdr);position:relative}
+.col .ch::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.col .ch .ci{font-size:16px}
+.col .ch .ct{font-weight:800;font-size:12.5px;letter-spacing:0.2px}
+.col .ch .cs{font-size:9.5px;color:var(--txt3);font-weight:600;margin-top:1px;line-height:1.25}
+.col .ch .cn{margin-left:auto;background:var(--c);color:#04121e;font-weight:900;font-size:12px;font-family:var(--mono);min-width:26px;text-align:center;padding:3px 8px;border-radius:11px}
+.col .body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px}
+.col .empty{margin:auto;text-align:center;color:var(--txt3);font-size:11px;padding:20px 10px;line-height:1.5}
+.col .empty .e{font-size:30px;opacity:0.35;display:block;margin-bottom:6px}
+
+/* ===== CARD ===== */
+.kc{background:var(--surf);border:1px solid var(--bdr);border-left:3px solid var(--c);border-radius:10px;padding:11px 12px;transition:border-color .12s,transform .08s}
+.kc:hover{border-color:var(--acc);transform:translateY(-1px)}
+.kc.aguard{border-left-color:#22c55e;background:linear-gradient(90deg,rgba(34,197,94,0.09),var(--surf) 60%)}
+.kc .r1{display:flex;align-items:center;gap:7px}
+.kc .num{font-family:var(--mono);font-size:11px;color:var(--acc);font-weight:800}
+.kc .cli{font-weight:800;font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kc .ico{font-size:15px}
+.kc .mv{font-size:11px;color:var(--txt);margin-top:5px;line-height:1.3}
+.kc .end{font-size:10px;color:var(--txt2);margin-top:3px;line-height:1.3;display:flex;gap:4px}
+.kc .end span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kc .meta{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--txt3);font-family:var(--mono);margin-top:7px}
+.kc .badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.kc .b{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:6px;letter-spacing:0.2px;white-space:nowrap}
+.b-aguard{background:#16a34a;color:#fff}
+.b-transf{background:rgba(168,85,247,0.18);color:#d8b4fe;border:1px solid rgba(168,85,247,0.4)}
+.b-ext{background:#f59e0b;color:#1a1200}
+.kc .who{display:flex;flex-direction:column;gap:5px;margin-top:9px;padding-top:9px;border-top:1px dashed var(--bdr)}
+.kc .wl{display:flex;align-items:center;gap:8px}
+.kc .wl .av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:0 0 24px;color:#04121e}
+.kc .wl .wi{min-width:0}
+.kc .wl .wr{font-size:8.5px;color:var(--txt3);font-weight:800;text-transform:uppercase;letter-spacing:0.4px;line-height:1}
+.kc .wl .wn{font-size:12px;font-weight:700;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kc .track{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:9px;padding:8px;background:rgba(0,180,229,0.13);border:1px solid var(--acc);color:var(--acc);font-weight:800;font-size:11.5px;border-radius:8px;text-decoration:none}
+.kc .track:hover{background:rgba(0,180,229,0.22)}
+
+/* driver chip (coluna Na base) */
+.dchip{display:flex;align-items:center;gap:9px;background:var(--surf);border:1px solid var(--bdr);border-left:3px solid var(--base);border-radius:10px;padding:9px 11px}
+.dchip .av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#04121e;flex:0 0 30px}
+.dchip .di{min-width:0;flex:1}
+.dchip .dn{font-size:12.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dchip .db{font-size:10px;color:var(--txt2);font-family:var(--mono);margin-top:1px}
+.dchip .dbase{font-size:9px;font-weight:800;color:var(--base);background:rgba(34,197,94,0.14);padding:2px 7px;border-radius:6px;white-space:nowrap}
+
+/* ===== LOGIN GATE ===== */
+#gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(1000px 500px at 50% -10%,rgba(0,180,229,0.16),transparent),rgba(4,10,18,0.98)}
+#gate .card{background:rgba(19,33,52,0.94);border:1px solid var(--bdr2);border-radius:20px;padding:36px 32px;max-width:390px;width:100%;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,0.6)}
+#gate .lg{color:var(--acc);line-height:0}
+#gate .lg svg{width:150px;height:auto;margin:0 auto;display:block}
+#gate .sub{font-size:12px;color:var(--txt2);font-weight:800;letter-spacing:2px;text-transform:uppercase;margin:8px 0 22px}
+#gate .txt{font-size:13px;color:var(--txt);margin-bottom:22px;line-height:1.5}
+#gbtn{display:flex;justify-content:center;min-height:44px}
+#gerr{font-size:11.5px;color:#fca5a5;margin-top:14px;min-height:16px;line-height:1.4}
+
+/* ===== MODAL Abrir chamado ===== */
+#modal{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,0.82)}
+#modal.on{display:flex}
+#modal .m{background:var(--surf);border:1px solid var(--bdr2);border-radius:16px;width:460px;max-width:94vw;max-height:92vh;overflow:auto;padding:24px}
+#modal h2{font-size:18px;margin-bottom:4px}
+#modal .msub{font-size:12px;color:var(--txt2);margin-bottom:18px;line-height:1.4}
+#modal label{display:block;font-size:11px;color:var(--txt2);font-weight:700;margin:12px 0 5px}
+#modal input,#modal select,#modal textarea{width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt);border-radius:9px;padding:10px 12px;font-size:13px;font-family:inherit}
+#modal input:focus,#modal select:focus,#modal textarea:focus{outline:none;border-color:var(--acc)}
+.mplate{background:linear-gradient(180deg,#0b3a6b,#0a2c52);border:2px solid #0e4d8f;border-radius:9px;padding:5px 5px 7px;text-align:center;margin-bottom:6px}
+.mplate .mt{display:flex;justify-content:space-between;align-items:center;font-size:8px;font-weight:800;color:#bfe3ff;padding:1px 5px;letter-spacing:0.5px}
+.mplate input{background:#fff;color:#0a1420;border:none;text-align:center;font-family:var(--mono);font-weight:800;font-size:22px;letter-spacing:3px;text-transform:uppercase;margin-top:4px}
+#mtransf{display:none;margin-top:12px;padding:11px;border:1px solid rgba(168,85,247,0.5);background:rgba(168,85,247,0.08);border-radius:10px}
+#mtransf .tt{font-size:11px;color:#d8b4fe;font-weight:800;margin-bottom:8px}
+.mrow{display:flex;gap:8px;margin-top:18px}
+.mrow button{flex:1;padding:12px;border-radius:10px;font-weight:800;font-size:13px}
+.mrow .cancel{background:transparent;border:1px solid var(--bdr2);color:var(--txt2)}
+.mrow .go{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#041824}
+.mrow .go:disabled{opacity:0.5}
+#mresult{margin-top:14px;padding:10px;background:var(--surf2);border-radius:8px;font-size:11px;color:var(--txt2);display:none;line-height:1.4}
+
+/* ===== TOAST ===== */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surf2);border:1px solid var(--acc);color:var(--txt);padding:11px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 10px 40px rgba(0,0,0,0.5);opacity:0;pointer-events:none;transition:all .25s;z-index:120;max-width:90vw}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:var(--novo)}
+
+@media(max-width:640px){
+  #top{flex-wrap:wrap;gap:10px;padding:10px 12px}
+  #top .sub{display:none}
+  #board{padding:12px;gap:12px}
+  .col{flex-basis:82vw}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN GATE -->
+<div id="gate">
+  <div class="card">
+    <div class="lg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo"><path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/><path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/><path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/><path d="M475.6293 139.81909V140.23909H475.9093Z"/><path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/></svg></div>
+    <div class="sub">Central de Fleet</div>
+    <div class="txt">Entre com sua conta <strong>@vammo.com</strong> para abrir e acompanhar chamados.</div>
+    <div id="gbtn"></div>
+    <div id="gerr"></div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div id="top">
+  <div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo"><path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/><path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/><path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/><path d="M475.6293 139.81909V140.23909H475.9093Z"/><path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/></svg></div>
+  <div class="sub">Central de <b>Fleet</b></div>
+  <button class="btn-open" onclick="openModal()">➕ Abrir chamado</button>
+  <div class="spacer"></div>
+  <div class="stat">
+    <span><span id="syncdot"></span> <span id="synctxt">conectando…</span></span>
+    <span>ativos <b id="statAtivos">0</b></span>
+    <span>em rota <b id="statRota">0</b></span>
+  </div>
+  <div id="userchip" style="display:none"></div>
+</div>
+
+<!-- BOARD -->
+<div id="board"></div>
+
+<!-- MODAL Abrir chamado -->
+<div id="modal">
+  <div class="m">
+    <h2>➕ Abrir chamado</h2>
+    <div class="msub">Cai direto na Torre de Controle. Um agente aceita e atribui a um motorista.</div>
+    <label>Placa da moto</label>
+    <div class="mplate">
+      <div class="mt"><span>◈ MERCOSUL</span><span>BRASIL 🇧🇷</span></div>
+      <input id="mPlaca" placeholder="ABC1D23" maxlength="8" autocomplete="off" spellcheck="false">
+    </div>
+    <label>Endereço (onde está a moto)</label>
+    <input id="mEnd" placeholder="Ex: Av. Paulista, 1578, São Paulo">
+    <label>Motivo</label>
+    <select id="mMotivo"></select>
+    <input id="mMotivoCustom" placeholder="Descreva o motivo" style="display:none;margin-top:6px">
+    <label>Referência / solicitante <small style="color:var(--txt3)">(opcional)</small></label>
+    <input id="mRef" placeholder="Ex: Fleet - João / nº do ticket">
+    <label>Cliente/piloto aguardando no local?</label>
+    <select id="mAguard">
+      <option value="sim">✅ Sim — aguardando no local</option>
+      <option value="nao">❌ Não</option>
+    </select>
+    <div id="mtransf">
+      <div class="tt">🚚 Transferência entre bases</div>
+      <label style="margin-top:0">🏁 Base de saída</label>
+      <select id="mBaseSaida"><option value="">— selecionar —</option></select>
+      <label>🎯 Base de entrega</label>
+      <select id="mBaseEntrega"><option value="">— selecionar —</option></select>
+    </div>
+    <div id="mresult"></div>
+    <div class="mrow">
+      <button class="cancel" onclick="closeModal()">Cancelar</button>
+      <button class="go" id="mGo" onclick="submitChamado()">📍 Abrir chamado</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2,6);
+
+const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
+const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
+const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
+const FLEET_VERSION = 'v1 · 2026-08-03';
+
+// Motivos oficiais (mesmos do CX/torre)
+const MOTIVOS = [
+  'Troca de pneu - roda traseira','Troca de pneu - roda dianteira','Moto não liga - VAMMO',
+  'Bateria descarregada','Freio sem resposta','Vazamento de óleo','Acidente',
+  'Moto travada no Tracksolution','Deslocamento entre bases','Recolhimento por inadimplência','Devolução de moto'
+];
+
+let chamados = {}, motoristas = {}, bases = {};
+let currentUser = null, fb = null;
+
+// ================= TOAST =================
+let _tt = null;
+function toast(msg, err){
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err?' err':'');
+  clearTimeout(_tt); _tt = setTimeout(()=>t.className='', 3200);
+}
+
+// ================= GEO =================
+function haversine(a, b){
+  const R=6371000, toR=x=>x*Math.PI/180;
+  const dLat=toR(b.lat-a.lat), dLng=toR(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+function nearestBase(pos){
+  let best=null, bd=Infinity;
+  for(const id in bases){ const b=bases[id]; if(!b||b.lat==null||b.lng==null) continue;
+    const d=haversine(pos,{lat:b.lat,lng:b.lng}); if(d<bd){ bd=d; best={id,base:b,dist:d}; } }
+  return best;
+}
+function motoristaNaBase(motId){
+  const m=motoristas[motId]; if(!m||m.lat==null||m.lng==null) return null;
+  const nb=nearestBase({lat:m.lat,lng:m.lng});
+  return (nb && nb.dist<=BASE_RADIUS_M) ? nb : null;
+}
+function motoristaForaDaBase(motId){
+  const m=motoristas[motId]; if(!m||m.lat==null||m.lng==null) return false;
+  return !motoristaNaBase(motId); // tem posição e NÃO está em nenhuma base = se deslocando
+}
+
+// ================= TEMPO =================
+function fmtElapsed(ts){
+  if(!ts) return '—'; const s=Math.floor((Date.now()-ts)/1000);
+  if(s<60) return s+'s'; const m=Math.floor(s/60); if(m<60) return m+'min';
+  const h=Math.floor(m/60); return h+'h'+(m%60?(' '+(m%60)+'min'):'');
+}
+function fmtTime(ts){ if(!ts) return ''; const d=new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function ehHoje(ts){ if(!ts) return false; const d=new Date(ts), n=new Date(); return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate(); }
+const baseNome = id => (bases[id] && bases[id].nome) || id || '';
+
+function icoMotivo(m){
+  m=(m||'').toLowerCase();
+  if(m.includes('pneu')||m.includes('roda')) return '🛞';
+  if(m.includes('não liga')||m.includes('nao liga')||m.includes('bateria')) return '🔋';
+  if(m.includes('acidente')) return '🚨';
+  if(m.includes('freio')) return '🛑';
+  if(m.includes('vazamento')||m.includes('óleo')) return '💧';
+  if(m.includes('travada')||m.includes('tracksolution')) return '🔒';
+  if(m.includes('deslocamento')||m.includes('transfer')) return '🚚';
+  if(m.includes('recolhimento')||m.includes('inadimpl')) return '🚛';
+  if(m.includes('devolução')||m.includes('devolucao')) return '📦';
+  return '🔧';
+}
+function ehTransf(c){ return !!(c.baseSaida||c.baseEntrega||/deslocamento|movimenta/i.test(c.motivo||'')); }
+
+// ================= ETAPAS =================
+// 1 aberto · 2 aceito · 3 atribuído · 4 em rota · 6 concluído  (5 = roster de motoristas na base)
+function etapa(c){
+  if(c.status==='concluido'||c.status==='cancelado') return 6;
+  const hasDriver=!!c.motoristaId, hasTerc=!!c.terceiroId;
+  if(hasDriver || hasTerc){
+    if(hasDriver && motoristaForaDaBase(c.motoristaId)) return 4;
+    return 3;
+  }
+  if(c.aceitoPor) return 2;
+  return 1;
+}
+// controlador responsável: quem aceitou > quem atribuiu > quem abriu
+function controladorDe(c){ return c.aceitoPor || c.atribuidoPor || null; }
+function driverDe(c){ return c.motoristaNome || (c.terceiroNome ? c.terceiroNome+' (externo)' : null); }
+function corDriver(c){ const m=c.motoristaId&&motoristas[c.motoristaId]; return (m&&m.color) || (c.terceiroId?'#f59e0b':'#00B4E5'); }
+
+const COLS = [
+  {n:1, ic:'📢', t:'Aberto',      s:'aguardando a torre aceitar', c:'var(--novo)'},
+  {n:2, ic:'✋', t:'Aceito',      s:'controlador assumiu o chamado', c:'var(--aceito)'},
+  {n:3, ic:'🧑‍🔧', t:'Atribuído',  s:'motorista designado, na base', c:'var(--atrib)'},
+  {n:4, ic:'🚚', t:'Em rota',     s:'motorista se deslocando', c:'var(--rota)'},
+  {n:5, ic:'🏠', t:'Na base',     s:'motoristas disponíveis na base', c:'var(--base)'},
+  {n:6, ic:'✅', t:'Concluídos',  s:'finalizados hoje', c:'var(--conc)'}
+];
+
+// ================= RENDER =================
+function chamadosVisiveis(){
+  return Object.values(chamados).filter(c=>{
+    if(!c||!c.id) return false;
+    if(c.status==='concluido'||c.status==='cancelado') return ehHoje(c.concluidoEm||c.ts);
+    return true;
+  });
+}
+
+function render(){
+  const board=$('#board');
+  const list=chamadosVisiveis();
+  const porEtapa={1:[],2:[],3:[],4:[],6:[]};
+  list.forEach(c=>{ const e=etapa(c); (porEtapa[e]=porEtapa[e]||[]).push(c); });
+  // ordena por prioridade (aguardando) depois por ts
+  for(const k in porEtapa) porEtapa[k].sort((a,b)=> (prioridade(b)-prioridade(a)) || ((a.ts||0)-(b.ts||0)) );
+
+  const ativos=list.filter(c=>c.status!=='concluido'&&c.status!=='cancelado').length;
+  $('#statAtivos').textContent=ativos;
+  $('#statRota').textContent=(porEtapa[4]||[]).length;
+
+  board.innerHTML = COLS.map(col=>{
+    let inner, count;
+    if(col.n===5){
+      const drivers=motoristasNaBase();
+      count=drivers.length;
+      inner = drivers.length ? drivers.map(driverChip).join('')
+        : emptyCol('🛵','Nenhum motorista na base agora');
+    } else {
+      const arr=porEtapa[col.n]||[];
+      count=arr.length;
+      inner = arr.length ? arr.map(c=>card(c,col.n)).join('')
+        : emptyCol(col.ic, col.n===6?'Nada concluído hoje':'Nenhum chamado aqui');
+    }
+    return `<div class="col" style="--c:${col.c}">
+      <div class="ch"><span class="ci">${col.ic}</span>
+        <div><div class="ct">${col.t}</div><div class="cs">${col.s}</div></div>
+        <span class="cn">${count}</span>
+      </div>
+      <div class="body">${inner}</div>
+    </div>`;
+  }).join('');
+}
+function emptyCol(e,txt){ return `<div class="empty"><span class="e">${e}</span>${esc(txt)}</div>`; }
+function prioridade(c){ return c.clienteAguardando===true ? 1 : 0; }
+
+function card(c, etapaN){
+  const num = c.seq!=null ? `<span class="num">#${c.seq}</span>` : '';
+  const ctrl = controladorDe(c);
+  const drv = driverDe(c);
+  const aguard = c.clienteAguardando===true;
+  const badges=[];
+  if(aguard) badges.push(`<span class="b b-aguard">🙋 AGUARDANDO</span>`);
+  if(ehTransf(c)) badges.push(`<span class="b b-transf">🚚 ${esc(baseNome(c.baseSaida)||'?')}→${esc(baseNome(c.baseEntrega)||'?')}</span>`);
+  if(c.terceiroId) badges.push(`<span class="b b-ext">🤝 externo</span>`);
+  const whoLines=[];
+  if(etapaN>=2 && ctrl) whoLines.push(whoLine('👮','Controlador',ctrl,'#00B4E5'));
+  if(etapaN>=3 && drv) whoLines.push(whoLine('🛵','Motorista',drv,corDriver(c)));
+  const trackBtn = (etapaN===4) ? `<a class="track" href="/track?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">🛰 Ver trajeto no mapa</a>` : '';
+  return `<div class="kc${aguard?' aguard':''}" style="--c:${etapaN===4?'var(--rota)':etapaN===3?'var(--atrib)':etapaN===2?'var(--aceito)':etapaN===6?'var(--conc)':'var(--novo)'}">
+    <div class="r1">${num}<span class="cli">${esc(c.cliente||'Sem nome')}</span><span class="ico">${icoMotivo(c.motivo)}</span></div>
+    <div class="mv">${esc(c.motivo||'—')}</div>
+    ${c.endereco?`<div class="end">📍<span>${esc(c.endereco)}</span></div>`:''}
+    ${badges.length?`<div class="badges">${badges.join('')}</div>`:''}
+    ${whoLines.length?`<div class="who">${whoLines.join('')}</div>`:''}
+    ${trackBtn}
+    <div class="meta"><span>${esc(c.placa||'—')}</span><span>${etapaN===6?('✓ '+fmtTime(c.concluidoEm||c.ts)):('⏱ '+fmtElapsed(c.ts))}</span></div>
+  </div>`;
+}
+function whoLine(ic,role,nome,cor){
+  return `<div class="wl"><div class="av" style="background:${cor}">${esc((nome||'?').charAt(0).toUpperCase())}</div>
+    <div class="wi"><div class="wr">${ic} ${role}</div><div class="wn">${esc(nome)}</div></div></div>`;
+}
+function motoristasNaBase(){
+  const out=[];
+  for(const id in motoristas){
+    const nb=motoristaNaBase(id); if(!nb) continue;
+    const m=motoristas[id];
+    out.push({m, base:nb.base});
+  }
+  return out.sort((a,b)=>(a.m.nome||'').localeCompare(b.m.nome||''));
+}
+function driverChip(d){
+  const m=d.m;
+  return `<div class="dchip"><div class="av" style="background:${m.color||'#22c55e'}">${esc((m.nome||'?').charAt(0).toUpperCase())}</div>
+    <div class="di"><div class="dn">${esc(m.nome||'Colaborador')}</div><div class="db">${esc(m.placa||'sem veículo')}</div></div>
+    <span class="dbase">🏠 ${esc(d.base.nome||'base')}</span></div>`;
+}
+
+// ================= FIREBASE =================
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+async function initFirebase(){
+  await loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
+  await loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js');
+  firebase.initializeApp(FIREBASE_CONFIG);
+  fb = firebase.database().ref('vammo');
+  const dot=$('#syncdot'), txt=$('#synctxt');
+  firebase.database().ref('.info/connected').on('value', s=>{
+    const on=!!s.val(); dot.classList.toggle('on',on); txt.textContent=on?'ao vivo':'reconectando…';
+  });
+  fb.child('chamados').on('value', s=>{ chamados=s.val()||{}; render(); });
+  fb.child('motoristas').on('value', s=>{ motoristas=s.val()||{}; render(); });
+  fb.child('bases').on('value', s=>{ bases=s.val()||{}; preencherBases(); render(); });
+}
+
+// ================= ABRIR CHAMADO =================
+function preencherBases(){
+  const opts='<option value="">— selecionar —</option>'+
+    Object.entries(bases).filter(([id,b])=>b&&b.nome&&b.ativo!==false)
+      .sort((a,b)=>(a[1].nome||'').localeCompare(b[1].nome||''))
+      .map(([id,b])=>`<option value="${id}">${esc(b.nome)}</option>`).join('');
+  if($('#mBaseSaida')) $('#mBaseSaida').innerHTML=opts;
+  if($('#mBaseEntrega')) $('#mBaseEntrega').innerHTML=opts;
+}
+function ehMotivoTransf(m){ return /deslocamento|movimenta/i.test(m||''); }
+function toggleTransf(){
+  let m=$('#mMotivo').value; if(m==='__custom') m=$('#mMotivoCustom').value||'';
+  $('#mtransf').style.display = ehMotivoTransf(m) ? 'block' : 'none';
+}
+function openModal(){
+  $('#mPlaca').value=''; $('#mEnd').value=''; $('#mRef').value='';
+  $('#mMotivo').innerHTML = MOTIVOS.map(m=>`<option value="${esc(m)}">${icoMotivo(m)} ${esc(m)}</option>`).join('')+'<option value="__custom">✏ Outro (digitar)</option>';
+  $('#mMotivo').value=MOTIVOS[0]; $('#mMotivoCustom').style.display='none'; $('#mMotivoCustom').value='';
+  $('#mAguard').value='sim'; $('#mresult').style.display='none';
+  const g=$('#mGo'); g.disabled=false; g.textContent='📍 Abrir chamado';
+  preencherBases(); toggleTransf();
+  $('#modal').classList.add('on');
+  setTimeout(()=>$('#mPlaca').focus(),80);
+}
+function closeModal(){ $('#modal').classList.remove('on'); }
+$('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
+
+async function submitChamado(){
+  const placa=($('#mPlaca').value.trim().toUpperCase())||('XYZ'+Math.floor(Math.random()*9000+1000));
+  const endereco=$('#mEnd').value.trim();
+  let motivo=$('#mMotivo').value; if(motivo==='__custom') motivo=$('#mMotivoCustom').value.trim()||'Atendimento';
+  const ref=$('#mRef').value.trim();
+  const clienteAguardando=$('#mAguard').value==='sim';
+  const transf=ehMotivoTransf(motivo);
+  const baseSaida = transf ? ($('#mBaseSaida').value||null) : null;
+  const baseEntrega = transf ? ($('#mBaseEntrega').value||null) : null;
+  if(!endereco){ toast('⚠ Informe o endereço', true); return; }
+  if(transf && (!baseSaida||!baseEntrega)){ toast('⚠ Transferência: escolha base de saída e entrega', true); return; }
+  let cliente = ref || (transf ? `Transferência: ${baseNome(baseSaida)} → ${baseNome(baseEntrega)}` : placa);
+
+  const g=$('#mGo'); g.disabled=true; g.textContent='⏳ Geocodificando…';
+  try{
+    let lat=null,lng=null,endOfic=endereco;
+    try{
+      const r=await fetch('/geocode?addr='+encodeURIComponent(endereco));
+      if(r.ok){ const d=await r.json(); if(d&&!d.error&&d.lat!=null){ lat=d.lat; lng=d.lng; endOfic=d.formatted||endereco; } }
+    }catch(_){}
+    if(lat==null||lng==null) throw new Error('Endereço não encontrado — revise a grafia ou inclua bairro/cidade.');
+    const ch={ id:genId(), ts:Date.now(), cliente, motivo, placa, endereco:endOfic, lat, lng,
+      status:'novo', travada:/travada|trava/i.test(motivo), clienteAguardando,
+      origemFleet:true, abertoPor:currentUser.nome, abertoPorEmail:currentUser.email };
+    if(baseSaida) ch.baseSaida=baseSaida;
+    if(baseEntrega) ch.baseEntrega=baseEntrega;
+    // seq global atômico (mesmo contador da torre)
+    await new Promise(res=>{
+      try{ fb.child('counters/chamadoSeq').transaction(n=>(n||0)+1,(err,ok,snap)=>{ if(ok&&snap&&snap.val()!=null) ch.seq=snap.val(); res(); }); }
+      catch(_){ res(); }
+    });
+    await fb.child('chamados/'+ch.id).set(clean(ch));
+    $('#mresult').style.display='block';
+    $('#mresult').innerHTML='✓ Chamado <b style="color:var(--acc)">#'+(ch.seq||'')+'</b> aberto — já está na Torre aguardando um agente.';
+    toast('📢 Chamado aberto na Torre!');
+    setTimeout(closeModal, 1200);
+  }catch(e){
+    toast('❌ '+e.message, true);
+    g.disabled=false; g.textContent='📍 Abrir chamado';
+  }
+}
+function clean(o){ const r={}; for(const k in o){ if(o[k]!==undefined&&o[k]!==null) r[k]=o[k]; } return r; }
+$('#mMotivo') && $('#mMotivo').addEventListener('change', e=>{
+  $('#mMotivoCustom').style.display = e.target.value==='__custom'?'block':'none'; toggleTransf();
+});
+$('#mMotivoCustom') && $('#mMotivoCustom').addEventListener('input', toggleTransf);
+
+// ================= AUTH (Google @vammo.com) =================
+function parseJwt(t){
+  try{ return JSON.parse(decodeURIComponent(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''))); }
+  catch(_){ return null; }
+}
+function entrar(u){
+  currentUser=u; localStorage.setItem('fleet_user', JSON.stringify(u));
+  $('#gate').style.display='none';
+  const uc=$('#userchip'); uc.style.display='flex';
+  uc.innerHTML=`${u.picture?`<img src="${esc(u.picture)}" referrerpolicy="no-referrer">`:''}<span class="un">${esc((u.nome||u.email).split(' ')[0])}</span><button class="lo" title="Sair" onclick="sair()">⏻</button>`;
+  initFirebase().catch(e=>{ console.error(e); toast('Erro ao conectar ao Firebase', true); });
+}
+function sair(){ localStorage.removeItem('fleet_user'); location.reload(); }
+function onCredential(resp){
+  const p=parseJwt(resp.credential);
+  if(!p||!p.email){ $('#gerr').textContent='Não consegui ler a conta. Tente de novo.'; return; }
+  if(!/@vammo\.com$/i.test(p.email)){ $('#gerr').textContent='Use uma conta @vammo.com para acessar.'; return; }
+  entrar({ email:p.email, nome:p.name||p.email, picture:p.picture||'' });
+}
+function initAuth(){
+  const saved=(()=>{ try{ return JSON.parse(localStorage.getItem('fleet_user')||'null'); }catch(_){ return null; } })();
+  if(saved && saved.email && /@vammo\.com$/i.test(saved.email)){ entrar(saved); return; }
+  loadScript('https://accounts.google.com/gsi/client').then(()=>{
+    try{
+      google.accounts.id.initialize({ client_id:GOOGLE_CLIENT_ID, callback:onCredential });
+      google.accounts.id.renderButton($('#gbtn'), { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:280 });
+      google.accounts.id.prompt();
+    }catch(e){ $('#gerr').textContent='Falha ao carregar o login do Google.'; }
+  }).catch(()=>{ $('#gerr').textContent='Sem conexão com o login do Google.'; });
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+initAuth();
+console.log('Vammo Fleet', FLEET_VERSION);
+</script>
+</body>
+</html>

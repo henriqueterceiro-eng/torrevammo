@@ -975,7 +975,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v67 · 2026-08-03';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v68 · 2026-08-03';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2889,6 +2889,7 @@ function renderList(){
     const tercBadge = ehTerceiro(c) ? `<span class="b" style="background:#f59e0b;color:#1a1200" title="Encaminhado ao prestador ${esc(c.terceiroNome||'')}">🤝 ${esc((c.terceiroNome||'Externo').split(' ')[0])}</span>` : '';
     const aguard = chamadoPrioritario(c);
     const aguardBadge = aguard ? `<span class="b b-aguard" title="Cliente aguardando no local — prioridade">🙋 AGUARDANDO</span>` : '';
+    const aceitoBadge = (c.status === 'novo' && c.aceitoPor && !c.motoristaId && !c.terceiroId) ? `<span class="b" style="background:#f59e0b;color:#1a1200" title="Aceito por ${esc(c.aceitoPor)} — controlador já assumiu">✋ ${esc((c.aceitoPor||'').split(' ')[0])}</span>` : '';
     const transfLine = transfInfo(c);
     const _num = c.seq != null ? c.seq : numMap[c.id];
     const numTag = _num ? `<span style="font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800;margin-right:5px">#${_num}</span>` : '';
@@ -2900,7 +2901,7 @@ function renderList(){
         <div class="nome">${numTag}${esc(c.cliente||'?')}</div>
         <div class="ico">${ico(c.motivo)}</div>
       </div>
-      <div class="badges">${aguardBadge}${stBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
+      <div class="badges">${aguardBadge}${stBadge}${aceitoBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
       <div class="motivo">${esc(c.motivo||'—')}</div>
       ${transfLine ? `<div class="transf">${transfLine}</div>` : ''}
       ${c.endereco ? `<div class="end">📍 ${esc(c.endereco)}</div>` : ''}
@@ -3347,6 +3348,13 @@ function renderDetail(){
       <button id="dafinforce" style="width:100%;margin-top:8px;padding:9px;background:rgba(220,38,38,0.14);border:1px solid #dc2626;color:#fca5a5;font-size:12px;font-weight:800;border-radius:6px;cursor:pointer">🛑 Finalizar forçado pela Torre <span style="font-weight:500;opacity:0.8">(gera log)</span></button>
     ` : ''}
     ${c.finalizadoForcado ? `<div style="margin-top:8px;padding:7px 10px;background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.5);border-radius:6px;font-size:10px;color:#fca5a5;line-height:1.4">🛑 <strong>Finalizado forçado pela Torre</strong>${c.finalizadoForcadoPor?' por '+esc(c.finalizadoForcadoPor):''}${c.finalizadoForcadoEm?' · '+fmtTime(c.finalizadoForcadoEm):''}</div>` : ''}
+    ${(c.status === 'novo' && !c.motoristaId && !c.terceiroId) ? `
+      <div style="margin-top:10px">
+        ${c.aceitoPor
+          ? `<div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.45);border-radius:8px;padding:8px 11px;font-size:11.5px"><span style="font-size:15px">✋</span><div><b style="color:#ffcf7a">Aceito por ${esc(c.aceitoPor)}</b>${c.aceitoEm?` <span style="color:var(--txt3)">· ${fmtTime(c.aceitoEm)}</span>`:''}<div style="font-size:10px;color:var(--txt2)">Fleet vê o controlador responsável. Agora atribua um motorista.</div></div></div>`
+          : `<button id="daaceitar" style="width:100%;padding:10px;background:rgba(245,158,11,0.16);border:1px solid #f59e0b;color:#fbbf24;font-size:12px;font-weight:800;border-radius:8px;cursor:pointer">✋ Aceitar chamado <span style="font-weight:500;opacity:0.85">(assume como controlador — aparece no Fleet)</span></button>`}
+      </div>
+    ` : ''}
     ${(c.status !== 'concluido' && c.status !== 'cancelado') ? `
       <div class="assign" style="border-top:1px dashed rgba(245,158,11,0.4);margin-top:10px;padding-top:10px">
         ${c.terceiroId ? `
@@ -3416,6 +3424,7 @@ function renderDetail(){
     } else updateStatus(c.id, b.dataset.st);
   });
   const ff = $('#dafinforce'); if(ff) ff.onclick = () => finalizarForcado(c.id);
+  { const ac = $('#daaceitar'); if(ac) ac.onclick = () => aceitarChamado(c.id); }
   const tc = $('#trackcopy'); if(tc) tc.onclick = (e) => {
     e.preventDefault();
     const url = location.origin + '/track?id=' + encodeURIComponent(c.id);
@@ -3714,6 +3723,21 @@ function abrirEscolhaLocalMoto(c, motoristaId, ping, dist){
     logTorre('atrela_local_moto', { chamadoId: c.id, cliente: c.cliente||null, placa: c.placa||null, motoristaId, distM: Math.round(dist), operador: getOperadorTorre() });
     atribuir(c.id, motoristaId);
   };
+}
+
+// ACEITAR — controlador assume o chamado (etapa "Aceito" no Fleet), ANTES de atribuir motorista.
+// Carimba aceitoPor/aceitoEm sem mudar o status (segue 'novo' até a atribuição).
+function aceitarChamado(chamadoId){
+  const c = chamados.find(x => x.id === chamadoId); if(!c) return;
+  if(c.motoristaId || c.terceiroId){ showToast('Este chamado já foi atribuído.'); return; }
+  const nome = currentUser ? (currentUser.nome || currentUser.email) : getOperadorTorre();
+  c.aceitoPor = nome;
+  c.aceitoPorEmail = currentUser ? currentUser.email : null;
+  c.aceitoEm = Date.now();
+  STORE.updateChamado(chamadoId, { aceitoPor: c.aceitoPor, aceitoPorEmail: c.aceitoPorEmail, aceitoEm: c.aceitoEm });
+  logTorre('aceitar_chamado', { chamadoId, aceitoPor: nome, cliente: c.cliente||null, operador: getOperadorTorre() });
+  showToast('✋ Você assumiu o chamado — visível no Fleet');
+  renderAll();
 }
 
 function atribuir(chamadoId, motoristaId, batch){
