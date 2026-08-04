@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" as="image" href="/fleet-intro.jpg">
 <style>
 :root{
   --bg:#EAEEF6;
@@ -39,7 +40,8 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
 /* ===== INTRO SPLASH (logo + Central de Fleet animados) ===== */
 #intro{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;overflow:hidden;
   background:
-    linear-gradient(180deg, rgba(4,14,26,.50), rgba(3,9,17,.80)),
+    radial-gradient(700px 470px at 50% 46%, rgba(2,8,16,.48), transparent 72%),
+    linear-gradient(180deg, rgba(4,14,26,.42), rgba(3,9,17,.82)),
     url('/fleet-intro.jpg') center/cover no-repeat,
     radial-gradient(1200px 760px at 50% 34%, #0d3a52, #061019 72%);
   opacity:1;transition:opacity .6s ease}
@@ -326,7 +328,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v6 · 2026-08-04';
+const FLEET_VERSION = 'v7 · 2026-08-04';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
