@@ -503,6 +503,26 @@ body.selmode .card .mcheck{display:flex}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:4px}
+/* ===== CHAMADO ENTRANDO — toque + slide-to-accept ===== */
+#incoming{position:fixed;right:18px;bottom:18px;z-index:10030;display:flex;flex-direction:column;gap:12px;width:346px;max-width:92vw;pointer-events:none}
+.inc-card{pointer-events:auto;background:linear-gradient(180deg,rgba(12,26,46,0.98),rgba(8,18,34,0.98));border:1px solid var(--acc);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,0.6),0 0 26px -6px rgba(0,180,229,0.5);overflow:hidden;animation:incIn .32s cubic-bezier(.2,.85,.25,1)}
+@keyframes incIn{from{opacity:0;transform:translateX(34px) scale(.96)}to{opacity:1;transform:none}}
+.inc-top{display:flex;align-items:center;gap:9px;padding:11px 13px;background:rgba(0,180,229,0.15);border-bottom:1px solid rgba(0,180,229,0.32)}
+.inc-ring{font-size:17px;animation:incShake 1s ease-in-out infinite;transform-origin:50% 20%}
+@keyframes incShake{0%,100%{transform:rotate(0)}15%{transform:rotate(-16deg)}30%{transform:rotate(13deg)}45%{transform:rotate(-9deg)}60%{transform:rotate(6deg)}75%{transform:rotate(-3deg)}}
+.inc-t{font-size:11px;font-weight:800;color:var(--acc);text-transform:uppercase;letter-spacing:.5px;flex:1}
+.inc-x{background:transparent;border:none;color:var(--txt3);font-size:15px;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1}
+.inc-x:hover{color:var(--novo);background:rgba(220,38,38,0.14)}
+.inc-body{padding:12px 14px 6px}
+.inc-cli{font-size:15px;font-weight:800;color:#fff;line-height:1.2}
+.inc-sub{font-size:11.5px;color:var(--txt2);margin-top:5px;line-height:1.35}
+.inc-meta{font-size:10px;color:var(--txt3);margin-top:6px}
+.inc-slide{position:relative;height:50px;margin:8px 12px 13px;border-radius:12px;background:rgba(255,255,255,0.06);border:1px solid var(--bdr2);overflow:hidden;user-select:none;touch-action:none}
+.inc-slabel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--txt2);letter-spacing:.3px;pointer-events:none}
+.inc-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,rgba(22,163,74,0.25),rgba(22,163,74,0.5));pointer-events:none}
+.inc-knob{position:absolute;left:3px;top:3px;bottom:3px;width:52px;border-radius:9px;background:linear-gradient(135deg,#18b34e,#12823b);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;cursor:grab;box-shadow:0 3px 10px rgba(0,0,0,0.4);touch-action:none;will-change:transform}
+.inc-knob:active{cursor:grabbing}
+.inc-more{pointer-events:auto;text-align:center;font-size:11px;font-weight:600;color:var(--txt2);background:rgba(8,18,34,0.92);border:1px solid var(--bdr);border-radius:10px;padding:7px}
 </style>
 </head>
 <body>
@@ -977,7 +997,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v70 · 2026-08-04';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v71 · 2026-08-04';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -6487,6 +6507,89 @@ function playAlertSound(){
   } catch(_){}
 }
 
+// ===== CHAMADO ENTRANDO — toque (ring) + slide-to-accept no canto =====
+function playIncomingRing(){
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext; if(!Ctx) return;
+    const ac = playIncomingRing._ac || (playIncomingRing._ac = new Ctx());
+    if(ac.state === 'suspended') ac.resume().catch(()=>{});
+    const seq = [660, 880, 1100], t0 = ac.currentTime;
+    for(let rep=0; rep<2; rep++){
+      seq.forEach((f,i)=>{
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        const st = t0 + rep*0.64 + i*0.13;
+        g.gain.setValueAtTime(0, st);
+        g.gain.linearRampToValueAtTime(0.16, st + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, st + 0.15);
+        o.connect(g); g.connect(ac.destination); o.start(st); o.stop(st + 0.17);
+      });
+    }
+  }catch(_){}
+}
+let incomingQueue = [];               // ids aguardando aceite (na tela deste operador)
+const incomingDismissed = new Set();  // ids que ESTE operador dispensou (não reaparecem)
+function chamadoPrecisaAceite(c){ return !!(c && c.status === 'novo' && !c.aceitoPor && !c.motoristaId && !c.terceiroId); }
+function syncIncoming(novosIds){
+  let tocou = false;
+  for(const id of (novosIds || [])){
+    const c = chamados.find(x => x.id === id);
+    if(c && chamadoPrecisaAceite(c) && !incomingDismissed.has(id) && !incomingQueue.includes(id)){
+      incomingQueue.push(id); tocou = true;
+    }
+  }
+  // poda: tira os que já foram aceitos/atribuídos/sumiram (por qualquer operador) ou dispensados
+  incomingQueue = incomingQueue.filter(id => { const c = chamados.find(x => x.id === id); return c && chamadoPrecisaAceite(c) && !incomingDismissed.has(id); });
+  if(tocou) playIncomingRing();
+  renderIncoming();
+}
+function renderIncoming(){
+  let box = document.getElementById('incoming');
+  if(!box){ box = document.createElement('div'); box.id = 'incoming'; document.body.appendChild(box); }
+  if(!incomingQueue.length){ box.innerHTML = ''; return; }
+  const numMap = buildNumeroMap();
+  const show = incomingQueue.slice(0, 3), extra = incomingQueue.length - show.length;
+  box.innerHTML = show.map(id => {
+    const c = chamados.find(x => x.id === id); if(!c) return '';
+    const seq = c.seq != null ? c.seq : numMap[c.id];
+    const nMotos = Array.isArray(c.motos) ? c.motos.length : (c.qtdMotos || 0);
+    const transf = (c.baseSaida || c.baseEntrega) ? `🚚 ${esc(_baseNome(c.baseSaida) || '?')} → ${esc(_baseNome(c.baseEntrega) || '?')}` : '';
+    const sub = [esc(c.motivo || '—'), nMotos ? `🏍 ${nMotos} moto${nMotos>1?'s':''}` : '', transf].filter(Boolean).join(' · ');
+    const aberto = c.abertoPor ? `✍ ${esc(c.abertoPor)}${c.origemFleet ? ' · Fleet' : ''}` : '';
+    return `<div class="inc-card" data-cid="${c.id}">
+      <div class="inc-top"><span class="inc-ring">📞</span><div class="inc-t">Novo chamado · aguardando aceite</div><button class="inc-x" data-x="${c.id}" title="Dispensar (outro operador ainda pode aceitar)">✕</button></div>
+      <div class="inc-body">
+        <div class="inc-cli">${seq ? `#${seq} · ` : ''}${esc(c.cliente || 'Chamado')}</div>
+        <div class="inc-sub">${sub}</div>
+        ${aberto ? `<div class="inc-meta">${aberto}</div>` : ''}
+      </div>
+      <div class="inc-slide" data-slide="${c.id}">
+        <div class="inc-fill"></div>
+        <div class="inc-slabel">→ deslize para aceitar →</div>
+        <div class="inc-knob">→</div>
+      </div>
+    </div>`;
+  }).join('') + (extra > 0 ? `<div class="inc-more">+${extra} chamado(s) aguardando</div>` : '');
+  box.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { incomingDismissed.add(b.dataset.x); incomingQueue = incomingQueue.filter(x => x !== b.dataset.x); renderIncoming(); });
+  box.querySelectorAll('.inc-slide').forEach(sl => bindSlideAccept(sl));
+}
+function bindSlideAccept(sl){
+  const id = sl.dataset.slide;
+  const knob = sl.querySelector('.inc-knob'), fill = sl.querySelector('.inc-fill'), label = sl.querySelector('.inc-slabel');
+  let dragging = false, startX = 0, x = 0, max = 0;
+  const setX = (nx) => { x = Math.max(0, Math.min(max, nx)); knob.style.transform = `translateX(${x}px)`; fill.style.width = (x + knob.offsetWidth + 3) + 'px'; label.style.opacity = String(Math.max(0, 1 - x / Math.max(1, max) * 1.4)); };
+  knob.addEventListener('pointerdown', (e) => { dragging = true; max = sl.clientWidth - knob.offsetWidth - 6; startX = e.clientX - x; knob.style.transition = ''; try { knob.setPointerCapture(e.pointerId); } catch(_){} e.preventDefault(); });
+  knob.addEventListener('pointermove', (e) => { if(dragging) setX(e.clientX - startX); });
+  const end = () => { if(!dragging) return; dragging = false; if(x >= max * 0.85){ setX(max); aceitarViaSlide(id); } else { knob.style.transition = 'transform .18s'; setX(0); } };
+  knob.addEventListener('pointerup', end); knob.addEventListener('pointercancel', end);
+}
+function aceitarViaSlide(id){
+  incomingQueue = incomingQueue.filter(x => x !== id);
+  try { aceitarChamado(id); } catch(_){}
+  selId = id;
+  renderIncoming();
+}
+
 // Alerta persistente no canto superior direito — fica até o gestor fechar (X)
 // opts: { id (string único — evita duplicata), tipo ('crit'|'warn'), titulo, msg, motId (pra Ver no Mapa), onClose?, autoCloseMs? }
 const _alertsAtivos = new Map(); // id -> element
@@ -6967,13 +7070,15 @@ function setupStoreListeners(){
       const novosArr = Object.values(data);
       // Reconstrói chamados mantendo ordem por ts desc
       const byTs = novosArr.slice().sort((a,b) => (b.ts||0) - (a.ts||0));
-      // Detecta novos pra mostrar toast (não inunda no primeiro carregamento)
+      // Detecta novos: os que precisam de ACEITE tocam + entram no overlay de slide;
+      // os demais (raros — já vêm atribuídos) só dão um toast. Nada disso no 1º load.
+      const _incNew = [];
       if(window._chamadosSeen){
         for(const ch of byTs){
           if(!window._chamadosSeen.has(ch.id)){
-            // Chamado novo vindo de outro gestor — quando não estamos no primeiro load
             if(window._initialSyncDone){
-              showToast(`📥 Novo chamado: ${ch.cliente || '?'}`);
+              if(chamadoPrecisaAceite(ch)) _incNew.push(ch.id);
+              else showToast(`📥 Novo chamado: ${ch.cliente || '?'}`);
             }
           }
         }
@@ -6983,6 +7088,7 @@ function setupStoreListeners(){
       // Blindagem: chamado sem status quebrava .status.toUpperCase() no render (travava lista/filtros/cliques).
       for(const _c of byTs){ if(_c && !_c.status) _c.status = 'novo'; }
       chamados = byTs;
+      try { syncIncoming(_incNew); } catch(_){}   // toque + slide-to-accept dos chamados entrando
       // Sync caches locais
       saveDemoChamados(byTs);
       const sm = {}; const a = {};
