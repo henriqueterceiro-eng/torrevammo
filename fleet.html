@@ -157,6 +157,60 @@ button{font-family:inherit;cursor:pointer;border:none}
 .mstat.err{color:#fca5a5}
 .mstat.info{color:var(--txt2)}
 
+/* card: clique + dica de rota */
+.kc{cursor:pointer}
+.kc .rotahint{margin-top:9px;padding:7px;text-align:center;background:rgba(0,180,229,0.1);border:1px dashed var(--acc);color:var(--acc);font-weight:700;font-size:10.5px;border-radius:8px}
+
+/* ===== DETALHE / HISTÓRICO ===== */
+#det{position:fixed;inset:0;z-index:95;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,0.82)}
+#det.on{display:flex}
+#det .m{background:var(--surf);border:1px solid var(--bdr2);border-radius:16px;width:440px;max-width:94vw;max-height:92vh;overflow:auto;padding:22px}
+.deth{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:4px}
+.deth h2{font-size:16px;line-height:1.25}
+.det-chip{display:inline-block;font-size:10px;font-weight:800;padding:3px 9px;border-radius:11px;text-transform:uppercase;letter-spacing:.3px;margin-top:6px}
+.det-sec{margin-top:16px}
+.det-sec .st{font-size:10px;font-weight:800;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px}
+.det-total{display:flex;align-items:center;justify-content:space-between;background:var(--surf2);border:1px solid var(--bdr2);border-radius:11px;padding:12px 14px;margin-top:4px}
+.det-total .tl{font-size:11px;color:var(--txt2);font-weight:700}
+.det-total .tv{font-size:22px;font-weight:900;font-family:var(--mono);color:var(--acc)}
+/* timeline */
+.tl-row{display:flex;gap:11px;position:relative;padding-bottom:15px}
+.tl-row:last-child{padding-bottom:0}
+.tl-row .tl-ic{flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:var(--surf2);border:2px solid var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;z-index:2}
+.tl-row.pend .tl-ic{border-color:var(--bdr2);opacity:.5}
+.tl-row::before{content:'';position:absolute;left:14px;top:30px;bottom:-2px;width:2px;background:var(--bdr2)}
+.tl-row:last-child::before{display:none}
+.tl-bd{flex:1;padding-top:3px}
+.tl-bd .tl-l{font-size:12.5px;font-weight:700}
+.tl-bd .tl-t{font-size:10.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px}
+.tl-dur{margin-left:auto;font-size:11px;font-weight:800;font-family:var(--mono);color:var(--txt2);background:var(--surf2);padding:2px 8px;border-radius:8px;height:fit-content;align-self:center}
+.det-motos{display:flex;flex-direction:column;gap:5px}
+.det-moto{display:flex;align-items:center;gap:8px;font-size:11.5px;background:var(--surf2);border:1px solid var(--bdr);border-radius:8px;padding:7px 9px}
+.det-moto .pl{font-family:var(--mono);font-weight:800;color:var(--txt)}
+.det-moto .mo{color:var(--txt2);font-size:10px}
+.det-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:16px;padding:12px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#041824;font-weight:800;font-size:13px;border-radius:10px;text-decoration:none}
+.det-nota{display:inline-flex;align-items:center;gap:5px;background:rgba(34,197,94,0.14);border:1px solid #22c55e;color:#4ade80;font-weight:800;font-size:12px;padding:4px 10px;border-radius:9px}
+
+/* ===== SIMULADOR ===== */
+#sim{position:fixed;inset:0;z-index:110;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,0.88)}
+#sim.on{display:flex}
+.simcard{background:var(--surf);border:1px solid var(--bdr2);border-radius:16px;width:620px;max-width:96vw;max-height:94vh;overflow:hidden;display:flex;flex-direction:column}
+.simhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--bdr)}
+.simt{font-size:15px;font-weight:800}
+.simsub{font-size:11px;color:var(--txt2);margin-top:2px}
+#simMap{height:min(56vh,440px);width:100%;background:#0a1428}
+.leaflet-container{background:#0a1428 !important;font-family:var(--sans)}
+.simfoot{padding:13px 18px;border-top:1px solid var(--bdr);display:flex;flex-direction:column;gap:10px}
+.simstat{font-size:12px;font-weight:700;color:var(--txt)}
+.simstat #simEta{color:var(--acc)}
+.simprog{height:7px;background:var(--surf2);border-radius:6px;overflow:hidden}
+.simprog #simBar{height:100%;width:0;background:linear-gradient(90deg,var(--acc),#22c55e);transition:width .12s linear}
+.simctrls{display:flex;gap:8px}
+.simctrls button{flex:1;padding:9px;border-radius:9px;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt);font-weight:700;font-size:12px}
+.simctrls button:hover{border-color:var(--acc);color:var(--acc)}
+.sim-marker div{width:34px;height:34px;border-radius:50%;background:var(--acc);border:3px solid #fff;box-shadow:0 3px 12px rgba(0,180,229,0.6);display:flex;align-items:center;justify-content:center;font-size:17px}
+.sim-pin div{font-size:22px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+
 /* ===== TOAST ===== */
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surf2);border:1px solid var(--acc);color:var(--txt);padding:11px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 10px 40px rgba(0,0,0,0.5);opacity:0;pointer-events:none;transition:all .25s;z-index:120;max-width:90vw}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -212,6 +266,30 @@ button{font-family:inherit;cursor:pointer;border:none}
   </div>
 </div>
 
+<!-- MODAL Detalhe / histórico do chamado -->
+<div id="det">
+  <div class="m"><div id="detBody"></div></div>
+</div>
+
+<!-- MODAL Simulador de rota (demo) -->
+<div id="sim">
+  <div class="simcard">
+    <div class="simhead">
+      <div><div class="simt" id="simTitle">Simulação de rota</div><div class="simsub" id="simSub">carregando…</div></div>
+      <button class="mx" onclick="closeSimulador()">✕</button>
+    </div>
+    <div id="simMap"></div>
+    <div class="simfoot">
+      <div class="simstat"><span id="simDriverN">Motorista</span> · <span id="simEta">—</span></div>
+      <div class="simprog"><div id="simBar"></div></div>
+      <div class="simctrls">
+        <button id="simPlay" onclick="simTogglePlay()">⏸ Pausar</button>
+        <button onclick="simRestart()">↺ Reiniciar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -223,7 +301,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v3 · 2026-08-04';
+const FLEET_VERSION = 'v4 · 2026-08-04';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -232,11 +310,11 @@ const MOTIVOS = [
   'Moto travada no Tracksolution','Deslocamento entre bases','Recolhimento por inadimplência','Devolução de moto'
 ];
 
-let chamados = {}, motoristas = {}, bases = {};
+let chamados = {}, motoristas = {}, bases = {}, corridas = {};   // corridas: chamadoId -> ride (tempos/nota)
 let currentUser = null, fb = null;
-// DEMO (apresentação): chamados/motoristas fictícios só em memória — NÃO vão pro Firebase,
+// DEMO (apresentação): chamados fictícios só em memória — NÃO vão pro Firebase,
 // não aparecem na torre nem pra outros. Ver plotarDemo()/limparDemo().
-let demoOn = false, demoChamados = [], demoDrivers = [];
+let demoOn = false, demoChamados = [];
 
 // ================= TOAST =================
 let _tt = null;
@@ -317,7 +395,6 @@ const COLS = [
   {n:2, ic:'✋', t:'Aceito',      s:'controlador assumiu o chamado', c:'var(--aceito)'},
   {n:3, ic:'🧑‍🔧', t:'Atribuído',  s:'motorista designado, na base', c:'var(--atrib)'},
   {n:4, ic:'🚚', t:'Em rota',     s:'motorista se deslocando', c:'var(--rota)'},
-  {n:5, ic:'🏠', t:'Na base',     s:'motoristas disponíveis na base', c:'var(--base)'},
   {n:6, ic:'✅', t:'Concluídos',  s:'finalizados hoje', c:'var(--conc)'}
 ];
 
@@ -350,26 +427,18 @@ function render(){
   $('#statRota').textContent=(porEtapa[4]||[]).length;
 
   board.innerHTML = COLS.map(col=>{
-    let inner, count;
-    if(col.n===5){
-      const drivers=motoristasNaBase().concat(demoOn?demoDrivers:[]);
-      count=drivers.length;
-      inner = drivers.length ? drivers.map(driverChip).join('')
-        : emptyCol('🛵','Nenhum motorista na base agora');
-    } else {
-      const arr=porEtapa[col.n]||[];
-      count=arr.length;
-      inner = arr.length ? arr.map(c=>card(c,col.n)).join('')
-        : emptyCol(col.ic, col.n===6?'Nada concluído hoje':'Nenhum chamado aqui');
-    }
+    const arr=porEtapa[col.n]||[];
+    const inner = arr.length ? arr.map(c=>card(c,col.n)).join('')
+      : emptyCol(col.ic, col.n===6?'Nada concluído hoje':'Nenhum chamado aqui');
     return `<div class="col" style="--c:${col.c}">
       <div class="ch"><span class="ci">${col.ic}</span>
         <div><div class="ct">${col.t}</div><div class="cs">${col.s}</div></div>
-        <span class="cn">${count}</span>
+        <span class="cn">${arr.length}</span>
       </div>
       <div class="body">${inner}</div>
     </div>`;
   }).join('');
+  board.querySelectorAll('.kc[data-cid]').forEach(el=> el.onclick=()=> openDetalhe(el.dataset.cid));
 }
 function emptyCol(e,txt){ return `<div class="empty"><span class="e">${e}</span>${esc(txt)}</div>`; }
 function prioridade(c){ return c.clienteAguardando===true ? 1 : 0; }
@@ -389,21 +458,19 @@ function card(c, etapaN){
   const whoLines=[];
   if(etapaN>=2 && ctrl) whoLines.push(whoLine('👮','Controlador',ctrl,'#00B4E5'));
   if(etapaN>=3 && drv) whoLines.push(whoLine('🛵','Motorista',drv,corDriver(c)));
-  const trackBtn = (etapaN===4) ? (c._fake
-    ? `<div class="track" style="cursor:default;opacity:.8">🛰 trajeto ao vivo (demo)</div>`
-    : `<a class="track" href="/track?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">🛰 Ver trajeto no mapa</a>`) : '';
+  const rotaHint = (etapaN===4) ? `<div class="rotahint">🛰 em trajeto · clique pra ${c._fake?'simular':'ver'} no mapa</div>` : '';
   const placasLine = motos && motos.length
     ? `<div class="mv" style="color:var(--txt2);font-family:var(--mono);font-size:10.5px">${motos.map(m=>esc(m.placa)+(m.iotForaDaBase?' ⚠':'')).join(' · ')}</div>` : '';
   const abertoFoot = c.abertoPor
     ? `<div class="aberto">✍ Aberto por <b>${esc(c.abertoPor)}</b> · ${fmtDataHora(c.abertoEm||c.ts)}</div>` : '';
-  return `<div class="kc${aguard?' aguard':''}" style="--c:${etapaN===4?'var(--rota)':etapaN===3?'var(--atrib)':etapaN===2?'var(--aceito)':etapaN===6?'var(--conc)':'var(--novo)'}">
+  return `<div class="kc${aguard?' aguard':''}" data-cid="${esc(c.id)}" style="--c:${etapaN===4?'var(--rota)':etapaN===3?'var(--atrib)':etapaN===2?'var(--aceito)':etapaN===6?'var(--conc)':'var(--novo)'}">
     <div class="r1">${num}<span class="cli">${esc(c.cliente||'Sem nome')}</span><span class="ico">${icoMotivo(c.motivo)}</span></div>
     <div class="mv">${esc(c.motivo||'—')}</div>
     ${placasLine}
     ${c.endereco?`<div class="end">📍<span>${esc(c.endereco)}</span></div>`:''}
     ${badges.length?`<div class="badges">${badges.join('')}</div>`:''}
     ${whoLines.length?`<div class="who">${whoLines.join('')}</div>`:''}
-    ${trackBtn}
+    ${rotaHint}
     ${abertoFoot}
     <div class="meta"><span>${esc((c.placa||'—')).slice(0,22)}</span><span>${etapaN===6?('✓ '+fmtTime(c.concluidoEm||c.ts)):('⏱ '+fmtElapsed(c.ts))}</span></div>
   </div>`;
@@ -412,30 +479,21 @@ function whoLine(ic,role,nome,cor){
   return `<div class="wl"><div class="av" style="background:${cor}">${esc((nome||'?').charAt(0).toUpperCase())}</div>
     <div class="wi"><div class="wr">${ic} ${role}</div><div class="wn">${esc(nome)}</div></div></div>`;
 }
-function motoristasNaBase(){
-  const out=[];
-  for(const id in motoristas){
-    const nb=motoristaNaBase(id); if(!nb) continue;
-    const m=motoristas[id];
-    out.push({m, base:nb.base});
-  }
-  return out.sort((a,b)=>(a.m.nome||'').localeCompare(b.m.nome||''));
-}
-
 // ================= DEMO (plotar chamados fictícios pra apresentação) =================
 function _demoBases(){
-  const ids = Object.keys(bases).filter(id=>bases[id]&&bases[id].nome);
-  const s = ids[0]||null, e = ids.find(id=>id!==s)||null;
-  const nS = s?baseNome(s):'Mooca', nE = e?baseNome(e):'Osasco';
-  return { bS:s||nS, bE:e||nE, nS, nE, bs:(s?bases[s]:{})||{} };  // bS/bE viram nome se não houver base cadastrada
+  const withco = Object.keys(bases).filter(id=>bases[id]&&bases[id].nome&&bases[id].lat!=null&&bases[id].lng!=null);
+  const s = withco[0], e = withco.find(id=>id!==s);
+  if(s && e) return { bS:s, bE:e, nS:baseNome(s), nE:baseNome(e), from:{lat:bases[s].lat,lng:bases[s].lng}, to:{lat:bases[e].lat,lng:bases[e].lng} };
+  // fallback sem bases cadastradas: Mooca → Osasco (coords fixas de SP)
+  return { bS:'Mooca', bE:'Osasco', nS:'Mooca', nE:'Osasco', from:{lat:-23.5557,lng:-46.6099}, to:{lat:-23.5329,lng:-46.7916} };
 }
 function plotarDemo(){
-  const {bS,bE,nS,nE,bs} = _demoBases();
+  const {bS,bE,nS,nE,from,to} = _demoBases();
   const now = Date.now(), M = 60000;
   const base = (agoMin, extra) => Object.assign({
     id:'demo_'+Math.random().toString(36).slice(2,9), _fake:true,
     ts: now - agoMin*M, abertoEm: now - agoMin*M, status:'novo',
-    baseSaida:bS, baseEntrega:bE, lat:(bs.lat!=null?bs.lat:null), lng:(bs.lng!=null?bs.lng:null),
+    baseSaida:bS, baseEntrega:bE, lat:from.lat, lng:from.lng, _simFrom:from, _simTo:to,
     endereco:nS, origemFleet:true, clienteAguardando:false,
     abertoPor:(currentUser&&currentUser.nome)||'Fleet', abertoPorEmail:(currentUser&&currentUser.email)||''
   }, extra);
@@ -446,31 +504,23 @@ function plotarDemo(){
       motos:[{placa:'FLE2A01',modelo:'Vammo One'},{placa:'FLE2A02',modelo:'Vammo One'},{placa:'FLE2A03',modelo:'Vammo One',iotForaDaBase:true,iotLocal:nE,iotDistM:18400}]}),
     base(9,  {_fakeEtapa:1, seq:902, cliente:cli(1), motivo:CHU, tipoMovimentacao:'churn_manut', qtdMotos:1,
       motos:[{placa:'CHU7B21',modelo:'Vammo Plus'}]}),
-    base(23, {_fakeEtapa:2, seq:903, cliente:cli(2), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:2, aceitoPor:'Ana Torre', aceitoEm:now-6*M,
+    base(23, {_fakeEtapa:2, seq:903, cliente:cli(2), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:2, aceitoPor:'Ana Torre', aceitoEm:now-19*M,
       motos:[{placa:'FLE9C10',modelo:'Vammo One'},{placa:'FLE9C11',modelo:'Vammo One'}]}),
-    base(41, {_fakeEtapa:3, seq:904, status:'em_rota', cliente:cli(2), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:2, aceitoPor:'Ana Torre', motoristaNome:'Carlos Souza', motoristaId:'demo_m1',
+    base(41, {_fakeEtapa:3, seq:904, status:'em_rota', cliente:cli(2), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:2, aceitoPor:'Ana Torre', aceitoEm:now-38*M, atribuidoEm:now-35*M, motoristaNome:'Carlos Souza', motoristaId:'demo_m1',
       motos:[{placa:'FLE3D44',modelo:'Vammo One'},{placa:'FLE3D45',modelo:'Vammo Plus'}]}),
-    base(58, {_fakeEtapa:4, seq:905, status:'em_rota', cliente:cli(4), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:4, aceitoPor:'Bruno Torre', motoristaNome:'Diego Lima', motoristaId:'demo_m2',
+    base(58, {_fakeEtapa:4, seq:905, status:'em_rota', cliente:cli(4), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:4, aceitoPor:'Bruno Torre', aceitoEm:now-54*M, atribuidoEm:now-50*M, emRotaEm:now-46*M, motoristaNome:'Diego Lima', motoristaId:'demo_m2',
       motos:[{placa:'FLE5E70',modelo:'Vammo One'},{placa:'FLE5E71',modelo:'Vammo One'},{placa:'FLE5E72',modelo:'Vammo Plus'},{placa:'FLE5E73',modelo:'Vammo One'}]}),
-    base(150,{_fakeEtapa:6, seq:906, status:'concluido', concluidoEm:now-14*M, cliente:cli(1), motivo:CHU, tipoMovimentacao:'churn_manut', qtdMotos:1, aceitoPor:'Ana Torre', motoristaNome:'Eduardo Reis',
+    base(95, {_fakeEtapa:6, seq:906, status:'concluido', cliente:cli(1), motivo:CHU, tipoMovimentacao:'churn_manut', qtdMotos:1,
+      aceitoPor:'Ana Torre', aceitoEm:now-92*M, atribuidoEm:now-90*M, emRotaEm:now-86*M, chegouEm:now-40*M, concluidoEm:now-25*M,
+      motoristaNome:'Eduardo Reis', nota:{final:9.1},
       motos:[{placa:'CHU1F90',modelo:'Vammo Plus'}]})
-  ];
-  demoDrivers = [
-    { m:{ nome:'Felipe Alves',  placa:'PICKUP-01',  color:'#22c55e' }, base:{ nome:nS } },
-    { m:{ nome:'Gustavo Pinto', placa:'CARRETA-07', color:'#00B4E5' }, base:{ nome:nS } }
   ];
   demoOn = true; updateDemoBtn(); render();
   toast('🧪 6 chamados de demonstração plotados (só na sua tela)');
 }
-function limparDemo(){ demoChamados=[]; demoDrivers=[]; demoOn=false; updateDemoBtn(); render(); toast('🧹 Demonstração removida'); }
+function limparDemo(){ demoChamados=[]; demoOn=false; updateDemoBtn(); render(); toast('🧹 Demonstração removida'); }
 function toggleDemo(){ demoOn ? limparDemo() : plotarDemo(); }
 function updateDemoBtn(){ const b=$('#demoBtn'); if(b){ b.textContent = demoOn ? '🧹 Limpar demo' : '🧪 Demo'; b.classList.toggle('on', demoOn); } }
-function driverChip(d){
-  const m=d.m;
-  return `<div class="dchip"><div class="av" style="background:${m.color||'#22c55e'}">${esc((m.nome||'?').charAt(0).toUpperCase())}</div>
-    <div class="di"><div class="dn">${esc(m.nome||'Colaborador')}</div><div class="db">${esc(m.placa||'sem veículo')}</div></div>
-    <span class="dbase">🏠 ${esc(d.base.nome||'base')}</span></div>`;
-}
 
 // ================= FIREBASE =================
 function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
@@ -486,6 +536,8 @@ async function initFirebase(){
   fb.child('chamados').on('value', s=>{ chamados=s.val()||{}; render(); });
   fb.child('motoristas').on('value', s=>{ motoristas=s.val()||{}; render(); });
   fb.child('bases').on('value', s=>{ bases=s.val()||{}; if(wiz && !wiz.baseEntrega) renderWizard(); render(); });
+  // corridas: pega tempos reais (em rota/chegou/concluiu) + nota pra o histórico do chamado
+  fb.child('corridas').on('value', s=>{ const all=s.val()||{}; const map={}; for(const k in all){ const r=all[k]; if(r&&r.chamadoId) map[r.chamadoId]=r; } corridas=map; });
 }
 
 // ================= ABRIR CHAMADO (WIZARD DE MOVIMENTAÇÃO) =================
@@ -638,6 +690,130 @@ async function abrirMov(){
   }catch(err){ toast('❌ erro ao abrir: '+err.message, true); g.disabled=false; g.textContent='📢 Abrir movimentação'; }
 }
 
+// ================= DETALHE / HISTÓRICO DO CHAMADO =================
+function findChamado(id){ return demoChamados.find(x=>x.id===id) || chamados[id] || Object.values(chamados).find(x=>x.id===id) || null; }
+function fmtDur(ms){ if(ms==null||ms<0) return '—'; const s=Math.round(ms/1000); if(s<60) return s+'s'; const m=Math.floor(s/60); if(m<60) return m+'min'; const h=Math.floor(m/60); const r=m%60; return h+'h'+(r?(' '+r+'min'):''); }
+const STAGE_DEFS = [
+  {ic:'📢', label:'Chamado aberto',        get:(c,r)=>c.abertoEm||c.ts},
+  {ic:'✋', label:'Aceito pela torre',      get:(c,r)=>c.aceitoEm},
+  {ic:'🧑‍🔧', label:'Atribuído ao motorista', get:(c,r)=>c.atribuidoEm||(r&&r.assignedTs)},
+  {ic:'🚚', label:'Em rota (saiu da base)', get:(c,r)=>c.emRotaEm||(r&&r.enRouteTs)},
+  {ic:'📍', label:'Chegou no destino',      get:(c,r)=>c.chegouEm||(r&&r.arrivedTs)},
+  {ic:'✅', label:'Concluído',              get:(c,r)=>c.concluidoEm||(r&&r.completedTs)}
+];
+function detStatusChip(c){
+  const map={1:['Aberto','var(--novo)'],2:['Aceito','var(--aceito)'],3:['Atribuído','var(--atrib)'],4:['Em rota','var(--rota)'],6:['Concluído','var(--conc)']};
+  const [t,cor]=map[etapa(c)]||['—','var(--txt3)'];
+  return `<span class="det-chip" style="background:${cor};color:#04121e">${t}</span>`;
+}
+function openDetalhe(id){
+  const c=findChamado(id); if(!c) return;
+  const r=corridas[c.id]||null, e=etapa(c);
+  // Timeline: só as etapas que já aconteceram (têm timestamp)
+  let prev=null;
+  const rows = STAGE_DEFS.map(s=>{
+    const ts=s.get(c,r); if(!ts) return null;
+    const dur = prev ? `<div class="tl-dur">+${fmtDur(ts-prev)}</div>` : '';
+    prev=ts;
+    return `<div class="tl-row"><div class="tl-ic">${s.ic}</div><div class="tl-bd"><div class="tl-l">${s.label}</div><div class="tl-t">${fmtDataHora(ts)}</div></div>${dur}</div>`;
+  }).filter(Boolean).join('');
+  const abTs=c.abertoEm||c.ts, endTs=c.concluidoEm||(r&&r.completedTs)||Date.now();
+  const totVal=fmtDur(endTs-abTs);
+  const nota=c.nota||(r&&r.nota)||null, notaV=nota?(nota.final!=null?nota.final:nota):null;
+  const motos=Array.isArray(c.motos)?c.motos:[], ctrl=controladorDe(c), drv=driverDe(c);
+  const rotaBtn = (e===4)
+    ? (c._fake
+       ? `<button class="det-btn" onclick="openSimulador('${esc(c.id)}')">▶ Simular rota em tempo real</button>`
+       : `<a class="det-btn" href="/track?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">🛰 Ver trajeto ao vivo</a>`)
+    : '';
+  $('#detBody').innerHTML = `
+    <div class="deth">
+      <div><h2>${c.seq!=null?`<span style="font-family:var(--mono);color:var(--acc)">#${c.seq}</span> `:''}${esc(c.cliente||'Chamado')}</h2>${detStatusChip(c)}</div>
+      <button class="mx" onclick="closeDetalhe()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--txt2);margin-top:8px">${icoMotivo(c.motivo)} ${esc(c.motivo||'—')}</div>
+    ${ehTransf(c)?`<div style="font-size:13px;font-weight:700;margin-top:6px;color:#d8b4fe">🚚 ${esc(baseNome(c.baseSaida))} → ${esc(baseNome(c.baseEntrega))}</div>`:''}
+    ${rotaBtn}
+    <div class="det-total"><span class="tl">${(c.status==='concluido')?'⏱ Tempo total de execução':'⏱ Tempo decorrido'}</span><span class="tv">${totVal}</span></div>
+    ${notaV!=null?`<div style="margin-top:10px"><span class="det-nota">⭐ Nota ${notaV}</span></div>`:''}
+    <div class="det-sec"><div class="st">📋 Histórico · tempo de cada etapa</div>${rows||'<div style="color:var(--txt3);font-size:12px">Sem etapas registradas ainda.</div>'}</div>
+    ${motos.length?`<div class="det-sec"><div class="st">🏍 ${motos.length} moto${motos.length>1?'s':''}</div><div class="det-motos">${motos.map(m=>`<div class="det-moto"><span class="pl">${esc(m.placa)}</span><span class="mo">${esc(m.modelo||'')}</span>${m.iotForaDaBase?'<span style="margin-left:auto;font-size:9px;font-weight:800;color:#1a1200;background:#f59e0b;padding:1px 6px;border-radius:5px">⚠ fora da base</span>':''}</div>`).join('')}</div></div>`:''}
+    <div class="det-sec"><div class="st">👥 Responsáveis</div><div class="det-motos">
+      ${ctrl?`<div class="det-moto"><span>👮</span><span class="pl">${esc(ctrl)}</span><span class="mo">controlador</span></div>`:''}
+      ${drv?`<div class="det-moto"><span>🛵</span><span class="pl">${esc(drv)}</span><span class="mo">motorista</span></div>`:''}
+      ${c.abertoPor?`<div class="det-moto"><span>✍</span><span class="pl">${esc(c.abertoPor)}</span><span class="mo">abriu · ${fmtDataHora(c.abertoEm||c.ts)}</span></div>`:''}
+    </div></div>`;
+  $('#det').classList.add('on');
+}
+function closeDetalhe(){ $('#det').classList.remove('on'); }
+$('#det').addEventListener('click', e=>{ if(e.target.id==='det') closeDetalhe(); });
+
+// ================= SIMULADOR DE ROTA (demo — motorista em rota no mapa) =================
+let _leaflet=false;
+async function ensureLeaflet(){
+  if(_leaflet && window.L) return;
+  if(!document.querySelector('link[data-lf]')){ const l=document.createElement('link'); l.rel='stylesheet'; l.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; l.setAttribute('data-lf','1'); document.head.appendChild(l); }
+  if(!window.L) await loadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
+  _leaflet=true;
+}
+let sim={ map:null, timer:null, coords:[], idx:0, marker:null, playing:false, durMs:34000, routeMin:0 };
+async function openSimulador(id){
+  const c=findChamado(id); if(!c) return;
+  const from=c._simFrom||(c.baseSaida&&bases[c.baseSaida]&&bases[c.baseSaida].lat!=null?{lat:bases[c.baseSaida].lat,lng:bases[c.baseSaida].lng}:null);
+  const to  =c._simTo  ||(c.baseEntrega&&bases[c.baseEntrega]&&bases[c.baseEntrega].lat!=null?{lat:bases[c.baseEntrega].lat,lng:bases[c.baseEntrega].lng}:null);
+  if(!from||!to){ toast('Sem coordenadas das bases pra simular', true); return; }
+  closeDetalhe();
+  $('#sim').classList.add('on');
+  $('#simTitle').textContent = `${baseNome(c.baseSaida)} → ${baseNome(c.baseEntrega)}`;
+  $('#simSub').textContent='carregando rota…';
+  $('#simDriverN').textContent = driverDe(c)||'Motorista';
+  await ensureLeaflet();
+  await simInit(from, to);
+}
+async function simInit(from, to){
+  simStop();
+  if(sim.map){ sim.map.remove(); sim.map=null; }
+  sim.map = L.map($('#simMap'), {zoomControl:true, attributionControl:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19}).addTo(sim.map);
+  const pin=(emoji)=>L.divIcon({className:'sim-pin', html:`<div>${emoji}</div>`, iconSize:[26,26], iconAnchor:[13,24]});
+  L.marker([from.lat,from.lng], {icon:pin('🏁')}).addTo(sim.map);
+  L.marker([to.lat,to.lng], {icon:pin('🎯')}).addTo(sim.map);
+  let coords=[[from.lat,from.lng],[to.lat,to.lng]], mins=0, real=false;
+  try{
+    const u=`https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+    const d=await (await fetch(u)).json();
+    const rt=d.routes&&d.routes[0];
+    if(rt && rt.geometry){ coords=rt.geometry.coordinates.map(p=>[p[1],p[0]]); mins=Math.round(rt.duration/60); real=true; }
+  }catch(_){}
+  sim.coords=coords; sim.routeMin=mins; sim.idx=0;
+  L.polyline(coords, {color:'#00B4E5', weight:5, opacity:.85, dashArray:'10,8'}).addTo(sim.map);
+  sim.marker = L.marker(coords[0], {icon:L.divIcon({className:'sim-marker', html:'<div>🛵</div>', iconSize:[34,34], iconAnchor:[17,17]}), zIndexOffset:1000}).addTo(sim.map);
+  sim.map.fitBounds(L.latLngBounds(coords).pad(0.15));
+  setTimeout(()=>{ if(sim.map) sim.map.invalidateSize(); }, 80);
+  $('#simSub').textContent = `${real?'trajeto real (OSRM)':'linha reta'} · ETA ~${mins||'—'} min`;
+  simPlay();
+}
+function simRender(){
+  const n=sim.coords.length; if(!n) return;
+  const pos=sim.coords[Math.min(Math.floor(sim.idx),n-1)];
+  if(sim.marker&&pos) sim.marker.setLatLng(pos);
+  const prog=n>1?Math.min(1, sim.idx/(n-1)):1;
+  $('#simBar').style.width=(prog*100).toFixed(1)+'%';
+  $('#simEta').textContent = prog>=1 ? '✓ chegou no destino' : `ETA ~${Math.max(0,Math.round(sim.routeMin*(1-prog)))} min · ${Math.round(prog*100)}%`;
+}
+function simStep(){
+  const n=sim.coords.length; if(n<2) return;
+  sim.idx += n/(sim.durMs/120);
+  if(sim.idx>=n-1){ sim.idx=n-1; simRender(); simStop(); sim.playing=false; $('#simPlay').textContent='↺ Refazer'; return; }
+  simRender();
+}
+function simStop(){ if(sim.timer){ clearInterval(sim.timer); sim.timer=null; } }
+function simPlay(){ simStop(); if(sim.idx>=sim.coords.length-1) sim.idx=0; sim.playing=true; $('#simPlay').textContent='⏸ Pausar'; sim.timer=setInterval(simStep,120); simRender(); }
+function simTogglePlay(){ if(sim.playing){ simStop(); sim.playing=false; $('#simPlay').textContent='▶ Continuar'; } else { simPlay(); } }
+function simRestart(){ sim.idx=0; simPlay(); }
+function closeSimulador(){ simStop(); $('#sim').classList.remove('on'); if(sim.map){ sim.map.remove(); sim.map=null; } }
+$('#sim').addEventListener('click', e=>{ if(e.target.id==='sim') closeSimulador(); });
+
 // ================= AUTH (Google @vammo.com) =================
 function parseJwt(t){
   try{ return JSON.parse(decodeURIComponent(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''))); }
@@ -668,7 +844,7 @@ function initAuth(){
     }catch(e){ $('#gerr').textContent='Falha ao carregar o login do Google.'; }
   }).catch(()=>{ $('#gerr').textContent='Sem conexão com o login do Google.'; });
 }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSimulador(); closeDetalhe(); closeModal(); } });
 initAuth();
 console.log('Vammo Fleet', FLEET_VERSION);
 </script>
