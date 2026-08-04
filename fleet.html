@@ -41,6 +41,9 @@ button{font-family:inherit;cursor:pointer;border:none}
 .btn-open{display:flex;align-items:center;gap:7px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#041824;font-weight:800;font-size:13px;padding:9px 16px;border-radius:10px;box-shadow:0 4px 16px rgba(0,180,229,0.35);transition:transform .1s}
 .btn-open:hover{transform:translateY(-1px)}
 .btn-open:active{transform:translateY(0)}
+.btn-demo{background:transparent;border:1px solid var(--bdr2);color:var(--txt2);font-weight:700;font-size:11px;padding:7px 11px;border-radius:9px;white-space:nowrap}
+.btn-demo:hover{border-color:var(--acc);color:var(--acc)}
+.btn-demo.on{background:rgba(251,191,36,0.14);border-color:#fbbf24;color:#fbbf24}
 #userchip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.05);border:1px solid var(--bdr2);border-radius:20px;padding:3px 5px 3px 3px}
 #userchip img{width:26px;height:26px;border-radius:50%}
 #userchip .un{font-size:11px;font-weight:700;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -191,6 +194,7 @@ button{font-family:inherit;cursor:pointer;border:none}
     <span>ativos <b id="statAtivos">0</b></span>
     <span>em rota <b id="statRota">0</b></span>
   </div>
+  <button id="demoBtn" class="btn-demo" onclick="toggleDemo()" title="Plotar chamados fictícios pra apresentação (só na sua tela — não afeta a torre nem outros)">🧪 Demo</button>
   <div id="userchip" style="display:none"></div>
 </div>
 
@@ -219,7 +223,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v2 · 2026-08-04';
+const FLEET_VERSION = 'v3 · 2026-08-04';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -230,6 +234,9 @@ const MOTIVOS = [
 
 let chamados = {}, motoristas = {}, bases = {};
 let currentUser = null, fb = null;
+// DEMO (apresentação): chamados/motoristas fictícios só em memória — NÃO vão pro Firebase,
+// não aparecem na torre nem pra outros. Ver plotarDemo()/limparDemo().
+let demoOn = false, demoChamados = [], demoDrivers = [];
 
 // ================= TOAST =================
 let _tt = null;
@@ -290,6 +297,7 @@ function ehTransf(c){ return !!(c.baseSaida||c.baseEntrega||/deslocamento|movime
 // ================= ETAPAS =================
 // 1 aberto · 2 aceito · 3 atribuído · 4 em rota · 6 concluído  (5 = roster de motoristas na base)
 function etapa(c){
+  if(c._fakeEtapa) return c._fakeEtapa;   // chamado de demonstração: etapa forçada
   if(c.status==='concluido'||c.status==='cancelado') return 6;
   const hasDriver=!!c.motoristaId, hasTerc=!!c.terceiroId;
   if(hasDriver || hasTerc){
@@ -314,12 +322,19 @@ const COLS = [
 ];
 
 // ================= RENDER =================
+// A dash do Fleet mostra SÓ os chamados abertos pelo próprio operador logado.
+function ehMeuChamado(c){
+  if(c && c._fake) return true;
+  const meu = (currentUser && currentUser.email || '').toLowerCase();
+  return !!meu && (c.abertoPorEmail||'').toLowerCase() === meu;
+}
 function chamadosVisiveis(){
-  return Object.values(chamados).filter(c=>{
-    if(!c||!c.id) return false;
+  const reais = Object.values(chamados).filter(c=>{
+    if(!c||!c.id || !ehMeuChamado(c)) return false;
     if(c.status==='concluido'||c.status==='cancelado') return ehHoje(c.concluidoEm||c.ts);
     return true;
   });
+  return demoOn ? reais.concat(demoChamados) : reais;
 }
 
 function render(){
@@ -337,7 +352,7 @@ function render(){
   board.innerHTML = COLS.map(col=>{
     let inner, count;
     if(col.n===5){
-      const drivers=motoristasNaBase();
+      const drivers=motoristasNaBase().concat(demoOn?demoDrivers:[]);
       count=drivers.length;
       inner = drivers.length ? drivers.map(driverChip).join('')
         : emptyCol('🛵','Nenhum motorista na base agora');
@@ -374,7 +389,9 @@ function card(c, etapaN){
   const whoLines=[];
   if(etapaN>=2 && ctrl) whoLines.push(whoLine('👮','Controlador',ctrl,'#00B4E5'));
   if(etapaN>=3 && drv) whoLines.push(whoLine('🛵','Motorista',drv,corDriver(c)));
-  const trackBtn = (etapaN===4) ? `<a class="track" href="/track?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">🛰 Ver trajeto no mapa</a>` : '';
+  const trackBtn = (etapaN===4) ? (c._fake
+    ? `<div class="track" style="cursor:default;opacity:.8">🛰 trajeto ao vivo (demo)</div>`
+    : `<a class="track" href="/track?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">🛰 Ver trajeto no mapa</a>`) : '';
   const placasLine = motos && motos.length
     ? `<div class="mv" style="color:var(--txt2);font-family:var(--mono);font-size:10.5px">${motos.map(m=>esc(m.placa)+(m.iotForaDaBase?' ⚠':'')).join(' · ')}</div>` : '';
   const abertoFoot = c.abertoPor
@@ -404,6 +421,50 @@ function motoristasNaBase(){
   }
   return out.sort((a,b)=>(a.m.nome||'').localeCompare(b.m.nome||''));
 }
+
+// ================= DEMO (plotar chamados fictícios pra apresentação) =================
+function _demoBases(){
+  const ids = Object.keys(bases).filter(id=>bases[id]&&bases[id].nome);
+  const s = ids[0]||null, e = ids.find(id=>id!==s)||null;
+  const nS = s?baseNome(s):'Mooca', nE = e?baseNome(e):'Osasco';
+  return { bS:s||nS, bE:e||nE, nS, nE, bs:(s?bases[s]:{})||{} };  // bS/bE viram nome se não houver base cadastrada
+}
+function plotarDemo(){
+  const {bS,bE,nS,nE,bs} = _demoBases();
+  const now = Date.now(), M = 60000;
+  const base = (agoMin, extra) => Object.assign({
+    id:'demo_'+Math.random().toString(36).slice(2,9), _fake:true,
+    ts: now - agoMin*M, abertoEm: now - agoMin*M, status:'novo',
+    baseSaida:bS, baseEntrega:bE, lat:(bs.lat!=null?bs.lat:null), lng:(bs.lng!=null?bs.lng:null),
+    endereco:nS, origemFleet:true, clienteAguardando:false,
+    abertoPor:(currentUser&&currentUser.nome)||'Fleet', abertoPorEmail:(currentUser&&currentUser.email)||''
+  }, extra);
+  const cli = (q)=>`${nS} → ${nE} · ${q} moto${q>1?'s':''}`;
+  const COM='Movimentação comercial - Fleet', CHU='Movimentação Churn / Manutenção - Live Ops';
+  demoChamados = [
+    base(4,  {_fakeEtapa:1, seq:901, cliente:cli(3), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:3,
+      motos:[{placa:'FLE2A01',modelo:'Vammo One'},{placa:'FLE2A02',modelo:'Vammo One'},{placa:'FLE2A03',modelo:'Vammo One',iotForaDaBase:true,iotLocal:nE,iotDistM:18400}]}),
+    base(9,  {_fakeEtapa:1, seq:902, cliente:cli(1), motivo:CHU, tipoMovimentacao:'churn_manut', qtdMotos:1,
+      motos:[{placa:'CHU7B21',modelo:'Vammo Plus'}]}),
+    base(23, {_fakeEtapa:2, seq:903, cliente:cli(2), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:2, aceitoPor:'Ana Torre', aceitoEm:now-6*M,
+      motos:[{placa:'FLE9C10',modelo:'Vammo One'},{placa:'FLE9C11',modelo:'Vammo One'}]}),
+    base(41, {_fakeEtapa:3, seq:904, status:'em_rota', cliente:cli(2), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:2, aceitoPor:'Ana Torre', motoristaNome:'Carlos Souza', motoristaId:'demo_m1',
+      motos:[{placa:'FLE3D44',modelo:'Vammo One'},{placa:'FLE3D45',modelo:'Vammo Plus'}]}),
+    base(58, {_fakeEtapa:4, seq:905, status:'em_rota', cliente:cli(4), motivo:COM, tipoMovimentacao:'comercial', qtdMotos:4, aceitoPor:'Bruno Torre', motoristaNome:'Diego Lima', motoristaId:'demo_m2',
+      motos:[{placa:'FLE5E70',modelo:'Vammo One'},{placa:'FLE5E71',modelo:'Vammo One'},{placa:'FLE5E72',modelo:'Vammo Plus'},{placa:'FLE5E73',modelo:'Vammo One'}]}),
+    base(150,{_fakeEtapa:6, seq:906, status:'concluido', concluidoEm:now-14*M, cliente:cli(1), motivo:CHU, tipoMovimentacao:'churn_manut', qtdMotos:1, aceitoPor:'Ana Torre', motoristaNome:'Eduardo Reis',
+      motos:[{placa:'CHU1F90',modelo:'Vammo Plus'}]})
+  ];
+  demoDrivers = [
+    { m:{ nome:'Felipe Alves',  placa:'PICKUP-01',  color:'#22c55e' }, base:{ nome:nS } },
+    { m:{ nome:'Gustavo Pinto', placa:'CARRETA-07', color:'#00B4E5' }, base:{ nome:nS } }
+  ];
+  demoOn = true; updateDemoBtn(); render();
+  toast('🧪 6 chamados de demonstração plotados (só na sua tela)');
+}
+function limparDemo(){ demoChamados=[]; demoDrivers=[]; demoOn=false; updateDemoBtn(); render(); toast('🧹 Demonstração removida'); }
+function toggleDemo(){ demoOn ? limparDemo() : plotarDemo(); }
+function updateDemoBtn(){ const b=$('#demoBtn'); if(b){ b.textContent = demoOn ? '🧹 Limpar demo' : '🧪 Demo'; b.classList.toggle('on', demoOn); } }
 function driverChip(d){
   const m=d.m;
   return `<div class="dchip"><div class="av" style="background:${m.color||'#22c55e'}">${esc((m.nome||'?').charAt(0).toUpperCase())}</div>
