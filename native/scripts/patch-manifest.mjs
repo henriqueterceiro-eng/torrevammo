@@ -25,15 +25,21 @@ for (const p of perms) {
 writeFileSync(path, xml);
 console.log(`[patch-manifest] ${added} permissão(ões) adicionada(s) em ${path}`);
 
-// Mira targetSdk 33: o Android 14 (API 34) tornou os foreground services de localização
-// muito rígidos e o plugin grátis não inicia o serviço. Mirar 33 relaxa essa regra e o
-// serviço de background volta a subir (ok pra APK debug distribuído direto).
+// targetSdk configurável via env TARGET_SDK.
+//  • APK direto pra testar/distribuir na mão: 33 (o Android 14 apertou os foreground services
+//    de localização e o plugin grátis não subia o serviço no 34) → padrão 33.
+//  • Play Store EXIGE targetSdk 34+ → o workflow de build passa TARGET_SDK=34.
+//    (nesse caso o GPS em background precisa ser validado no track interno; se falhar,
+//     fixar versão do plugin ou trocar pelo transistorsoft — ver PLAYSTORE-GUIDE.md)
+const TARGET_SDK = process.env.TARGET_SDK || '33';
 try {
   const varsPath = 'android/variables.gradle';
   let v = readFileSync(varsPath, 'utf8');
-  v = v.replace(/targetSdkVersion\s*=\s*\d+/, 'targetSdkVersion = 33');
+  v = v.replace(/targetSdkVersion\s*=\s*\d+/, `targetSdkVersion = ${TARGET_SDK}`);
+  const compile = Math.max(34, Number(TARGET_SDK) || 34);
+  v = v.replace(/compileSdkVersion\s*=\s*\d+/, `compileSdkVersion = ${compile}`);
   writeFileSync(varsPath, v);
-  console.log('[patch-manifest] targetSdkVersion → 33');
+  console.log(`[patch-manifest] targetSdkVersion → ${TARGET_SDK} / compileSdkVersion → ${compile}`);
 } catch (e) {
   console.warn('[patch-manifest] não consegui ajustar variables.gradle:', e.message);
 }

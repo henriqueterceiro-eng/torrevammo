@@ -1,0 +1,95 @@
+name: 2) Build Android (AAB p/ Play + APK debug)
+
+# Compila o app do colaborador na nuvem. Gera:
+#   • app-release.aab  → o arquivo que sobe na Google Play
+#   • app-debug.apk    → pra instalar direto num celular e testar antes
+# Baixe os dois no final, na aba Artifacts da execução.
+#
+# PRÉ-REQUISITOS (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_B64 = conteúdo do upload.keystore.b64 (gerado pelo workflow 1)
+#   ANDROID_KS_PASS      = a senha da keystore
+#   ANDROID_KEY_ALIAS    = o alias (ex.: upload)
+
+on:
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: 'Version name (ex.: 1.0.0)'
+        required: true
+        default: '1.0.0'
+      versionCode:
+        description: 'Version code (inteiro — SEMPRE maior que o do build anterior)'
+        required: true
+        default: '1'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SDK: '34'   # Play exige 34+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Instalar dependências
+        working-directory: native
+        run: npm install
+
+      - name: Gerar projeto Android
+        working-directory: native
+        run: npx cap add android
+
+      - name: Ajustar versão (versionCode/versionName)
+        working-directory: native
+        run: |
+          sed -i "s/versionCode .*/versionCode ${{ inputs.versionCode }}/" android/app/build.gradle
+          sed -i "s/versionName .*/versionName \"${{ inputs.versionName }}\"/" android/app/build.gradle
+
+      - name: Permissões + targetSdk 34
+        working-directory: native
+        run: node scripts/patch-manifest.mjs
+
+      - name: Sincronizar (cap sync)
+        working-directory: native
+        run: npx cap sync android
+
+      - name: Restaurar keystore
+        working-directory: native
+        run: |
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_B64 }}" ]; then
+            echo "::error::Falta o secret ANDROID_KEYSTORE_B64 (rode o workflow 1 e configure)."; exit 1
+          fi
+          echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > android/app/upload.keystore
+
+      - name: Build AAB assinado + APK debug
+        working-directory: native/android
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KS_PASS }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file="$(pwd)/app/upload.keystore" \
+            -Pandroid.injected.signing.store.password="$KS_PASS" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KS_PASS"
+          ./gradlew assembleDebug
+
+      - name: Publicar artefatos
+        uses: actions/upload-artifact@v4
+        with:
+          name: vammo-colab-v${{ inputs.versionName }}
+          path: |
+            native/android/app/build/outputs/bundle/release/app-release.aab
+            native/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
