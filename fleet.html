@@ -182,6 +182,28 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
 .mstat.warn{color:#FFB020}
 .mstat.err{color:#FF6B85}
 .mstat.info{color:var(--txt2)}
+/* autocomplete de placa */
+.acwrap{position:relative}
+.acdd{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:6;background:var(--glassmod);backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);border:1px solid var(--bdr2);border-radius:12px;box-shadow:var(--sh-md);overflow:hidden auto;display:none;max-height:240px}
+.acdd.on{display:block}
+.acitem{display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.06)}
+.acitem:last-child{border-bottom:none}
+.acitem:hover{background:rgba(0,180,229,.16)}
+.acpl{font-family:var(--mono);font-weight:800;color:#fff;font-size:13px;letter-spacing:1px}
+.acmo{font-size:10.5px;color:var(--txt2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acempty{padding:11px;font-size:11px;color:var(--txt3)}
+/* tag de status da moto no sistema */
+.mstag{display:inline-block;font-size:9px;font-weight:800;padding:2px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.3px;margin-right:6px;vertical-align:middle}
+.mstag.ok{background:rgba(52,211,153,.18);color:#5FE0B0;border:1px solid rgba(52,211,153,.4)}
+.mstag.info{background:rgba(0,180,229,.16);color:#8FE0F7;border:1px solid rgba(0,180,229,.36)}
+.mstag.warn{background:rgba(255,176,32,.16);color:#FFCB6B;border:1px solid rgba(255,176,32,.38)}
+.mstag.err{background:rgba(255,92,121,.16);color:#FF9DAC;border:1px solid rgba(255,92,121,.4)}
+.mstag.muted{background:rgba(255,255,255,.08);color:var(--txt2);border:1px solid var(--bdr)}
+/* remover placa + adicionar placa */
+.moto-card .mrm{margin-left:auto;background:transparent;border:none;color:var(--txt3);font-size:12px;cursor:pointer;padding:2px 7px;border-radius:6px;line-height:1}
+.moto-card .mrm:hover{color:var(--novo);background:rgba(255,92,121,.14)}
+.wadd{width:100%;margin-top:10px;padding:11px;background:rgba(0,180,229,.10);border:1px dashed rgba(0,180,229,.45);color:var(--acc-br);font-weight:700;font-size:12.5px;border-radius:11px;transition:.12s}
+.wadd:hover{background:rgba(0,180,229,.17);border-style:solid}
 
 /* ===== DETALHE / HISTÓRICO ===== */
 .deth{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:2px}
@@ -327,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v8 · 2026-08-04';
+const FLEET_VERSION = 'v9 · 2026-08-04';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -572,7 +594,19 @@ const TIPOS = [
 ];
 const tipoLabel = k => { const t=TIPOS.find(x=>x.k===k); return t ? `${t.t} - ${t.s}` : (k||''); };
 const FORA_BASE_M = 800;       // ping a mais que isso da base de saída = "fora da base" (alerta)
-const MAX_MOTOS = 30;
+const MAX_MOTOS = 40;
+// Status da moto no sistema (bike.status) → rótulo PT + classe de cor
+const MOTO_STATUS = {
+  IN_STREET:['Na rua','ok'], RENTED:['Alugada','ok'], STORED:['Estocada','info'],
+  AWAITING_ARRIVAL:['Aguard. chegada','warn'], AWAITING_ACTIVATION:['Aguard. ativação','warn'],
+  AWAITING_INSPECTION:['Aguard. inspeção','warn'], AWAITING_CX:['Aguard. CX','warn'],
+  AWAITING_SERVICE:['Aguard. serviço','warn'], AWAITING_PARTS:['Aguard. peças','warn'],
+  AWAITING_VMGMT:['Aguard. gestão','warn'], AWAITING_INSURANCE:['Aguard. seguro','warn'],
+  AWAITING_PLATE:['Aguard. placa','warn'], IN_MAINTENANCE:['Em manutenção','warn'],
+  IN_FLEET_MAINTENANCE:['Manut. frota','warn'], DEFLEETED:['Desfrotada','muted'],
+  UNASSIGNED:['Não atribuída','muted'], LOST:['Perdida','err'], MISSING:['Desaparecida','err']
+};
+function statusMoto(code){ const m=MOTO_STATUS[code]; return m?{l:m[0],c:m[1]}:{l:(code||'—'),c:'muted'}; }
 let wiz = null;
 
 function clean(o){ const r={}; for(const k in o){ if(o[k]!==undefined&&o[k]!==null) r[k]=o[k]; } return r; }
@@ -583,78 +617,114 @@ function baseOpts(sel){
       .map(([id,b])=>`<option value="${id}"${id===sel?' selected':''}>${esc(b.nome)}</option>`).join('');
 }
 function openModal(){
-  wiz = { tipo:null, qtd:1, baseSaida:'', baseEntrega:'', motos:[{placa:''}] };
+  wiz = { tipo:null, baseSaida:'', baseEntrega:'', motos:[{placa:''}] };
   $('#modal').classList.add('on');
   renderWizard();
 }
 function closeModal(){ $('#modal').classList.remove('on'); }
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
 
-function syncMotosLen(){ const m=wiz.motos; while(m.length<wiz.qtd) m.push({placa:''}); while(m.length>wiz.qtd) m.pop(); }
+function motosValidas(){ return wiz.motos.filter(m => m.placa && ['ok','forabase','iotoff'].includes(m.status)); }
 function podeAbrir(){
-  if(!wiz||!wiz.tipo||!wiz.baseSaida||!wiz.baseEntrega||!wiz.motos.length) return false;
-  return wiz.motos.every(m => m.placa && ['ok','forabase','iotoff'].includes(m.status));
+  if(!wiz||!wiz.tipo||!wiz.baseSaida||!wiz.baseEntrega) return false;
+  const preenchidas = wiz.motos.filter(m=>m.placa);
+  if(!preenchidas.length) return false;
+  return preenchidas.every(m=>['ok','forabase','iotoff'].includes(m.status));  // toda placa digitada precisa estar válida
 }
-function updateGo(){ const g=$('#wGo'); if(g) g.disabled=!podeAbrir(); }
+function updateGo(){ const g=$('#wGo'); if(g) g.disabled=!podeAbrir(); const c=$('#wMotoCount'); if(c) c.textContent=motosValidas().length; }
 
 function renderWizard(){
   const w=wiz;
-  const showQty=!!w.tipo, showSaida=showQty, showEntrega=showSaida&&w.baseSaida, showMotos=showEntrega&&w.baseEntrega;
+  const showSaida=!!w.tipo, showEntrega=showSaida&&w.baseSaida, showMotos=showEntrega&&w.baseEntrega;
   let h='';
   // 1 — tipo
   h+=`<div class="wsec"><div class="wlabel"><span class="wn">1</span> Tipo de chamado</div>
     <div class="wtipo">${TIPOS.map(t=>`<button data-tipo="${t.k}" class="${w.tipo===t.k?'sel':''}"><span class="em">${t.em}</span><div><div class="tt">${t.t}</div><div class="ts">${t.s}</div></div></button>`).join('')}</div></div>`;
-  // 2 — quantidade
-  if(showQty) h+=`<div class="wsec"><div class="wlabel"><span class="wn">2</span> Quantas motos serão transportadas?</div>
-    <div class="wqty"><button id="qminus">−</button><span class="qn">${w.qtd}</span><button id="qplus">+</button><span style="font-size:12px;color:var(--txt2)">moto${w.qtd>1?'s':''}</span></div></div>`;
-  // 3 — base saída
-  if(showSaida) h+=`<div class="wsec"><div class="wlabel"><span class="wn">3</span> Base de saída</div><select id="wSaida">${baseOpts(w.baseSaida)}</select></div>`;
-  // 4 — base entrega
-  if(showEntrega) h+=`<div class="wsec"><div class="wlabel"><span class="wn">4</span> Base de entrega</div><select id="wEntrega">${baseOpts(w.baseEntrega)}</select>${(w.baseEntrega&&w.baseEntrega===w.baseSaida)?'<div class="mstat warn">⚠ Saída e entrega são a mesma base.</div>':''}</div>`;
-  // 5 — placas
-  if(showMotos) h+=`<div class="wsec"><div class="wlabel"><span class="wn">5</span> Placas das motos <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">(valida na base + confere IoT)</span></div><div id="wizMotos"></div></div>`;
+  // 2 — base saída
+  if(showSaida) h+=`<div class="wsec"><div class="wlabel"><span class="wn">2</span> Base de saída</div><select id="wSaida">${baseOpts(w.baseSaida)}</select></div>`;
+  // 3 — base entrega
+  if(showEntrega) h+=`<div class="wsec"><div class="wlabel"><span class="wn">3</span> Base de entrega</div><select id="wEntrega">${baseOpts(w.baseEntrega)}</select>${(w.baseEntrega&&w.baseEntrega===w.baseSaida)?'<div class="mstat warn">⚠ Saída e entrega são a mesma base.</div>':''}</div>`;
+  // 4 — placas (dinâmico: adicione quantas precisar; a quantidade é a soma das placas)
+  if(showMotos) h+=`<div class="wsec"><div class="wlabel"><span class="wn">4</span> Placas das motos <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">· <b id="wMotoCount" style="color:var(--acc-br)">0</b> moto(s)</span></div>
+    <div id="wizMotos"></div>
+    <button id="wAddMoto" class="wadd">＋ adicionar outra placa</button></div>`;
   // rodapé
   h+=`<div class="mrow"><button class="cancel" onclick="closeModal()">Cancelar</button><button class="go" id="wGo" onclick="abrirMov()" ${podeAbrir()?'':'disabled'}>📢 Abrir movimentação</button></div>`;
   $('#wizBody').innerHTML=h;
   // binds
   document.querySelectorAll('#wizBody [data-tipo]').forEach(b=> b.onclick=()=>{ wiz.tipo=b.dataset.tipo; renderWizard(); });
-  { const qm=$('#qminus'); if(qm) qm.onclick=()=>{ wiz.qtd=Math.max(1,wiz.qtd-1); syncMotosLen(); renderWizard(); }; }
-  { const qp=$('#qplus'); if(qp) qp.onclick=()=>{ wiz.qtd=Math.min(MAX_MOTOS,wiz.qtd+1); syncMotosLen(); renderWizard(); }; }
   { const s=$('#wSaida'); if(s) s.onchange=()=>{ wiz.baseSaida=s.value; recheckMotos(); renderWizard(); }; }
   { const e=$('#wEntrega'); if(e) e.onchange=()=>{ wiz.baseEntrega=e.value; renderWizard(); }; }
+  { const a=$('#wAddMoto'); if(a) a.onclick=()=>{ if(wiz.motos.length<MAX_MOTOS){ wiz.motos.push({placa:''}); renderMotoCards(); updateGo(); setTimeout(()=>{ const inp=$('#mp-'+(wiz.motos.length-1)); if(inp) inp.focus(); },30); } }; }
   if(showMotos) renderMotoCards();
+  updateGo();
 }
 
 function statClass(m){ return m.status==='ok'?'ok':(m.status==='forabase'?'warn':(m.status==='notfound'||m.status==='short'?'err':'info')); }
 function statText(m){
+  const st = m.motoStatus ? `<span class="mstag ${statusMoto(m.motoStatus).c}">${esc(statusMoto(m.motoStatus).l)}</span>` : '';
   switch(m.status){
-    case 'checking': return '🔎 verificando placa…';
+    case 'checking': return '🔎 verificando…';
     case 'notfound': return '✗ placa não encontrada na base Vammo';
     case 'short':    return 'digite a placa completa';
-    case 'ok':       return `✓ ${esc(m.modelo||'moto')} · na base de saída`;
-    case 'iotoff':   return `✓ ${esc(m.modelo||'moto')} · válida · 📡 IoT offline (localização não confirmada)`;
-    case 'forabase': return `⚠ ${esc(m.modelo||'moto')} — FORA da base de saída! 📡 IoT ${m.iotLocal?('perto de '+esc(m.iotLocal)):'em outro local'} (~${(m.iotDist/1000).toFixed(1)}km)`;
-    default:         return 'digite a placa da moto';
+    case 'ok':       return `${st}✓ ${esc(m.modelo||'moto')} · na base de saída`;
+    case 'iotoff':   return `${st}✓ ${esc(m.modelo||'moto')} · 📡 IoT offline (local não confirmado)`;
+    case 'forabase': return `${st}⚠ <b>FORA da base de saída</b> — 📡 IoT ${m.iotLocal?('perto de '+esc(m.iotLocal)):'em outro local'} (~${(m.iotDist/1000).toFixed(1)}km)`;
+    default:         return m.placa ? '' : 'digite ou busque a placa';
   }
 }
 function renderMotoCards(){
   const wrap=$('#wizMotos'); if(!wrap) return;
   wrap.innerHTML = wiz.motos.map((mo,i)=>`
     <div class="moto-card">
-      <div class="mh"><span class="mnum">${i+1}</span> Moto ${i+1} de ${wiz.qtd}</div>
-      <input id="mp-${i}" placeholder="ABC1D23" maxlength="8" value="${esc(mo.placa||'')}" autocomplete="off" spellcheck="false">
+      <div class="mh"><span class="mnum">${i+1}</span> Moto ${i+1}${wiz.motos.length>1?`<button class="mrm" data-rm="${i}" title="Remover placa">✕</button>`:''}</div>
+      <div class="acwrap">
+        <input id="mp-${i}" placeholder="Digite a placa…" maxlength="8" value="${esc(mo.placa||'')}" autocomplete="off" spellcheck="false">
+        <div class="acdd" id="mdd-${i}"></div>
+      </div>
       <div class="mstat ${statClass(mo)}" id="mstat-${i}">${statText(mo)}</div>
     </div>`).join('');
   wiz.motos.forEach((mo,i)=>{
     const inp=$('#mp-'+i);
-    inp.addEventListener('change', ()=>{ const v=inp.value.trim().toUpperCase(); inp.value=v; wiz.motos[i]={placa:v}; checkMoto(i); });
+    inp.addEventListener('input', ()=>{ onPlacaInput(i, inp.value); });
+    inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); hideDD(i); inp.blur(); } });
+    inp.addEventListener('blur', ()=>{ setTimeout(()=>{ hideDD(i); const m=wiz.motos[i]; if(m && m.placa && !['ok','forabase','iotoff','checking'].includes(m.status)) checkMoto(i); }, 180); });
   });
+  wrap.querySelectorAll('[data-rm]').forEach(b=> b.onclick=()=>{ wiz.motos.splice(+b.dataset.rm,1); if(!wiz.motos.length) wiz.motos.push({placa:''}); renderMotoCards(); updateGo(); });
 }
 function updateMotoStat(i){
   const el=$('#mstat-'+i); if(!el) return;
   const m=wiz.motos[i]; el.className='mstat '+statClass(m); el.innerHTML=statText(m);
 }
-function recheckMotos(){ wiz.motos.forEach((m,i)=>{ if(m.placa) checkMoto(i); }); }
+function recheckMotos(){ wiz.motos.forEach((m,i)=>{ if(m.placa && ['ok','forabase','iotoff'].includes(m.status)) checkIoT(i); }); }
+
+// ---- Autocomplete de placa (busca na base enquanto digita) ----
+const _acTimers={};
+function hideDD(i){ const dd=$('#mdd-'+i); if(dd){ dd.innerHTML=''; dd.classList.remove('on'); } }
+function onPlacaInput(i, val){
+  const q=(val||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  wiz.motos[i]={placa:q};           // reseta validação enquanto edita
+  updateMotoStat(i); updateGo();
+  if(_acTimers[i]) clearTimeout(_acTimers[i]);
+  if(q.length<2){ hideDD(i); return; }
+  _acTimers[i]=setTimeout(async ()=>{
+    try{
+      const d=await (await fetch('/api/moto_search?q='+encodeURIComponent(q))).json();
+      const res=(d&&d.results)||[];
+      const dd=$('#mdd-'+i); if(!dd) return;
+      if(!res.length){ dd.innerHTML=`<div class="acempty">nenhuma placa começando com <b>${esc(q)}</b></div>`; dd.classList.add('on'); return; }
+      dd.innerHTML=res.map((r,j)=>{ const s=statusMoto(r.status); return `<div class="acitem" data-j="${j}"><span class="acpl">${esc(r.placa)}</span><span class="acmo">${esc(r.modelo||'')}</span><span class="mstag ${s.c}">${esc(s.l)}</span></div>`; }).join('');
+      dd.classList.add('on');
+      dd.querySelectorAll('.acitem').forEach(el=> el.onmousedown=(ev)=>{ ev.preventDefault(); pickMoto(i, res[+el.dataset.j]); });
+    }catch(_){}
+  }, 230);
+}
+function pickMoto(i, r){
+  const inp=$('#mp-'+i); if(inp) inp.value=r.placa;
+  wiz.motos[i]={ placa:r.placa, modelo:r.modelo||'moto', motoStatus:r.status||null, deposito:r.deposito||null };
+  hideDD(i);
+  checkIoT(i);   // já temos os dados da moto; só falta conferir o IoT vs base de saída
+}
 
 async function checkMoto(i){
   const m=wiz.motos[i]; const placa=(m.placa||'').replace(/[^A-Z0-9]/g,'');
@@ -664,31 +734,37 @@ async function checkMoto(i){
   try{
     const d=await (await fetch('/api/moto_lookup?placa='+encodeURIComponent(placa))).json();
     if(!d||!d.found){ m.status='notfound'; updateMotoStat(i); updateGo(); return; }
-    m.found=true; m.modelo=d.modelo||'moto'; m.clienteMoto=d.cliente||null;
-    // IoT: só alerta se online (offline é desconsiderado)
-    let status='iotoff';
-    try{
-      const ij=await (await fetch('/iot_status?placas='+encodeURIComponent(placa))).json();
-      const ping=ij.pings && ij.pings[placa];
-      if(ping && ping.online && ping.lat!=null && ping.lon!=null){
-        const bs=bases[wiz.baseSaida];
-        if(bs && bs.lat!=null && bs.lng!=null){
-          const dist=haversine({lat:bs.lat,lng:bs.lng},{lat:ping.lat,lng:ping.lon});
-          const nb=nearestBase({lat:ping.lat,lng:ping.lon});
-          m.iotDist=dist; m.iotLocal = nb ? nb.base.nome : null;
-          status = dist>FORA_BASE_M ? 'forabase' : 'ok';
-        } else { status='iotoff'; }   // base sem coordenada: não dá pra conferir
+    m.found=true; m.modelo=d.modelo||'moto'; m.motoStatus=d.status||null; m.deposito=d.deposito||null;
+    await checkIoT(i);
+  }catch(e){ m.status='notfound'; updateMotoStat(i); updateGo(); }
+}
+// Confere o IoT vs base de saída → aviso/trava "fora da base". IoT offline é DESCONSIDERADO.
+async function checkIoT(i){
+  const m=wiz.motos[i]; const placa=(m.placa||'').replace(/[^A-Z0-9]/g,'');
+  m.status='checking'; updateMotoStat(i); updateGo();
+  let status='iotoff';
+  try{
+    const ij=await (await fetch('/iot_status?placas='+encodeURIComponent(placa))).json();
+    const ping=ij.pings && ij.pings[placa];
+    if(ping && ping.online && ping.lat!=null && ping.lon!=null){
+      const bs=bases[wiz.baseSaida];
+      if(bs && bs.lat!=null && bs.lng!=null){
+        const dist=haversine({lat:bs.lat,lng:bs.lng},{lat:ping.lat,lng:ping.lon});
+        const nb=nearestBase({lat:ping.lat,lng:ping.lon});
+        m.iotDist=dist; m.iotLocal=nb?nb.base.nome:null;
+        status = dist>FORA_BASE_M ? 'forabase' : 'ok';
       }
-    }catch(_){ status='iotoff'; }
-    m.status=status;
-  }catch(e){ m.status='notfound'; }
-  updateMotoStat(i); updateGo();
+    }
+  }catch(_){ status='iotoff'; }
+  m.status=status; updateMotoStat(i); updateGo();
 }
 
 async function abrirMov(){
   if(!podeAbrir()) return;
   const w=wiz, nS=baseNome(w.baseSaida), nE=baseNome(w.baseEntrega);
-  const fora=w.motos.filter(m=>m.status==='forabase');
+  const motos=motosValidas();
+  const qtd=motos.length;
+  const fora=motos.filter(m=>m.status==='forabase');
   if(fora.length && !confirm(`⚠ ${fora.length} moto(s) com IoT FORA da base de saída (${nS}):\n`+
     fora.map(m=>`• ${m.placa} — ${m.iotLocal||'outro local'} (~${(m.iotDist/1000).toFixed(1)}km)`).join('\n')+
     `\n\nA moto provavelmente não está na base. Abrir mesmo assim?`)) return;
@@ -697,12 +773,12 @@ async function abrirMov(){
   const ch={
     id:genId(), ts:Date.now(),
     tipoMovimentacao:w.tipo, motivo:tipoLabel(w.tipo),
-    cliente:`${nS} → ${nE} · ${w.qtd} moto${w.qtd>1?'s':''}`,
-    qtdMotos:w.qtd, baseSaida:w.baseSaida, baseEntrega:w.baseEntrega,
-    motos:w.motos.map(m=>clean({ placa:m.placa, modelo:m.modelo||null,
+    cliente:`${nS} → ${nE} · ${qtd} moto${qtd>1?'s':''}`,
+    qtdMotos:qtd, baseSaida:w.baseSaida, baseEntrega:w.baseEntrega,
+    motos:motos.map(m=>clean({ placa:m.placa, modelo:m.modelo||null, motoStatus:m.motoStatus||null,
       iotForaDaBase:m.status==='forabase'?true:null, iotDistM:m.iotDist!=null?Math.round(m.iotDist):null,
       iotLocal:m.iotLocal||null, iotOffline:m.status==='iotoff'?true:null })),
-    placa:w.motos.map(m=>m.placa).join(', ').slice(0,80),
+    placa:motos.map(m=>m.placa).join(', ').slice(0,80),
     endereco:bs.endereco||bs.nome||nS, lat:(bs.lat!=null?bs.lat:null), lng:(bs.lng!=null?bs.lng:null),
     status:'novo', clienteAguardando:false, origemFleet:true,
     abertoPor:currentUser.nome, abertoPorEmail:currentUser.email, abertoEm:Date.now()

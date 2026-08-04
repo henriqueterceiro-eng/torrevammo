@@ -25,7 +25,9 @@ export async function onRequestGet(context) {
       u.cellphone AS telefone,
       u.email     AS email,
       bm.bike_model_name AS modelo,
-      b.user_id   AS user_id
+      b.user_id   AS user_id,
+      b.status    AS status,
+      b.current_deposit_name AS deposito
     FROM vammo_r.bike b FINAL
     LEFT JOIN vammo_r.user u FINAL ON u.id = b.user_id
     LEFT JOIN vammo_r.bike_model bm FINAL ON bm.id = b.bike_model_id
@@ -59,6 +61,8 @@ export async function onRequestGet(context) {
       modelo: val("modelo"),
       email: val("email"),
       user_id: uid,
+      status: val("status"),
+      deposito: val("deposito"),
       backofficeUrl: uid ? "https://backoffice.vammo.com/users/" + uid : null,
     };
     CACHE[placa] = { at: Date.now(), data };
