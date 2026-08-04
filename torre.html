@@ -997,7 +997,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v72 · 2026-08-04';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v73 · 2026-08-04';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3379,7 +3379,7 @@ function renderDetail(){
       <button id="dafinforce" style="width:100%;margin-top:8px;padding:9px;background:rgba(220,38,38,0.14);border:1px solid #dc2626;color:#fca5a5;font-size:12px;font-weight:800;border-radius:6px;cursor:pointer">🛑 Finalizar forçado pela Torre <span style="font-weight:500;opacity:0.8">(gera log)</span></button>
     ` : ''}
     ${c.finalizadoForcado ? `<div style="margin-top:8px;padding:7px 10px;background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.5);border-radius:6px;font-size:10px;color:#fca5a5;line-height:1.4">🛑 <strong>Finalizado forçado pela Torre</strong>${c.finalizadoForcadoPor?' por '+esc(c.finalizadoForcadoPor):''}${c.finalizadoForcadoEm?' · '+fmtTime(c.finalizadoForcadoEm):''}</div>` : ''}
-    ${(c.status === 'novo' && !c.motoristaId && !c.terceiroId) ? `
+    ${(c.origemFleet && c.status === 'novo' && !c.motoristaId && !c.terceiroId) ? `
       <div style="margin-top:10px">
         ${c.aceitoPor
           ? `<div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.45);border-radius:8px;padding:8px 11px;font-size:11.5px"><span style="font-size:15px">✋</span><div><b style="color:#ffcf7a">Aceito por ${esc(c.aceitoPor)}</b>${c.aceitoEm?` <span style="color:var(--txt3)">· ${fmtTime(c.aceitoEm)}</span>`:''}<div style="font-size:10px;color:var(--txt2)">Fleet vê o controlador responsável. Agora atribua um motorista.</div></div></div>`
@@ -6529,7 +6529,9 @@ function playIncomingRing(){
 }
 let incomingQueue = [];               // ids aguardando aceite (na tela deste operador)
 const incomingDismissed = new Set();  // ids que ESTE operador dispensou (não reaparecem)
-function chamadoPrecisaAceite(c){ return !!(c && c.status === 'novo' && !c.aceitoPor && !c.motoristaId && !c.terceiroId); }
+// SÓ chamados abertos no app de Fleet (origemFleet) pedem aceite/toque/slide na torre.
+// Chamados internos da torre (form manual / CX) NÃO tocam nem exigem aceite.
+function chamadoPrecisaAceite(c){ return !!(c && c.origemFleet === true && c.status === 'novo' && !c.aceitoPor && !c.motoristaId && !c.terceiroId); }
 function syncIncoming(novosIds){
   let tocou = false;
   for(const id of (novosIds || [])){
@@ -6543,12 +6545,18 @@ function syncIncoming(novosIds){
   if(tocou) playIncomingRing();
   renderIncoming();
 }
+let _incLastKey = '';
 function renderIncoming(){
   let box = document.getElementById('incoming');
   if(!box){ box = document.createElement('div'); box.id = 'incoming'; document.body.appendChild(box); }
+  const show = incomingQueue.slice(0, 3), extra = incomingQueue.length - show.length;
+  // Só re-renderiza quando o CONJUNTO visível muda — senão um snapshot no meio do arraste
+  // reconstruía o DOM e travava/reiniciava o slide. Mudança de dados do card é irrelevante aqui.
+  const key = show.join('|') + (extra > 0 ? ('+' + extra) : '');
+  if(key === _incLastKey) return;
+  _incLastKey = key;
   if(!incomingQueue.length){ box.innerHTML = ''; return; }
   const numMap = buildNumeroMap();
-  const show = incomingQueue.slice(0, 3), extra = incomingQueue.length - show.length;
   box.innerHTML = show.map(id => {
     const c = chamados.find(x => x.id === id); if(!c) return '';
     const seq = c.seq != null ? c.seq : numMap[c.id];
