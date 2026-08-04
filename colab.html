@@ -818,7 +818,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v54 · 2026-07-31';
+const APP_VERSION = 'v55 · 2026-08-04';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2247,7 +2247,7 @@ function consumirPeca(key, qtd){
 // + km/h consistente). O `ts` muda sempre → garante child_changed na torre mesmo parado.
 function writeMotoristaNode(extra){
   if(!me) return;
-  const data = { ...cleanForFb(extra || {}), ts: Date.now() };
+  const data = { ...cleanForFb(extra || {}), online: true, ts: Date.now() };  // todo write vivo reassere online
   // 1) SDK (WebSocket) — rápido em foreground
   try {
     if(typeof firebase !== 'undefined' && firebase.apps?.length){
@@ -3719,6 +3719,32 @@ function startColabOnlineTracker(){
   window.addEventListener('beforeunload', syncColOnline);
 }
 
+// ===== PRESENÇA ROBUSTA (Firebase onDisconnect) — fix DEFINITIVO do "offline direto" =====
+// Antes a torre marcava offline por TTL (180s) sempre que o app parava de mandar heartbeat — o que
+// acontece SEMPRE em background/Doze (timers JS congelam) e parado (GPS nativo só dispara ao mover).
+// Solução SERVER-SIDE: enquanto o WebSocket do Firebase estiver vivo (o foreground service nativo
+// mantém vivo mesmo com a tela apagada), `online:true` persiste no nó SEM precisar de nenhum timer.
+// Se a conexão cair de verdade, o SERVIDOR roda o onDisconnect e marca `online:false`. Ao reconectar,
+// reassere `online:true`. A torre passa a honrar essa flag (não decide só pelo TTL de lastSeen).
+let _presenceRef = null, _presenceConn = null;
+function setupPresence(){
+  try{
+    if(!me || !me.id || typeof firebase === 'undefined' || !firebase.apps?.length) return;
+    const db = firebase.database();
+    _presenceRef = db.ref('vammo/motoristas/' + me.id);
+    _presenceConn = db.ref('.info/connected');
+    _presenceConn.on('value', (snap) => {
+      if(snap.val() !== true) return;   // desconectou — o servidor executa o onDisconnect (não depende de timer)
+      try { _presenceRef.onDisconnect().update({ online: false, offlineAt: firebase.database.ServerValue.TIMESTAMP }); } catch(_){}
+      try { _presenceRef.update({ online: true, lastSeen: Date.now(), nome: me.nome, placa: me.placa || null, color: me.color, status: me.status, ts: Date.now() }); } catch(_){}
+    });
+  }catch(_){}
+}
+function cancelPresence(){   // chamado no checkout/logout intencional (evita nó-fantasma {online:false})
+  try { if(_presenceConn) _presenceConn.off(); } catch(_){}
+  try { if(_presenceRef) _presenceRef.onDisconnect().cancel(); } catch(_){}
+}
+
 function bootApp(){
   showApp();
   renderTopBar();
@@ -3726,6 +3752,7 @@ function bootApp(){
   setupSyncListeners();
   startGPS();
   startColabOnlineTracker();
+  setupPresence();   // presença server-side (onDisconnect) — não some mais em background/parado
   const av = document.getElementById('appver');
   if(av) av.textContent = 'app ' + APP_VERSION;
 
@@ -4923,6 +4950,7 @@ async function finalizarCheckOut(){
   // Logout + reload
   if(sync) sync.send('motorista:logout', { id: me.id });
   // Remove o nó de telemetria pra sumir do mapa da torre na hora (não fica fantasma)
+  try { cancelPresence(); } catch(_){}   // cancela onDisconnect antes de remover (senão recria {online:false})
   try { if(typeof firebase !== 'undefined' && firebase.apps?.length && me) firebase.database().ref('vammo/motoristas/' + me.id).remove(); } catch(_){}
   if(watchId) navigator.geolocation.clearWatch(watchId);
   if(wakeLock && !wakeLock.released){ try{ await wakeLock.release(); }catch(_){} }
@@ -5551,6 +5579,7 @@ async function encerrarTurno(){
 async function encerrarTurnoOrfao(){
   try { await encerrarTurno(); } catch(err){ console.warn('encerrarTurnoOrfao:', err); }
   try { if(sync) sync.send('motorista:logout', { id: me.id }); } catch(_){}
+  try { cancelPresence(); } catch(_){}
   try { if(typeof firebase !== 'undefined' && firebase.apps?.length && me) firebase.database().ref('vammo/motoristas/' + me.id).remove(); } catch(_){}
   try { if(watchId) navigator.geolocation.clearWatch(watchId); } catch(_){}
   try { if(wakeLock && !wakeLock.released){ await wakeLock.release(); } } catch(_){}

@@ -997,7 +997,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v71 · 2026-08-04';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v72 · 2026-08-04';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2272,7 +2272,7 @@ function checkOciosidade(){
   for(const c of assigned){
     const m = motoristas[c.motoristaId];
     if(!m) continue;
-    if(m.status === 'off' || (now - (m.lastSeen || 0)) > MOTORISTA_TTL_MS) continue;  // offline → ignora
+    if(m.status === 'off' || (m.online !== true && (now - (m.lastSeen || 0)) > MOTORISTA_TTL_MS)) continue;  // offline → ignora (online=true = conectado)
     ativosIds.add(c.motoristaId);
     const prev = _idleTrack[c.motoristaId];
     const cur = { lat: m.lat, lng: m.lng };
@@ -2421,7 +2421,7 @@ function renderMotoristaMarkers(){
     seen.add(id);
     const ageS = Math.round((now - (m.lastSeen || 0))/1000);
     const emAtend = motEmAtendimento(m, ageS);
-    const isOff = m.status === 'off' || (ageS > MOTORISTA_TTL_MS/1000 && !emAtend);
+    const isOff = m.status === 'off' || (m.online !== true && ageS > MOTORISTA_TTL_MS/1000 && !emAtend);
     const isStale = !isOff && !emAtend && ageS > 60; // > 60s sem update mas ainda dentro do TTL
     let ringColor = emAtend ? '#0ea5e9' : m.status === 'busy' ? '#d97706' : isOff ? '#6b7280' : isStale ? '#fbbf24' : '#10b981';
     if(m.modo === 'descarregando') ringColor = '#dc2626';
@@ -2976,7 +2976,7 @@ function renderMot(){
     }, 0);
     const ageS = Math.round((Date.now() - (m.lastSeen||0))/1000);
     const emAtend = motEmAtendimento(m, ageS);
-    const isOff = m.status === 'off' || (ageS > MOTORISTA_TTL_MS/1000 && !emAtend);
+    const isOff = m.status === 'off' || (m.online !== true && ageS > MOTORISTA_TTL_MS/1000 && !emAtend);
     const isStale = !isOff && !emAtend && ageS > 60;
     const stCls = isOff ? 'off' : emAtend ? 'busy' : m.status === 'busy' ? 'busy' : 'online';
     const stLbl = isOff ? 'offline' : emAtend ? motTrabShort(m) : m.modo === 'descarregando' ? '🔴 descarregando' : m.status === 'busy' ? 'em rota' : 'online';
@@ -7203,7 +7203,8 @@ function applyMotoristaTelemetry(data, opts){
       (existe && (existe.activeCount||0) > 0)
     );
     const limite = trabalhando ? MOTORISTA_GHOST_MS : MOTORISTA_REMOVE_MS;
-    if(data.status === 'off' || idade > limite){
+    // online=true (conexão viva pelo onDisconnect) NUNCA é removido no seed, mesmo com ts velho.
+    if(data.status === 'off' || (data.online !== true && idade > limite)){
       if(existe) removeMotorista(data.id);
       return;
     }
@@ -7221,6 +7222,7 @@ function applyMotoristaTelemetry(data, opts){
   const hasGeo = data.lat != null && data.lng != null;
   if(hasGeo){ m.lat = data.lat; m.lng = data.lng; }
   m.status = data.status || m.status;
+  if('online' in data) m.online = data.online === true;   // presença server-side (onDisconnect) — autoritativa sobre o TTL
   // lastSeen: ao vivo = agora; no load inicial de nó já velho, usa o ts pra mostrar offline correto
   if(opts.initial && data.ts && (Date.now() - data.ts > MOTORISTA_TTL_MS)){
     m.lastSeen = data.ts;
