@@ -975,7 +975,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v68 · 2026-08-03';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v69 · 2026-08-04';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3232,8 +3232,13 @@ function renderDetail(){
       <div style="font-size:12px;font-weight:700;line-height:1.25">Prioridade na fila — entra na frente na roteirização</div></div>
     </div>` : ''}
     ${transfInfo(c) ? `<div style="margin-top:10px;padding:10px 12px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.5);border-radius:9px">
-      <div style="font-size:9px;color:#c4b5fd;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🚚 Transferência entre bases</div>
+      <div style="font-size:9px;color:#c4b5fd;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🚚 Transferência entre bases${c.tipoMovimentacao?' · '+esc(c.motivo||''):''}</div>
       <div style="font-size:13px;font-weight:700;line-height:1.3">${transfInfo(c)}</div>
+      ${Array.isArray(c.motos) && c.motos.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(139,92,246,0.4)">
+        <div style="font-size:9px;color:#c4b5fd;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">🏍 ${c.motos.length} moto${c.motos.length>1?'s':''} a transportar</div>
+        ${c.motos.map(m => `<div style="display:flex;align-items:center;gap:7px;font-size:11.5px;padding:2px 0"><span style="font-family:var(--mono);font-weight:800;color:var(--txt)">${esc(m.placa||'?')}</span><span style="color:var(--txt2);font-size:10px">${esc(m.modelo||'')}</span>${m.iotForaDaBase?`<span style="margin-left:auto;font-size:9px;font-weight:800;color:#1a1200;background:#f59e0b;padding:1px 6px;border-radius:5px" title="IoT ${m.iotLocal?('perto de '+esc(m.iotLocal)):'em outro local'}${m.iotDistM?(' · ~'+(m.iotDistM/1000).toFixed(1)+'km'):''}">⚠ fora da base</span>`:''}</div>`).join('')}
+      </div>` : ''}
+      ${c.abertoPor ? `<div style="margin-top:7px;font-size:10px;color:var(--txt3)">✍ Aberto por <b style="color:var(--txt2)">${esc(c.abertoPor)}</b>${c.abertoEm?' · '+fmtTime(c.abertoEm):''}${c.origemFleet?' · <span style="color:#00B4E5;font-weight:700">Fleet</span>':''}</div>` : ''}
     </div>` : ''}
     ${(() => {
       // DESTAQUE: controlador responsável pelo chamado (quem atribuiu > quem abriu > analista CX)

@@ -85,6 +85,8 @@ button{font-family:inherit;cursor:pointer;border:none}
 .kc .wl .wn{font-size:12px;font-weight:700;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kc .track{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:9px;padding:8px;background:rgba(0,180,229,0.13);border:1px solid var(--acc);color:var(--acc);font-weight:800;font-size:11.5px;border-radius:8px;text-decoration:none}
 .kc .track:hover{background:rgba(0,180,229,0.22)}
+.kc .aberto{font-size:9.5px;color:var(--txt3);margin-top:8px;padding-top:7px;border-top:1px dashed var(--bdr);line-height:1.3}
+.kc .aberto b{color:var(--txt2)}
 
 /* driver chip (coluna Na base) */
 .dchip{display:flex;align-items:center;gap:9px;background:var(--surf);border:1px solid var(--bdr);border-left:3px solid var(--base);border-radius:10px;padding:9px 11px}
@@ -118,12 +120,39 @@ button{font-family:inherit;cursor:pointer;border:none}
 .mplate input{background:#fff;color:#0a1420;border:none;text-align:center;font-family:var(--mono);font-weight:800;font-size:22px;letter-spacing:3px;text-transform:uppercase;margin-top:4px}
 #mtransf{display:none;margin-top:12px;padding:11px;border:1px solid rgba(168,85,247,0.5);background:rgba(168,85,247,0.08);border-radius:10px}
 #mtransf .tt{font-size:11px;color:#d8b4fe;font-weight:800;margin-bottom:8px}
-.mrow{display:flex;gap:8px;margin-top:18px}
+.mrow{display:flex;gap:8px;margin-top:20px}
 .mrow button{flex:1;padding:12px;border-radius:10px;font-weight:800;font-size:13px}
-.mrow .cancel{background:transparent;border:1px solid var(--bdr2);color:var(--txt2)}
+.mrow .cancel{flex:0 0 34%;background:transparent;border:1px solid var(--bdr2);color:var(--txt2)}
 .mrow .go{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#041824}
-.mrow .go:disabled{opacity:0.5}
-#mresult{margin-top:14px;padding:10px;background:var(--surf2);border-radius:8px;font-size:11px;color:var(--txt2);display:none;line-height:1.4}
+.mrow .go:disabled{opacity:0.45;cursor:not-allowed}
+/* ---- WIZARD de movimentação ---- */
+.mhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px}
+.mx{background:transparent;border:none;color:var(--txt3);font-size:20px;line-height:1;padding:2px 6px}
+.mx:hover{color:var(--txt)}
+.wsec{margin-top:18px;animation:wfade .18s ease}
+@keyframes wfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.wlabel{font-size:11px;color:var(--txt2);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:9px;display:flex;align-items:center;gap:8px}
+.wlabel .wn{background:var(--acc);color:#04121e;width:19px;height:19px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex:0 0 19px}
+.wtipo{display:flex;flex-direction:column;gap:8px}
+.wtipo button{display:flex;align-items:center;gap:12px;padding:13px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:11px;text-align:left;color:var(--txt);width:100%}
+.wtipo button:hover{border-color:var(--acc)}
+.wtipo button.sel{border-color:var(--acc);background:rgba(0,180,229,0.12);box-shadow:inset 0 0 0 1px var(--acc)}
+.wtipo .em{font-size:23px;flex:0 0 auto}
+.wtipo .tt{font-weight:800;font-size:13px}
+.wtipo .ts{font-size:10.5px;color:var(--txt2);font-weight:600}
+.wqty{display:flex;align-items:center;gap:14px}
+.wqty button{width:44px;height:44px;border-radius:12px;background:var(--surf2);border:1px solid var(--bdr2);color:var(--acc);font-size:24px;font-weight:800;line-height:1}
+.wqty button:hover{border-color:var(--acc)}
+.wqty .qn{font-size:32px;font-weight:900;font-family:var(--mono);min-width:54px;text-align:center;color:var(--txt)}
+.moto-card{background:var(--surf2);border:1px solid var(--bdr2);border-radius:11px;padding:11px;margin-top:9px}
+.moto-card .mh{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;font-weight:800;color:var(--txt2)}
+.moto-card .mnum{background:var(--atrib);color:#fff;width:20px;height:20px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex:0 0 20px}
+.moto-card input{text-transform:uppercase;font-family:var(--mono);letter-spacing:2px;font-weight:800;font-size:16px;text-align:center}
+.mstat{font-size:11px;margin-top:7px;line-height:1.4;min-height:15px;font-weight:600}
+.mstat.ok{color:#4ade80}
+.mstat.warn{color:#fbbf24}
+.mstat.err{color:#fca5a5}
+.mstat.info{color:var(--txt2)}
 
 /* ===== TOAST ===== */
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surf2);border:1px solid var(--acc);color:var(--txt);padding:11px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 10px 40px rgba(0,0,0,0.5);opacity:0;pointer-events:none;transition:all .25s;z-index:120;max-width:90vw}
@@ -171,37 +200,11 @@ button{font-family:inherit;cursor:pointer;border:none}
 <!-- MODAL Abrir chamado -->
 <div id="modal">
   <div class="m">
-    <h2>➕ Abrir chamado</h2>
-    <div class="msub">Cai direto na Torre de Controle. Um agente aceita e atribui a um motorista.</div>
-    <label>Placa da moto</label>
-    <div class="mplate">
-      <div class="mt"><span>◈ MERCOSUL</span><span>BRASIL 🇧🇷</span></div>
-      <input id="mPlaca" placeholder="ABC1D23" maxlength="8" autocomplete="off" spellcheck="false">
+    <div class="mhead">
+      <div><h2>➕ Abrir movimentação</h2><div class="msub">Transporte de motos entre bases Vammo · cai direto na Torre</div></div>
+      <button class="mx" onclick="closeModal()">✕</button>
     </div>
-    <label>Endereço (onde está a moto)</label>
-    <input id="mEnd" placeholder="Ex: Av. Paulista, 1578, São Paulo">
-    <label>Motivo</label>
-    <select id="mMotivo"></select>
-    <input id="mMotivoCustom" placeholder="Descreva o motivo" style="display:none;margin-top:6px">
-    <label>Referência / solicitante <small style="color:var(--txt3)">(opcional)</small></label>
-    <input id="mRef" placeholder="Ex: Fleet - João / nº do ticket">
-    <label>Cliente/piloto aguardando no local?</label>
-    <select id="mAguard">
-      <option value="sim">✅ Sim — aguardando no local</option>
-      <option value="nao">❌ Não</option>
-    </select>
-    <div id="mtransf">
-      <div class="tt">🚚 Transferência entre bases</div>
-      <label style="margin-top:0">🏁 Base de saída</label>
-      <select id="mBaseSaida"><option value="">— selecionar —</option></select>
-      <label>🎯 Base de entrega</label>
-      <select id="mBaseEntrega"><option value="">— selecionar —</option></select>
-    </div>
-    <div id="mresult"></div>
-    <div class="mrow">
-      <button class="cancel" onclick="closeModal()">Cancelar</button>
-      <button class="go" id="mGo" onclick="submitChamado()">📍 Abrir chamado</button>
-    </div>
+    <div id="wizBody"></div>
   </div>
 </div>
 
@@ -216,7 +219,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v1 · 2026-08-03';
+const FLEET_VERSION = 'v2 · 2026-08-04';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -265,6 +268,7 @@ function fmtElapsed(ts){
   const h=Math.floor(m/60); return h+'h'+(m%60?(' '+(m%60)+'min'):'');
 }
 function fmtTime(ts){ if(!ts) return ''; const d=new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function fmtDataHora(ts){ if(!ts) return '—'; const d=new Date(ts); const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`; }
 function ehHoje(ts){ if(!ts) return false; const d=new Date(ts), n=new Date(); return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate(); }
 const baseNome = id => (bases[id] && bases[id].nome) || id || '';
 
@@ -276,7 +280,7 @@ function icoMotivo(m){
   if(m.includes('freio')) return '🛑';
   if(m.includes('vazamento')||m.includes('óleo')) return '💧';
   if(m.includes('travada')||m.includes('tracksolution')) return '🔒';
-  if(m.includes('deslocamento')||m.includes('transfer')) return '🚚';
+  if(m.includes('deslocamento')||m.includes('transfer')||m.includes('movimenta')) return '🚚';
   if(m.includes('recolhimento')||m.includes('inadimpl')) return '🚛';
   if(m.includes('devolução')||m.includes('devolucao')) return '📦';
   return '🔧';
@@ -360,22 +364,31 @@ function card(c, etapaN){
   const ctrl = controladorDe(c);
   const drv = driverDe(c);
   const aguard = c.clienteAguardando===true;
+  const motos = Array.isArray(c.motos) ? c.motos : null;
   const badges=[];
   if(aguard) badges.push(`<span class="b b-aguard">🙋 AGUARDANDO</span>`);
+  if(motos && motos.length) badges.push(`<span class="b" style="background:rgba(0,180,229,0.16);color:var(--acc);border:1px solid rgba(0,180,229,0.4)">🏍 ${motos.length} moto${motos.length>1?'s':''}</span>`);
   if(ehTransf(c)) badges.push(`<span class="b b-transf">🚚 ${esc(baseNome(c.baseSaida)||'?')}→${esc(baseNome(c.baseEntrega)||'?')}</span>`);
+  if(motos && motos.some(m=>m.iotForaDaBase)) badges.push(`<span class="b" style="background:#f59e0b;color:#1a1200" title="Uma ou mais motos com IoT fora da base de saída">⚠ moto fora da base</span>`);
   if(c.terceiroId) badges.push(`<span class="b b-ext">🤝 externo</span>`);
   const whoLines=[];
   if(etapaN>=2 && ctrl) whoLines.push(whoLine('👮','Controlador',ctrl,'#00B4E5'));
   if(etapaN>=3 && drv) whoLines.push(whoLine('🛵','Motorista',drv,corDriver(c)));
   const trackBtn = (etapaN===4) ? `<a class="track" href="/track?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">🛰 Ver trajeto no mapa</a>` : '';
+  const placasLine = motos && motos.length
+    ? `<div class="mv" style="color:var(--txt2);font-family:var(--mono);font-size:10.5px">${motos.map(m=>esc(m.placa)+(m.iotForaDaBase?' ⚠':'')).join(' · ')}</div>` : '';
+  const abertoFoot = c.abertoPor
+    ? `<div class="aberto">✍ Aberto por <b>${esc(c.abertoPor)}</b> · ${fmtDataHora(c.abertoEm||c.ts)}</div>` : '';
   return `<div class="kc${aguard?' aguard':''}" style="--c:${etapaN===4?'var(--rota)':etapaN===3?'var(--atrib)':etapaN===2?'var(--aceito)':etapaN===6?'var(--conc)':'var(--novo)'}">
     <div class="r1">${num}<span class="cli">${esc(c.cliente||'Sem nome')}</span><span class="ico">${icoMotivo(c.motivo)}</span></div>
     <div class="mv">${esc(c.motivo||'—')}</div>
+    ${placasLine}
     ${c.endereco?`<div class="end">📍<span>${esc(c.endereco)}</span></div>`:''}
     ${badges.length?`<div class="badges">${badges.join('')}</div>`:''}
     ${whoLines.length?`<div class="who">${whoLines.join('')}</div>`:''}
     ${trackBtn}
-    <div class="meta"><span>${esc(c.placa||'—')}</span><span>${etapaN===6?('✓ '+fmtTime(c.concluidoEm||c.ts)):('⏱ '+fmtElapsed(c.ts))}</span></div>
+    ${abertoFoot}
+    <div class="meta"><span>${esc((c.placa||'—')).slice(0,22)}</span><span>${etapaN===6?('✓ '+fmtTime(c.concluidoEm||c.ts)):('⏱ '+fmtElapsed(c.ts))}</span></div>
   </div>`;
 }
 function whoLine(ic,role,nome,cor){
@@ -411,82 +424,158 @@ async function initFirebase(){
   });
   fb.child('chamados').on('value', s=>{ chamados=s.val()||{}; render(); });
   fb.child('motoristas').on('value', s=>{ motoristas=s.val()||{}; render(); });
-  fb.child('bases').on('value', s=>{ bases=s.val()||{}; preencherBases(); render(); });
+  fb.child('bases').on('value', s=>{ bases=s.val()||{}; if(wiz && !wiz.baseEntrega) renderWizard(); render(); });
 }
 
-// ================= ABRIR CHAMADO =================
-function preencherBases(){
-  const opts='<option value="">— selecionar —</option>'+
+// ================= ABRIR CHAMADO (WIZARD DE MOVIMENTAÇÃO) =================
+const TIPOS = [
+  { k:'comercial',   em:'🏷️', t:'Movimentação comercial',        s:'Fleet' },
+  { k:'churn_manut', em:'🔧', t:'Movimentação Churn / Manutenção', s:'Live Ops' }
+];
+const tipoLabel = k => { const t=TIPOS.find(x=>x.k===k); return t ? `${t.t} - ${t.s}` : (k||''); };
+const FORA_BASE_M = 800;       // ping a mais que isso da base de saída = "fora da base" (alerta)
+const MAX_MOTOS = 30;
+let wiz = null;
+
+function clean(o){ const r={}; for(const k in o){ if(o[k]!==undefined&&o[k]!==null) r[k]=o[k]; } return r; }
+function baseOpts(sel){
+  return '<option value="">— selecionar base —</option>'+
     Object.entries(bases).filter(([id,b])=>b&&b.nome&&b.ativo!==false)
       .sort((a,b)=>(a[1].nome||'').localeCompare(b[1].nome||''))
-      .map(([id,b])=>`<option value="${id}">${esc(b.nome)}</option>`).join('');
-  if($('#mBaseSaida')) $('#mBaseSaida').innerHTML=opts;
-  if($('#mBaseEntrega')) $('#mBaseEntrega').innerHTML=opts;
-}
-function ehMotivoTransf(m){ return /deslocamento|movimenta/i.test(m||''); }
-function toggleTransf(){
-  let m=$('#mMotivo').value; if(m==='__custom') m=$('#mMotivoCustom').value||'';
-  $('#mtransf').style.display = ehMotivoTransf(m) ? 'block' : 'none';
+      .map(([id,b])=>`<option value="${id}"${id===sel?' selected':''}>${esc(b.nome)}</option>`).join('');
 }
 function openModal(){
-  $('#mPlaca').value=''; $('#mEnd').value=''; $('#mRef').value='';
-  $('#mMotivo').innerHTML = MOTIVOS.map(m=>`<option value="${esc(m)}">${icoMotivo(m)} ${esc(m)}</option>`).join('')+'<option value="__custom">✏ Outro (digitar)</option>';
-  $('#mMotivo').value=MOTIVOS[0]; $('#mMotivoCustom').style.display='none'; $('#mMotivoCustom').value='';
-  $('#mAguard').value='sim'; $('#mresult').style.display='none';
-  const g=$('#mGo'); g.disabled=false; g.textContent='📍 Abrir chamado';
-  preencherBases(); toggleTransf();
+  wiz = { tipo:null, qtd:1, baseSaida:'', baseEntrega:'', motos:[{placa:''}] };
   $('#modal').classList.add('on');
-  setTimeout(()=>$('#mPlaca').focus(),80);
+  renderWizard();
 }
 function closeModal(){ $('#modal').classList.remove('on'); }
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
 
-async function submitChamado(){
-  const placa=($('#mPlaca').value.trim().toUpperCase())||('XYZ'+Math.floor(Math.random()*9000+1000));
-  const endereco=$('#mEnd').value.trim();
-  let motivo=$('#mMotivo').value; if(motivo==='__custom') motivo=$('#mMotivoCustom').value.trim()||'Atendimento';
-  const ref=$('#mRef').value.trim();
-  const clienteAguardando=$('#mAguard').value==='sim';
-  const transf=ehMotivoTransf(motivo);
-  const baseSaida = transf ? ($('#mBaseSaida').value||null) : null;
-  const baseEntrega = transf ? ($('#mBaseEntrega').value||null) : null;
-  if(!endereco){ toast('⚠ Informe o endereço', true); return; }
-  if(transf && (!baseSaida||!baseEntrega)){ toast('⚠ Transferência: escolha base de saída e entrega', true); return; }
-  let cliente = ref || (transf ? `Transferência: ${baseNome(baseSaida)} → ${baseNome(baseEntrega)}` : placa);
+function syncMotosLen(){ const m=wiz.motos; while(m.length<wiz.qtd) m.push({placa:''}); while(m.length>wiz.qtd) m.pop(); }
+function podeAbrir(){
+  if(!wiz||!wiz.tipo||!wiz.baseSaida||!wiz.baseEntrega||!wiz.motos.length) return false;
+  return wiz.motos.every(m => m.placa && ['ok','forabase','iotoff'].includes(m.status));
+}
+function updateGo(){ const g=$('#wGo'); if(g) g.disabled=!podeAbrir(); }
 
-  const g=$('#mGo'); g.disabled=true; g.textContent='⏳ Geocodificando…';
-  try{
-    let lat=null,lng=null,endOfic=endereco;
-    try{
-      const r=await fetch('/geocode?addr='+encodeURIComponent(endereco));
-      if(r.ok){ const d=await r.json(); if(d&&!d.error&&d.lat!=null){ lat=d.lat; lng=d.lng; endOfic=d.formatted||endereco; } }
-    }catch(_){}
-    if(lat==null||lng==null) throw new Error('Endereço não encontrado — revise a grafia ou inclua bairro/cidade.');
-    const ch={ id:genId(), ts:Date.now(), cliente, motivo, placa, endereco:endOfic, lat, lng,
-      status:'novo', travada:/travada|trava/i.test(motivo), clienteAguardando,
-      origemFleet:true, abertoPor:currentUser.nome, abertoPorEmail:currentUser.email };
-    if(baseSaida) ch.baseSaida=baseSaida;
-    if(baseEntrega) ch.baseEntrega=baseEntrega;
-    // seq global atômico (mesmo contador da torre)
-    await new Promise(res=>{
-      try{ fb.child('counters/chamadoSeq').transaction(n=>(n||0)+1,(err,ok,snap)=>{ if(ok&&snap&&snap.val()!=null) ch.seq=snap.val(); res(); }); }
-      catch(_){ res(); }
-    });
-    await fb.child('chamados/'+ch.id).set(clean(ch));
-    $('#mresult').style.display='block';
-    $('#mresult').innerHTML='✓ Chamado <b style="color:var(--acc)">#'+(ch.seq||'')+'</b> aberto — já está na Torre aguardando um agente.';
-    toast('📢 Chamado aberto na Torre!');
-    setTimeout(closeModal, 1200);
-  }catch(e){
-    toast('❌ '+e.message, true);
-    g.disabled=false; g.textContent='📍 Abrir chamado';
+function renderWizard(){
+  const w=wiz;
+  const showQty=!!w.tipo, showSaida=showQty, showEntrega=showSaida&&w.baseSaida, showMotos=showEntrega&&w.baseEntrega;
+  let h='';
+  // 1 — tipo
+  h+=`<div class="wsec"><div class="wlabel"><span class="wn">1</span> Tipo de chamado</div>
+    <div class="wtipo">${TIPOS.map(t=>`<button data-tipo="${t.k}" class="${w.tipo===t.k?'sel':''}"><span class="em">${t.em}</span><div><div class="tt">${t.t}</div><div class="ts">${t.s}</div></div></button>`).join('')}</div></div>`;
+  // 2 — quantidade
+  if(showQty) h+=`<div class="wsec"><div class="wlabel"><span class="wn">2</span> Quantas motos serão transportadas?</div>
+    <div class="wqty"><button id="qminus">−</button><span class="qn">${w.qtd}</span><button id="qplus">+</button><span style="font-size:12px;color:var(--txt2)">moto${w.qtd>1?'s':''}</span></div></div>`;
+  // 3 — base saída
+  if(showSaida) h+=`<div class="wsec"><div class="wlabel"><span class="wn">3</span> Base de saída</div><select id="wSaida">${baseOpts(w.baseSaida)}</select></div>`;
+  // 4 — base entrega
+  if(showEntrega) h+=`<div class="wsec"><div class="wlabel"><span class="wn">4</span> Base de entrega</div><select id="wEntrega">${baseOpts(w.baseEntrega)}</select>${(w.baseEntrega&&w.baseEntrega===w.baseSaida)?'<div class="mstat warn">⚠ Saída e entrega são a mesma base.</div>':''}</div>`;
+  // 5 — placas
+  if(showMotos) h+=`<div class="wsec"><div class="wlabel"><span class="wn">5</span> Placas das motos <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">(valida na base + confere IoT)</span></div><div id="wizMotos"></div></div>`;
+  // rodapé
+  h+=`<div class="mrow"><button class="cancel" onclick="closeModal()">Cancelar</button><button class="go" id="wGo" onclick="abrirMov()" ${podeAbrir()?'':'disabled'}>📢 Abrir movimentação</button></div>`;
+  $('#wizBody').innerHTML=h;
+  // binds
+  document.querySelectorAll('#wizBody [data-tipo]').forEach(b=> b.onclick=()=>{ wiz.tipo=b.dataset.tipo; renderWizard(); });
+  { const qm=$('#qminus'); if(qm) qm.onclick=()=>{ wiz.qtd=Math.max(1,wiz.qtd-1); syncMotosLen(); renderWizard(); }; }
+  { const qp=$('#qplus'); if(qp) qp.onclick=()=>{ wiz.qtd=Math.min(MAX_MOTOS,wiz.qtd+1); syncMotosLen(); renderWizard(); }; }
+  { const s=$('#wSaida'); if(s) s.onchange=()=>{ wiz.baseSaida=s.value; recheckMotos(); renderWizard(); }; }
+  { const e=$('#wEntrega'); if(e) e.onchange=()=>{ wiz.baseEntrega=e.value; renderWizard(); }; }
+  if(showMotos) renderMotoCards();
+}
+
+function statClass(m){ return m.status==='ok'?'ok':(m.status==='forabase'?'warn':(m.status==='notfound'||m.status==='short'?'err':'info')); }
+function statText(m){
+  switch(m.status){
+    case 'checking': return '🔎 verificando placa…';
+    case 'notfound': return '✗ placa não encontrada na base Vammo';
+    case 'short':    return 'digite a placa completa';
+    case 'ok':       return `✓ ${esc(m.modelo||'moto')} · na base de saída`;
+    case 'iotoff':   return `✓ ${esc(m.modelo||'moto')} · válida · 📡 IoT offline (localização não confirmada)`;
+    case 'forabase': return `⚠ ${esc(m.modelo||'moto')} — FORA da base de saída! 📡 IoT ${m.iotLocal?('perto de '+esc(m.iotLocal)):'em outro local'} (~${(m.iotDist/1000).toFixed(1)}km)`;
+    default:         return 'digite a placa da moto';
   }
 }
-function clean(o){ const r={}; for(const k in o){ if(o[k]!==undefined&&o[k]!==null) r[k]=o[k]; } return r; }
-$('#mMotivo') && $('#mMotivo').addEventListener('change', e=>{
-  $('#mMotivoCustom').style.display = e.target.value==='__custom'?'block':'none'; toggleTransf();
-});
-$('#mMotivoCustom') && $('#mMotivoCustom').addEventListener('input', toggleTransf);
+function renderMotoCards(){
+  const wrap=$('#wizMotos'); if(!wrap) return;
+  wrap.innerHTML = wiz.motos.map((mo,i)=>`
+    <div class="moto-card">
+      <div class="mh"><span class="mnum">${i+1}</span> Moto ${i+1} de ${wiz.qtd}</div>
+      <input id="mp-${i}" placeholder="ABC1D23" maxlength="8" value="${esc(mo.placa||'')}" autocomplete="off" spellcheck="false">
+      <div class="mstat ${statClass(mo)}" id="mstat-${i}">${statText(mo)}</div>
+    </div>`).join('');
+  wiz.motos.forEach((mo,i)=>{
+    const inp=$('#mp-'+i);
+    inp.addEventListener('change', ()=>{ const v=inp.value.trim().toUpperCase(); inp.value=v; wiz.motos[i]={placa:v}; checkMoto(i); });
+  });
+}
+function updateMotoStat(i){
+  const el=$('#mstat-'+i); if(!el) return;
+  const m=wiz.motos[i]; el.className='mstat '+statClass(m); el.innerHTML=statText(m);
+}
+function recheckMotos(){ wiz.motos.forEach((m,i)=>{ if(m.placa) checkMoto(i); }); }
+
+async function checkMoto(i){
+  const m=wiz.motos[i]; const placa=(m.placa||'').replace(/[^A-Z0-9]/g,'');
+  if(!placa){ m.status='idle'; updateMotoStat(i); updateGo(); return; }
+  if(placa.length<6){ m.status='short'; updateMotoStat(i); updateGo(); return; }
+  m.status='checking'; updateMotoStat(i); updateGo();
+  try{
+    const d=await (await fetch('/api/moto_lookup?placa='+encodeURIComponent(placa))).json();
+    if(!d||!d.found){ m.status='notfound'; updateMotoStat(i); updateGo(); return; }
+    m.found=true; m.modelo=d.modelo||'moto'; m.clienteMoto=d.cliente||null;
+    // IoT: só alerta se online (offline é desconsiderado)
+    let status='iotoff';
+    try{
+      const ij=await (await fetch('/iot_status?placas='+encodeURIComponent(placa))).json();
+      const ping=ij.pings && ij.pings[placa];
+      if(ping && ping.online && ping.lat!=null && ping.lon!=null){
+        const bs=bases[wiz.baseSaida];
+        if(bs && bs.lat!=null && bs.lng!=null){
+          const dist=haversine({lat:bs.lat,lng:bs.lng},{lat:ping.lat,lng:ping.lon});
+          const nb=nearestBase({lat:ping.lat,lng:ping.lon});
+          m.iotDist=dist; m.iotLocal = nb ? nb.base.nome : null;
+          status = dist>FORA_BASE_M ? 'forabase' : 'ok';
+        } else { status='iotoff'; }   // base sem coordenada: não dá pra conferir
+      }
+    }catch(_){ status='iotoff'; }
+    m.status=status;
+  }catch(e){ m.status='notfound'; }
+  updateMotoStat(i); updateGo();
+}
+
+async function abrirMov(){
+  if(!podeAbrir()) return;
+  const w=wiz, nS=baseNome(w.baseSaida), nE=baseNome(w.baseEntrega);
+  const fora=w.motos.filter(m=>m.status==='forabase');
+  if(fora.length && !confirm(`⚠ ${fora.length} moto(s) com IoT FORA da base de saída (${nS}):\n`+
+    fora.map(m=>`• ${m.placa} — ${m.iotLocal||'outro local'} (~${(m.iotDist/1000).toFixed(1)}km)`).join('\n')+
+    `\n\nA moto provavelmente não está na base. Abrir mesmo assim?`)) return;
+  const g=$('#wGo'); g.disabled=true; g.textContent='⏳ Abrindo…';
+  const bs=bases[w.baseSaida]||{};
+  const ch={
+    id:genId(), ts:Date.now(),
+    tipoMovimentacao:w.tipo, motivo:tipoLabel(w.tipo),
+    cliente:`${nS} → ${nE} · ${w.qtd} moto${w.qtd>1?'s':''}`,
+    qtdMotos:w.qtd, baseSaida:w.baseSaida, baseEntrega:w.baseEntrega,
+    motos:w.motos.map(m=>clean({ placa:m.placa, modelo:m.modelo||null,
+      iotForaDaBase:m.status==='forabase'?true:null, iotDistM:m.iotDist!=null?Math.round(m.iotDist):null,
+      iotLocal:m.iotLocal||null, iotOffline:m.status==='iotoff'?true:null })),
+    placa:w.motos.map(m=>m.placa).join(', ').slice(0,80),
+    endereco:bs.endereco||bs.nome||nS, lat:(bs.lat!=null?bs.lat:null), lng:(bs.lng!=null?bs.lng:null),
+    status:'novo', clienteAguardando:false, origemFleet:true,
+    abertoPor:currentUser.nome, abertoPorEmail:currentUser.email, abertoEm:Date.now()
+  };
+  try{
+    await new Promise(res=>{ try{ fb.child('counters/chamadoSeq').transaction(n=>(n||0)+1,(e,ok,s)=>{ if(ok&&s&&s.val()!=null) ch.seq=s.val(); res(); }); }catch(_){ res(); } });
+    await fb.child('chamados/'+ch.id).set(clean(ch));
+    toast(`📢 Movimentação #${ch.seq||''} aberta na Torre!`);
+    closeModal();
+  }catch(err){ toast('❌ erro ao abrir: '+err.message, true); g.disabled=false; g.textContent='📢 Abrir movimentação'; }
+}
 
 // ================= AUTH (Google @vammo.com) =================
 function parseJwt(t){
