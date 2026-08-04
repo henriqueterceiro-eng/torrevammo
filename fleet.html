@@ -38,7 +38,11 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
 
 /* ===== INTRO SPLASH (logo + Central de Fleet animados) ===== */
 #intro{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;overflow:hidden;
-  background:radial-gradient(1200px 760px at 50% 34%, #0d3a52, #061019 72%);opacity:1;transition:opacity .6s ease}
+  background:
+    linear-gradient(180deg, rgba(4,14,26,.50), rgba(3,9,17,.80)),
+    url('/fleet-intro.jpg') center/cover no-repeat,
+    radial-gradient(1200px 760px at 50% 34%, #0d3a52, #061019 72%);
+  opacity:1;transition:opacity .6s ease}
 #intro.done{opacity:0;pointer-events:none}
 #intro .glow{position:absolute;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle, rgba(0,180,229,.4), transparent 62%);filter:blur(28px);animation:introGlow 2.6s ease-in-out infinite}
 @keyframes introGlow{0%,100%{transform:scale(.9);opacity:.55}50%{transform:scale(1.1);opacity:1}}
@@ -80,8 +84,7 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
 
 /* ===== BOARD ===== */
 #board{flex:1;min-height:0;display:flex;gap:16px;padding:20px 22px;overflow-x:auto;overflow-y:hidden;align-items:stretch}
-.col{flex:0 0 308px;display:flex;flex-direction:column;min-height:0;background:var(--surf2);border:1px solid var(--bdr);border-radius:18px;overflow:hidden;box-shadow:var(--sh-sm);animation:colIn .4s ease backwards}
-@keyframes colIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.col{flex:0 0 308px;display:flex;flex-direction:column;min-height:0;background:var(--surf2);border:1px solid var(--bdr);border-radius:18px;overflow:hidden;box-shadow:var(--sh-sm)}
 .col .ch{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 15px;border-bottom:1px solid var(--bdr);
   background:#EEF3FA;background:color-mix(in srgb, var(--c) 9%, #fff);
   border-bottom-color:#E2E9F3;border-bottom-color:color-mix(in srgb, var(--c) 20%, var(--bdr))}
@@ -323,7 +326,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v5 · 2026-08-04';
+const FLEET_VERSION = 'v6 · 2026-08-04';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -436,6 +439,8 @@ function chamadosVisiveis(){
   return demoOn ? reais.concat(demoChamados) : reais;
 }
 
+let _renderTimer=null;
+function scheduleRender(){ if(_renderTimer) return; _renderTimer=setTimeout(()=>{ _renderTimer=null; render(); }, 80); }
 function render(){
   const board=$('#board');
   const list=chamadosVisiveis();
@@ -552,9 +557,9 @@ async function initFirebase(){
   firebase.database().ref('.info/connected').on('value', s=>{
     const on=!!s.val(); dot.classList.toggle('on',on); txt.textContent=on?'ao vivo':'reconectando…';
   });
-  fb.child('chamados').on('value', s=>{ chamados=s.val()||{}; render(); });
-  fb.child('motoristas').on('value', s=>{ motoristas=s.val()||{}; render(); });
-  fb.child('bases').on('value', s=>{ bases=s.val()||{}; if(wiz && !wiz.baseEntrega) renderWizard(); render(); });
+  fb.child('chamados').on('value', s=>{ chamados=s.val()||{}; scheduleRender(); });
+  fb.child('motoristas').on('value', s=>{ motoristas=s.val()||{}; scheduleRender(); });
+  fb.child('bases').on('value', s=>{ bases=s.val()||{}; if(wiz && !wiz.baseEntrega) renderWizard(); scheduleRender(); });
   // corridas: pega tempos reais (em rota/chegou/concluiu) + nota pra o histórico do chamado
   fb.child('corridas').on('value', s=>{ const all=s.val()||{}; const map={}; for(const k in all){ const r=all[k]; if(r&&r.chamadoId) map[r.chamadoId]=r; } corridas=map; });
 }
