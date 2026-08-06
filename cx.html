@@ -211,6 +211,15 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
 .cxresult.warn{display:block;background:rgba(245,158,11,.14);border-color:#f59e0b;color:#ffcf7a}
 .cxresult.info{display:block;background:rgba(0,180,229,.12);border-color:rgba(0,180,229,.4);color:#8FE0F7}
 .cxresult .useiot{margin-top:8px;width:100%;padding:9px;background:#f59e0b;color:#1a1200;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer}
+/* opções de endereço (moto/ping + cliente) — read-only + botão usar */
+#cxAddrOpts{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.addr-opt{background:rgba(255,255,255,.05);border:1px solid var(--bdr2);border-radius:10px;padding:9px 11px}
+.addr-opt.off{opacity:.72}
+.addr-opt .ao-h{font-size:9.5px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.addr-opt .ao-meta{font-weight:700;text-transform:none;letter-spacing:0;color:var(--txt2)}
+.addr-opt .ao-v{font-size:12px;color:var(--txt);margin:5px 0 8px;line-height:1.35}
+.addr-opt .ao-btn{width:100%;padding:8px;background:rgba(0,180,229,.14);border:1px solid rgba(0,180,229,.4);color:var(--acc-br);font-weight:800;font-size:11.5px;border-radius:8px;cursor:pointer}
+.addr-opt .ao-btn:hover{background:rgba(0,180,229,.22)}
 /* card: placa Mercosul em evidência + modelo + piscar ao mover */
 .cxplate{display:flex;flex-direction:column;align-items:flex-start;margin-top:9px}
 .cxplate .pl{display:inline-block;border-radius:7px;overflow:hidden;border:1.5px solid #1560a8;box-shadow:0 2px 8px rgba(0,0,0,.3)}
@@ -347,8 +356,20 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
     <div id="cxPlacaHint" class="cxhint">👆 Digite a placa pra puxar o cliente do Backoffice.<br><a href="#" id="cxSemPlaca">não tenho a placa →</a></div>
 
     <div id="cxRest" style="display:none">
-      <label>Endereço (onde está a moto)</label>
-      <input id="cxEnd" placeholder="Ex: Av. Paulista, 1578, São Paulo">
+      <label>Endereço do chamado <small style="color:var(--txt3)">(editável — onde atender)</small></label>
+      <input id="cxEnd" placeholder="Digite ou use uma das opções abaixo">
+      <div id="cxAddrOpts">
+        <div class="addr-opt" id="cxOptPing" style="display:none">
+          <div class="ao-h">🏍 Endereço da moto · último ping <span id="cxOptPingMeta" class="ao-meta"></span></div>
+          <div class="ao-v" id="cxOptPingVal">—</div>
+          <button type="button" class="ao-btn" onclick="usarEndereco('ping')">📍 Usar esse endereço no chamado</button>
+        </div>
+        <div class="addr-opt" id="cxOptCliente" style="display:none">
+          <div class="ao-h">🏠 Endereço do cliente · cadastro</div>
+          <div class="ao-v" id="cxOptClienteVal">—</div>
+          <button type="button" class="ao-btn" onclick="usarEndereco('cliente')">📍 Usar esse endereço no chamado</button>
+        </div>
+      </div>
       <label>Cliente</label>
       <input id="cxCliente" placeholder="Nome do cliente">
       <label>Telefone <small style="color:var(--txt3)">(vira WhatsApp pro colaborador)</small></label>
@@ -406,7 +427,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const CX_VERSION = 'v2 · 2026-08-04';
+const CX_VERSION = 'v3 · 2026-08-04';
 
 // Motivos oficiais (mesmos do CX/torre)
 // Motivos oficiais do CX (mesmos da torre, SEM os de Fleet/logística — Deslocamento entre bases,
@@ -687,6 +708,28 @@ function statusMoto(code){ const m=MOTO_STATUS[code]; return m?{l:m[0],c:m[1]}:{
 
 let _cxLookup = null, _cxLookupTimer = null;
 let _cxUseIot = false, _cxIotChecked = false, _cxIotPos = null, _cxIotAddr = null;   // fluxo IoT vs endereço
+let _cxClienteAddr = null, _cxPingPos = null, _cxPingAddr = null;   // opções de endereço (cadastro / ping)
+// Aplica no "Endereço do chamado" a opção escolhida (moto/ping ou cliente)
+function usarEndereco(src){
+  const en=$('#cxEnd'); if(!en) return;
+  if(src==='cliente' && _cxClienteAddr){ en.value=_cxClienteAddr; _cxUseIot=false; _cxIotPos=null; _cxIotAddr=null; toast('📍 Endereço do cliente aplicado'); }
+  else if(src==='ping' && _cxPingPos){ en.value=_cxPingAddr||`${_cxPingPos.lat.toFixed(5)}, ${_cxPingPos.lng.toFixed(5)}`; _cxUseIot=true; _cxIotPos={lat:_cxPingPos.lat,lng:_cxPingPos.lng}; _cxIotAddr=_cxPingAddr; toast('📍 Endereço do último ping aplicado'); }
+  else return;
+  en.focus();
+}
+// Preenche a opção "endereço da moto (último ping)" — reverse geocode do ping
+async function mostrarPingCX(placa){
+  const opt=$('#cxOptPing'), val=$('#cxOptPingVal'), meta=$('#cxOptPingMeta'); if(!opt) return;
+  opt.style.display='block'; opt.classList.remove('off'); val.textContent='🔎 localizando…'; meta.textContent='';
+  const iot = await iotDaMoto(placa);
+  if(!iot || iot.lat==null || iot.lon==null){ val.textContent='sem ping de IoT registrado'; opt.classList.add('off'); _cxPingPos=null; _cxPingAddr=null; return; }
+  _cxPingPos = {lat:iot.lat, lng:iot.lon};
+  meta.innerHTML = (iot.online?'🟢 online':'⚫ offline') + (iot.lp?(' · há '+fmtElapsed(iot.lp)):'');
+  if(!iot.online) opt.classList.add('off');
+  _cxPingAddr = `${iot.lat.toFixed(5)}, ${iot.lon.toFixed(5)}`;
+  val.textContent = _cxPingAddr;
+  try{ const r=await fetch('/geocode?latlng='+iot.lat+','+iot.lon); if(r.ok){ const g=await r.json(); if(g&&g.formatted){ _cxPingAddr=g.formatted; val.textContent=g.formatted; } } }catch(_){}
+}
 function mostrarCXResult(cls, html){ const el=$('#cxResult'); if(!el) return; el.className='cxresult '+(cls||''); el.innerHTML=html; el.style.display='block'; }
 async function usarEnderecoIoT(){
   if(!_cxIotPos) return;
@@ -698,8 +741,10 @@ async function usarEnderecoIoT(){
 
 function openModal(){
   _cxLookup = null; _cxUseIot=false; _cxIotChecked=false; _cxIotPos=null; _cxIotAddr=null;
+  _cxClienteAddr=null; _cxPingPos=null; _cxPingAddr=null;
   $('#cxPlaca').value=''; $('#cxEnd').value=''; $('#cxCliente').value=''; $('#cxTel').value='';
   $('#cxMotoInfo').innerHTML=''; $('#cxResult').className='cxresult'; $('#cxResult').style.display='none';
+  $('#cxOptPing').style.display='none'; $('#cxOptCliente').style.display='none';
   $('#cxRest').style.display='none'; $('#cxPlacaHint').style.display='block';
   $('#cxMotivo').innerHTML = MOTIVOS.map(m=>`<option value="${esc(m)}">${icoMotivo(m)} ${esc(m)}</option>`).join('') + '<option value="__custom">✏ Outro (digitar)</option>';
   $('#cxMotivo').value = MOTIVOS[0];
@@ -728,6 +773,12 @@ async function buscarMotoCX(placa){
     const st = d.status ? statusMoto(d.status) : null;
     info.innerHTML = `🏍 <b style="color:var(--acc-br)">${esc(d.modelo||'moto')}</b> · 👤 ${esc(d.cliente||'?')}${st?` <span class="mstag ${st.c}">${esc(st.l)}</span>`:''}`;
     _cxRevelarRest();
+    // opção "endereço do cliente" (cadastro)
+    const co=$('#cxOptCliente'), cov=$('#cxOptClienteVal');
+    if(d.enderecoCliente){ _cxClienteAddr=d.enderecoCliente; cov.textContent=d.enderecoCliente; co.style.display='block'; }
+    else { _cxClienteAddr=null; co.style.display='none'; }
+    // opção "endereço da moto (último ping)" — assíncrono (reverse geocode)
+    mostrarPingCX(placa);
   }catch(e){ info.innerHTML='<span style="color:var(--txt3)">Erro ao buscar no Backoffice.</span>'; _cxRevelarRest(); }
 }
 function _wireCXPlaca(){
@@ -739,6 +790,7 @@ function _wireCXPlaca(){
   };
   const sp=$('#cxSemPlaca'); if(sp) sp.onclick=(ev)=>{ ev.preventDefault(); _cxRevelarRest(); setTimeout(()=>{ const e=$('#cxEnd'); if(e) e.focus(); },50); };
   const mv=$('#cxMotivo'); if(mv) mv.onchange=(e)=>{ $('#cxMotivoCustom').style.display = e.target.value==='__custom'?'block':'none'; if(e.target.value==='__custom') setTimeout(()=>$('#cxMotivoCustom').focus(),50); };
+  const en=$('#cxEnd'); if(en) en.oninput=()=>{ _cxUseIot=false; _cxIotAddr=null; };   // editar manualmente cancela "usar ping"
 }
 
 async function abrirCX(){

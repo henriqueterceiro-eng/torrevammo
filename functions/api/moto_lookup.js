@@ -27,7 +27,9 @@ export async function onRequestGet(context) {
       bm.bike_model_name AS modelo,
       b.user_id   AS user_id,
       b.status    AS status,
-      b.current_deposit_name AS deposito
+      b.current_deposit_name AS deposito,
+      u.street_address AS rua, u.street_number AS numero,
+      u.complement_address AS complemento, u.city AS cidade, u.zip_code AS cep
     FROM vammo_r.bike b FINAL
     LEFT JOIN vammo_r.user u FINAL ON u.id = b.user_id
     LEFT JOIN vammo_r.bike_model bm FINAL ON bm.id = b.bike_model_id
@@ -53,6 +55,17 @@ export async function onRequestGet(context) {
     const val = (k) => { const v = row[ix[k]]; return v == null || v === "" ? null : v; };
     const uid = val("user_id");
 
+    // Endereço de CADASTRO do cliente (compõe rua, número - complemento · cidade · CEP)
+    const rua = val("rua"), numero = val("numero"), compl = val("complemento"), cidade = val("cidade"), cep = val("cep");
+    let enderecoCliente = null;
+    if (rua) {
+      let e = rua + (numero ? ", " + numero : "");
+      if (compl) e += " - " + compl;
+      if (cidade) e += " - " + cidade;
+      if (cep) e += " · " + cep;
+      enderecoCliente = e;
+    }
+
     const data = {
       found: true,
       placa: val("placa") || placa,
@@ -63,6 +76,7 @@ export async function onRequestGet(context) {
       user_id: uid,
       status: val("status"),
       deposito: val("deposito"),
+      enderecoCliente,
       backofficeUrl: uid ? "https://backoffice.vammo.com/users/" + uid : null,
     };
     CACHE[placa] = { at: Date.now(), data };
