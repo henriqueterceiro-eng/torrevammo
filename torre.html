@@ -343,7 +343,8 @@ body.selmode .card .mcheck{display:flex}
 #iotpanel .io-here{background:rgba(22,163,74,0.18);color:#4ade80}
 #iotpanel .io-far{background:rgba(217,119,6,0.22);color:#fbbf24}
 #iotpanel .io-empty{padding:20px;text-align:center;color:var(--txt2);font-size:11px}
-.moto-ping-icon{display:flex;align-items:center;justify-content:center;font-size:20px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))}
+.moto-ping-icon{display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.55))}
+.moto-ping-icon svg{width:28px;height:28px;background:#fff;border-radius:50%;padding:4px;box-sizing:border-box;fill:#00B4E5;box-shadow:0 0 0 1.5px #00B4E5}
 
 /* Legenda do heatmap (canto inferior direito) */
 #heatlegend{position:absolute;bottom:50px;right:12px;background:rgba(21,35,57,0.92);color:var(--txt);padding:8px 10px;font-size:10px;border:1px solid var(--bdr);border-radius:8px;backdrop-filter:blur(8px);z-index:500;display:none;min-width:140px}
@@ -997,7 +998,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v74 · 2026-08-06';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v75 · 2026-08-06';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -7475,7 +7476,7 @@ function renderMotoPingMarkers(){
     const pg = pingDoChamado(c);
     if(!pg || !pg.temGps) continue;
     const longe = pg.dist != null && pg.dist > IOT_RAIO_M;
-    const icon = L.divIcon({ className:'moto-ping-icon', html:'🛵', iconSize:[26,26], iconAnchor:[13,13] });
+    const icon = L.divIcon({ className:'moto-ping-icon', html:'<svg viewBox="0 0 24 24"><path d="M19.44 9.03L15.41 5H11v2h3.59l2 2H5c-2.8 0-5 2.2-5 5s2.2 5 5 5c2.46 0 4.45-1.69 4.9-4h1.65l2.77-2.77c-.21.54-.32 1.14-.32 1.77 0 2.8 2.2 5 5 5s5-2.2 5-5c0-2.79-2.61-5.16-5.56-4.97zM7.82 15C7.4 16.15 6.28 17 5 17c-1.63 0-3-1.37-3-3s1.37-3 3-3c1.28 0 2.4.85 2.82 2H5v2h2.82zM19 17c-1.63 0-3-1.37-3-3s1.37-3 3-3 3 1.37 3 3-1.37 3-3 3z"/></svg>', iconSize:[28,28], iconAnchor:[14,14] });
     const mk = L.marker([pg.lat, pg.lon], { icon, zIndexOffset: 400 }).addTo(map);
     mk.bindPopup(`<b>${esc(c.cliente||'?')}</b> · ${esc(c.placa)}<br>🛵 moto ${pg.online?'online':'offline'}` + (longe ? `<br>⚠ a ${_distLbl(pg.dist)} do endereço do chamado` : `<br>✓ no endereço do chamado`));
     motoPingMarkers[c.id] = mk;
