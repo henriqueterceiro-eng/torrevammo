@@ -1,0 +1,54 @@
+name: 3) Build APK debug (colab — teste GPS, SEM keystore)
+
+# Gera SÓ o app-debug.apk do colaborador (colab.html). Não precisa de nenhum secret/senha:
+# o APK debug é assinado automaticamente com a chave de debug do Android. É o arquivo pra
+# instalar direto no celular e validar o GPS em background. targetSdk 33 = o foreground
+# service do plugin grátis sobe (o problema do 34 é só p/ Play Store).
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SDK: '33'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+
+      - name: Instalar dependências
+        working-directory: native
+        run: npm install
+
+      - name: Gerar projeto Android
+        working-directory: native
+        run: npx cap add android
+
+      - name: Permissões de GPS/background + targetSdk 33
+        working-directory: native
+        run: node scripts/patch-manifest.mjs
+
+      - name: Sincronizar
+        working-directory: native
+        run: npx cap sync android
+
+      - name: Compilar APK debug
+        working-directory: native/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vammo-colab-debug-apk
+          path: native/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
