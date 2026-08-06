@@ -13,6 +13,21 @@ export async function onRequestGet(context){
   catch(_){ return json({ error:'origem invalida' }, 403); }
 
   if(!env.GMAPS_KEY) return json({ error:'GMAPS_KEY nao configurada' }, 500);
+
+  // REVERSE: ?latlng=-23.5,-46.6 -> endereço (usado pra transformar o ping do IoT em endereço)
+  const latlng = (url.searchParams.get('latlng') || '').trim();
+  if(latlng){
+    if(!/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(latlng)) return json({ error:'latlng invalido' }, 400);
+    try {
+      const p = new URLSearchParams({ latlng, key: env.GMAPS_KEY, language: 'pt-BR' });
+      const r = await fetch('https://maps.googleapis.com/maps/api/geocode/json?' + p.toString());
+      const d = await r.json();
+      if(d.status !== 'OK' || !d.results || !d.results.length) return json({ error: 'reverse:' + (d.status || '?') }, 502);
+      const g = d.results[0];
+      return json({ lat: g.geometry.location.lat, lng: g.geometry.location.lng, formatted: g.formatted_address });
+    } catch(e){ return json({ error: 'falha reverse geocode' }, 502); }
+  }
+
   const addr = (url.searchParams.get('addr') || '').trim();
   if(addr.length < 5) return json({ error:'addr invalido' }, 400);
 

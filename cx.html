@@ -14,7 +14,7 @@
 :root{
   --acc:#00B4E5; --acc-br:#3CCDF6;
   --txt:#EAF2FB; --txt2:#AEC0D8; --txt3:#8195B0;
-  --novo:#FF5C79; --aceito:#FFB020; --atrib:#A78BFA; --rota:#3CCDF6; --conc:#34D399;
+  --novo:#FF5C79; --aceito:#FFB020; --atrib:#A78BFA; --rota:#3CCDF6; --atend:#2DD4BF; --conc:#34D399;
   --bdr:rgba(255,255,255,.10); --bdr2:rgba(255,255,255,.17);
   --glass:rgba(16,31,55,.50); --glass2:rgba(9,20,40,.28); --glassmod:rgba(13,25,46,.92);
   --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -208,6 +208,24 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
 .cxhint{text-align:center;font-size:12px;color:var(--acc-br);font-weight:700;margin:2px 0 8px;line-height:1.5}
 .cxhint a{color:var(--txt2);text-decoration:underline;font-weight:600;font-size:11px}
 .cxresult{margin-top:12px;padding:10px;background:rgba(255,255,255,.05);border:1px solid var(--bdr);border-radius:9px;font-size:11px;color:var(--txt2);display:none;line-height:1.4}
+.cxresult.warn{display:block;background:rgba(245,158,11,.14);border-color:#f59e0b;color:#ffcf7a}
+.cxresult.info{display:block;background:rgba(0,180,229,.12);border-color:rgba(0,180,229,.4);color:#8FE0F7}
+.cxresult .useiot{margin-top:8px;width:100%;padding:9px;background:#f59e0b;color:#1a1200;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer}
+/* card: placa Mercosul em evidência + modelo + piscar ao mover */
+.cxplate{display:flex;flex-direction:column;align-items:flex-start;margin-top:9px}
+.cxplate .pl{display:inline-block;border-radius:7px;overflow:hidden;border:1.5px solid #1560a8;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.cxplate .pl-top{display:flex;justify-content:space-between;align-items:center;font-size:7px;font-weight:800;color:#cfe7ff;background:#0b3a6b;padding:2px 6px;letter-spacing:.5px}
+.cxplate .pl-num{background:#fff;color:#0a1420;font-family:var(--mono);font-weight:800;font-size:19px;letter-spacing:3px;text-align:center;padding:3px 14px}
+.cxplate .pl-mod{font-size:10.5px;color:var(--txt2);font-weight:700;margin-top:4px}
+.moved-banner{margin-top:9px;padding:7px 10px;background:rgba(245,158,11,.18);border:1px solid #f59e0b;color:#ffcf7a;font-weight:800;font-size:11px;border-radius:8px;animation:mvPulse 1s infinite}
+@keyframes mvPulse{0%,100%{opacity:1}50%{opacity:.55}}
+.kc.moved{border-color:#f59e0b !important;animation:cardMv 1.1s infinite}
+@keyframes cardMv{0%,100%{box-shadow:0 0 0 1px #f59e0b,0 10px 30px rgba(0,0,0,.35)}50%{box-shadow:0 0 0 3px rgba(245,158,11,.5),0 12px 34px rgba(0,0,0,.42)}}
+/* dados do IoT no detalhe */
+.det-iot{margin-top:6px;display:flex;flex-wrap:wrap;gap:7px}
+.det-iot .kv{background:rgba(255,255,255,.05);border:1px solid var(--bdr);border-radius:9px;padding:7px 10px;font-size:11px}
+.det-iot .kv b{display:block;font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;font-weight:800;margin-bottom:2px}
+.det-iot .kv.on{border-color:rgba(52,211,153,.45)} .det-iot .kv.off{border-color:rgba(255,92,121,.45)}
 /* remover placa + adicionar placa */
 .moto-card .mrm{margin-left:auto;background:transparent;border:none;color:var(--txt3);font-size:12px;cursor:pointer;padding:2px 7px;border-radius:6px;line-height:1}
 .moto-card .mrm:hover{color:var(--novo);background:rgba(255,92,121,.14)}
@@ -388,7 +406,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const CX_VERSION = 'v1 · 2026-08-04';
+const CX_VERSION = 'v2 · 2026-08-04';
 
 // Motivos oficiais (mesmos do CX/torre)
 // Motivos oficiais do CX (mesmos da torre, SEM os de Fleet/logística — Deslocamento entre bases,
@@ -409,6 +427,34 @@ let currentUser = null, fb = null;
 // DEMO (apresentação): chamados fictícios só em memória — NÃO vão pro Firebase,
 // não aparecem na torre nem pra outros. Ver plotarDemo()/limparDemo().
 let demoOn = false, demoChamados = [];
+// IoT da moto — usado no abrir (local divergente), no card (piscar ao mover) e no detalhe
+const FORA_LOCAL_M = 300;   // moto a mais que isso do endereço do chamado = "local diferente"
+const MOVE_M = 150;         // moto andou mais que isso desde o último check = "se movimentou"
+async function iotDaMoto(placa){
+  if(!placa) return null;
+  try{ const j = await (await fetch('/iot_status?placas='+encodeURIComponent(placa))).json(); return (j.pings && j.pings[String(placa).toUpperCase()]) || null; }catch(_){ return null; }
+}
+const _iotSeen = {};            // placa -> {lat,lng} (última posição vista pelo poll)
+const _iotMoved = new Set();    // ids de chamado onde a moto se moveu (pisca o card)
+// Poll periódico: se a moto de um chamado ABERTO (não concluído) se mover, pisca o card.
+async function pollIoT(){
+  if(!fb || !currentUser) return;
+  const vis = chamadosVisiveis().filter(c => c.placa && !c._fake && c.status!=='concluido' && c.status!=='cancelado');
+  const placas = [...new Set(vis.map(c => String(c.placa).toUpperCase()).filter(p => /^[A-Z0-9]{6,8}$/.test(p)))];
+  if(!placas.length) return;
+  let pings={};
+  try{ const j = await (await fetch('/iot_status?placas='+encodeURIComponent(placas.join(',')))).json(); pings = j.pings || {}; }catch(_){ return; }
+  let changed=false;
+  for(const p of placas){
+    const ping = pings[p]; if(!ping || !ping.online || ping.lat==null || ping.lon==null) continue;
+    const prev = _iotSeen[p];
+    if(prev && haversine(prev, {lat:ping.lat, lng:ping.lon}) > MOVE_M){
+      vis.filter(c => String(c.placa).toUpperCase()===p).forEach(c => { if(!_iotMoved.has(c.id)){ _iotMoved.add(c.id); changed=true; } });
+    }
+    _iotSeen[p] = { lat:ping.lat, lng:ping.lon };
+  }
+  if(changed) scheduleRender();
+}
 
 // ================= TOAST =================
 let _tt = null;
@@ -473,8 +519,9 @@ function etapa(c){
   if(c.status==='concluido'||c.status==='cancelado') return 6;
   const hasDriver=!!c.motoristaId, hasTerc=!!c.terceiroId;
   if(hasDriver || hasTerc){
-    if(hasDriver && motoristaForaDaBase(c.motoristaId)) return 4;
-    return 3;
+    if(c.arrived) return 5;                                          // chegou + iniciou o atendimento
+    if(hasDriver && motoristaForaDaBase(c.motoristaId)) return 4;    // em rota (se deslocando)
+    return 3;                                                        // atribuído
   }
   if(c.aceitoPor) return 2;
   return 1;
@@ -485,10 +532,11 @@ function driverDe(c){ return c.motoristaNome || (c.terceiroNome ? c.terceiroNome
 function corDriver(c){ const m=c.motoristaId&&motoristas[c.motoristaId]; return (m&&m.color) || (c.terceiroId?'#f59e0b':'#00B4E5'); }
 
 const COLS = [
-  {n:1, ic:'📢', t:'Aberto',      s:'aguardando a torre', c:'var(--novo)'},
-  {n:3, ic:'🧑‍🔧', t:'Atribuído',  s:'colaborador designado', c:'var(--atrib)'},
-  {n:4, ic:'🚚', t:'Em rota',     s:'colaborador a caminho', c:'var(--rota)'},
-  {n:6, ic:'✅', t:'Concluídos',  s:'finalizados hoje', c:'var(--conc)'}
+  {n:1, ic:'📢', t:'Aberto',        s:'aguardando a torre', c:'var(--novo)'},
+  {n:3, ic:'🧑‍🔧', t:'Atribuído',    s:'colaborador designado', c:'var(--atrib)'},
+  {n:4, ic:'🚚', t:'Em rota',       s:'colaborador a caminho', c:'var(--rota)'},
+  {n:5, ic:'🔧', t:'Em atendimento', s:'colaborador iniciou no local', c:'var(--atend)'},
+  {n:6, ic:'✅', t:'Concluídos',    s:'finalizados hoje', c:'var(--conc)'}
 ];
 
 // ================= RENDER =================
@@ -512,7 +560,7 @@ function scheduleRender(){ if(_renderTimer) return; _renderTimer=setTimeout(()=>
 function render(){
   const board=$('#board');
   const list=chamadosVisiveis();
-  const porEtapa={1:[],3:[],4:[],6:[]};
+  const porEtapa={1:[],3:[],4:[],5:[],6:[]};
   list.forEach(c=>{ let e=etapa(c); if(e===2) e=1; (porEtapa[e]=porEtapa[e]||[]).push(c); });  // CX não tem etapa "aceito" — dobra em Aberto
   // ordena por prioridade (aguardando) depois por ts
   for(const k in porEtapa) porEtapa[k].sort((a,b)=> (prioridade(b)-prioridade(a)) || ((a.ts||0)-(b.ts||0)) );
@@ -553,18 +601,26 @@ function card(c, etapaN){
   const whoLines=[];
   if(etapaN>=2 && ctrl) whoLines.push(whoLine('👮','Controlador',ctrl,'#00B4E5'));
   if(etapaN>=3 && drv) whoLines.push(whoLine('🛵','Motorista',drv,corDriver(c)));
-  const rotaHint = (etapaN===4) ? `<div class="rotahint">🛰 em trajeto · clique pra ${c._fake?'simular':'ver'} no mapa</div>` : '';
+  const rotaHint = (etapaN===4) ? `<div class="rotahint">🛰 em trajeto · clique pra ${c._fake?'simular':'ver'} no mapa</div>`
+    : (etapaN===5) ? `<div class="rotahint" style="background:rgba(45,212,191,.13);border-color:rgba(45,212,191,.4);color:#5eead4">🔧 em atendimento no local</div>` : '';
   const abertoFoot = c.abertoPor
     ? `<div class="aberto">✍ Aberto por <b>${esc(c.abertoPor)}</b> · ${fmtDataHora(c.abertoEm||c.ts)}</div>` : '';
-  return `<div class="kc${aguard?' aguard':''}" data-cid="${esc(c.id)}" style="--c:${etapaN===4?'var(--rota)':etapaN===3?'var(--atrib)':etapaN===2?'var(--aceito)':etapaN===6?'var(--conc)':'var(--novo)'}">
+  // Placa Mercosul em evidência + modelo embaixo (chamado de socorro tem placa da moto)
+  const temPlaca = c.placa && !(motos && motos.length);
+  const plateBadge = temPlaca ? `<div class="cxplate"><div class="pl"><div class="pl-top"><span>◈ MERCOSUL</span><span>BR</span></div><div class="pl-num">${esc(c.placa)}</div></div>${c.motoModelo?`<div class="pl-mod">🏍 ${esc(c.motoModelo)}</div>`:''}</div>` : '';
+  const moved = _iotMoved.has(c.id);
+  const movedBanner = moved ? `<div class="moved-banner">📡 a moto se movimentou!</div>` : '';
+  return `<div class="kc${aguard?' aguard':''}${moved?' moved':''}" data-cid="${esc(c.id)}" style="--c:${etapaN===4?'var(--rota)':etapaN===5?'var(--atend)':etapaN===3?'var(--atrib)':etapaN===2?'var(--aceito)':etapaN===6?'var(--conc)':'var(--novo)'}">
     <div class="r1">${num}<span class="cli">${esc(c.cliente||'Sem nome')}</span><span class="ico">${icoMotivo(c.motivo)}</span></div>
     <div class="mv">${esc(c.motivo||'—')}</div>
+    ${plateBadge}
+    ${movedBanner}
     ${c.endereco?`<div class="end">📍<span>${esc(c.endereco)}</span></div>`:''}
     ${badges.length?`<div class="badges">${badges.join('')}</div>`:''}
     ${whoLines.length?`<div class="who">${whoLines.join('')}</div>`:''}
     ${rotaHint}
     ${abertoFoot}
-    <div class="meta"><span>${(motos&&motos.length)?'':esc((c.placa||'').slice(0,22))}</span><span>${etapaN===6?('✓ '+fmtTime(c.concluidoEm||c.ts)):('⏱ '+fmtElapsed(c.ts))}</span></div>
+    <div class="meta"><span></span><span>${etapaN===6?('✓ '+fmtTime(c.concluidoEm||c.ts)):('⏱ '+fmtElapsed(c.ts))}</span></div>
   </div>`;
 }
 function whoLine(ic,role,nome,cor){
@@ -610,6 +666,7 @@ async function initFirebase(){
   fb.child('bases').on('value', s=>{ bases=s.val()||{}; scheduleRender(); });
   // corridas: pega tempos reais (em rota/chegou/concluiu) + nota pra o histórico do chamado
   fb.child('corridas').on('value', s=>{ const all=s.val()||{}; const map={}; for(const k in all){ const r=all[k]; if(r&&r.chamadoId) map[r.chamadoId]=r; } corridas=map; });
+  setInterval(pollIoT, 45000); setTimeout(pollIoT, 6000);   // pisca o card se a moto se mover
 }
 
 // ================= ABRIR CHAMADO (WIZARD DE MOVIMENTAÇÃO) =================
@@ -629,11 +686,20 @@ const MOTO_STATUS = {
 function statusMoto(code){ const m=MOTO_STATUS[code]; return m?{l:m[0],c:m[1]}:{l:(code||'—'),c:'muted'}; }
 
 let _cxLookup = null, _cxLookupTimer = null;
+let _cxUseIot = false, _cxIotChecked = false, _cxIotPos = null, _cxIotAddr = null;   // fluxo IoT vs endereço
+function mostrarCXResult(cls, html){ const el=$('#cxResult'); if(!el) return; el.className='cxresult '+(cls||''); el.innerHTML=html; el.style.display='block'; }
+async function usarEnderecoIoT(){
+  if(!_cxIotPos) return;
+  _cxUseIot = true;
+  try{ const r=await fetch('/geocode?latlng='+_cxIotPos.lat+','+_cxIotPos.lng); if(r.ok){ const d=await r.json(); if(d && d.formatted){ _cxIotAddr=d.formatted; const e=$('#cxEnd'); if(e) e.value=d.formatted; } } }catch(_){}
+  mostrarCXResult('info', '📍 Endereço trocado para a localização atual do IoT. Clique em <b>Abrir chamado</b>.');
+  const g=$('#cxGo'); if(g) g.textContent='📢 Abrir chamado';
+}
 
 function openModal(){
-  _cxLookup = null;
+  _cxLookup = null; _cxUseIot=false; _cxIotChecked=false; _cxIotPos=null; _cxIotAddr=null;
   $('#cxPlaca').value=''; $('#cxEnd').value=''; $('#cxCliente').value=''; $('#cxTel').value='';
-  $('#cxMotoInfo').innerHTML=''; $('#cxResult').style.display='none';
+  $('#cxMotoInfo').innerHTML=''; $('#cxResult').className='cxresult'; $('#cxResult').style.display='none';
   $('#cxRest').style.display='none'; $('#cxPlacaHint').style.display='block';
   $('#cxMotivo').innerHTML = MOTIVOS.map(m=>`<option value="${esc(m)}">${icoMotivo(m)} ${esc(m)}</option>`).join('') + '<option value="__custom">✏ Outro (digitar)</option>';
   $('#cxMotivo').value = MOTIVOS[0];
@@ -681,13 +747,44 @@ async function abrirCX(){
   const cliente = $('#cxCliente').value.trim();
   let motivo = $('#cxMotivo').value; if(motivo==='__custom') motivo = $('#cxMotivoCustom').value.trim() || 'Atendimento';
   const clienteAguardando = $('#cxAguard').value==='sim';
-  if(!endereco){ toast('⚠ Informe o endereço', true); return; }
+  if(!endereco && !_cxUseIot){ toast('⚠ Informe o endereço', true); return; }
   if(!cliente){ toast('⚠ Informe o cliente', true); return; }
-  const g=$('#cxGo'); g.disabled=true; g.textContent='⏳ Geocodificando…';
+  const g=$('#cxGo'); g.disabled=true; g.textContent='⏳ …';
   try{
-    let lat=null,lng=null,endOfic=endereco;
-    try{ const r=await fetch('/geocode?addr='+encodeURIComponent(endereco)); if(r.ok){ const d=await r.json(); if(d&&!d.error&&d.lat!=null){ lat=d.lat; lng=d.lng; endOfic=d.formatted||endereco; } } }catch(_){}
-    if(lat==null||lng==null) throw new Error('Endereço não encontrado — revise a grafia ou inclua bairro/cidade.');
+    let lat, lng, endOfic, iotForaLocal=null;
+    if(_cxUseIot && _cxIotPos){
+      // usuário optou por usar a localização do IoT
+      lat=_cxIotPos.lat; lng=_cxIotPos.lng; endOfic=_cxIotAddr || endereco || 'Localização do IoT';
+    } else {
+      let gl=null,gn=null,gf=endereco;
+      try{ const r=await fetch('/geocode?addr='+encodeURIComponent(endereco)); if(r.ok){ const d=await r.json(); if(d&&!d.error&&d.lat!=null){ gl=d.lat; gn=d.lng; gf=d.formatted||endereco; } } }catch(_){}
+      if(gl==null){ throw new Error('Endereço não encontrado — revise a grafia ou inclua bairro/cidade.'); }
+      lat=gl; lng=gn; endOfic=gf;
+      // === Checagem IoT × endereço (só p/ moto real encontrada no Backoffice) ===
+      const temMotoReal = !!(_cxLookup && _cxLookup._searched===placa && _cxLookup.found);
+      if(temMotoReal){
+        const iot = await iotDaMoto(placa);
+        if(!iot || !iot.online){
+          if(!_cxIotChecked){   // IoT offline → só ALERTA de como o IoT está (não trava de vez)
+            const quando = (iot && iot.lp) ? ('última posição há '+fmtElapsed(iot.lp)) : 'sem ping recente';
+            mostrarCXResult('info', `📡 IoT da moto <b>OFFLINE</b> (${quando}) — não dá pra confirmar se a moto está no endereço. Clique em <b>Abrir chamado</b> de novo pra prosseguir.`);
+            _cxIotChecked=true; g.disabled=false; g.textContent='📢 Abrir chamado'; return;
+          }
+        } else if(iot.lat!=null && iot.lon!=null){
+          const dist = haversine({lat,lng}, {lat:iot.lat,lng:iot.lon});
+          if(dist > FORA_LOCAL_M){
+            iotForaLocal = Math.round(dist);
+            if(!_cxIotChecked){   // 1º clique → alerta + opção de usar o endereço do IoT
+              _cxIotPos = {lat:iot.lat, lng:iot.lon};
+              mostrarCXResult('warn', `⚠ A moto (IoT) está a <b>~${(dist/1000).toFixed(1)} km</b> do endereço informado — provavelmente NÃO está aí.<button class="useiot" onclick="usarEnderecoIoT()">📍 Usar o endereço do IoT</button>`);
+              _cxIotChecked=true; g.disabled=false; g.textContent='📢 Abrir mesmo assim'; return;
+            } else {   // 2º clique sem trocar → confirma
+              if(!confirm(`A moto está a ~${(dist/1000).toFixed(1)}km do endereço informado.\n\nAbrir o chamado nesse endereço mesmo assim?`)){ g.disabled=false; g.textContent='📢 Abrir mesmo assim'; return; }
+            }
+          }
+        }
+      }
+    }
     const ch = {
       id:genId(), ts:Date.now(), cliente, motivo, placa,
       endereco:endOfic, lat, lng, status:'novo',
@@ -695,6 +792,8 @@ async function abrirCX(){
       telefone: ($('#cxTel').value.trim() || null),
       origemCX:true, abertoPor:currentUser.nome, abertoPorEmail:currentUser.email, abertoEm:Date.now()
     };
+    if(_cxUseIot) ch.enderecoDoIot = true;
+    if(iotForaLocal!=null && !_cxUseIot){ ch.iotForaLocalM = iotForaLocal; }
     if(_cxLookup && _cxLookup._searched===placa){
       if(_cxLookup.modelo) ch.motoModelo = _cxLookup.modelo;
       if(_cxLookup.user_id) ch.clienteUserId = _cxLookup.user_id;
@@ -702,6 +801,8 @@ async function abrirCX(){
     }
     await new Promise(res=>{ try{ fb.child('counters/chamadoSeq').transaction(n=>(n||0)+1,(e,ok,s)=>{ if(ok&&s&&s.val()!=null) ch.seq=s.val(); res(); }); }catch(_){ res(); } });
     await fb.child('chamados/'+ch.id).set(clean(ch));
+    // guarda a posição do IoT pra detectar movimento depois (piscar)
+    if(_cxIotPos){ _iotSeen[placa] = { lat:_cxIotPos.lat, lng:_cxIotPos.lng }; }
     toast(`📢 Chamado #${ch.seq||''} aberto na Torre!`);
     closeModal();
   }catch(err){ toast('❌ '+err.message, true); g.disabled=false; g.textContent='📢 Abrir chamado'; }
@@ -719,12 +820,13 @@ const STAGE_DEFS = [
   {ic:'✅', label:'Concluído',              get:(c,r)=>c.concluidoEm||(r&&r.completedTs)}
 ];
 function detStatusChip(c){
-  const map={1:['Aberto','var(--novo)'],2:['Aceito','var(--aceito)'],3:['Atribuído','var(--atrib)'],4:['Em rota','var(--rota)'],6:['Concluído','var(--conc)']};
+  const map={1:['Aberto','var(--novo)'],2:['Aceito','var(--aceito)'],3:['Atribuído','var(--atrib)'],4:['Em rota','var(--rota)'],5:['Em atendimento','var(--atend)'],6:['Concluído','var(--conc)']};
   const [t,cor]=map[etapa(c)]||['—','var(--txt3)'];
   return `<span class="det-chip" style="background:${cor};color:#04121e">${t}</span>`;
 }
 function openDetalhe(id){
   const c=findChamado(id); if(!c) return;
+  if(_iotMoved.delete(id)) scheduleRender();   // abriu o card → reconhece o movimento (para de piscar)
   const r=corridas[c.id]||null, e=etapa(c);
   // Timeline: só as etapas que já aconteceram (têm timestamp)
   let prev=null;
@@ -749,8 +851,10 @@ function openDetalhe(id){
       <button class="mx" onclick="closeDetalhe()">✕</button>
     </div>
     <div style="font-size:12px;color:var(--txt2);margin-top:8px">${icoMotivo(c.motivo)} ${esc(c.motivo||'—')}</div>
+    ${(c.placa && !motos.length)?`<div class="cxplate" style="margin-top:10px"><div class="pl"><div class="pl-top"><span>◈ MERCOSUL</span><span>BR</span></div><div class="pl-num">${esc(c.placa)}</div></div>${c.motoModelo?`<div class="pl-mod">🏍 ${esc(c.motoModelo)}</div>`:''}</div>`:''}
     ${ehTransf(c)?`<div style="font-size:13px;font-weight:700;margin-top:6px;color:#d8b4fe">🚚 ${esc(baseNome(c.baseSaida))} → ${esc(baseNome(c.baseEntrega))}</div>`:''}
     ${rotaBtn}
+    ${(c.placa && !motos.length)?`<div class="det-sec"><div class="st">📡 IoT da moto</div><div id="detIot" class="det-iot"><span style="color:var(--txt3);font-size:11px">🔎 carregando…</span></div></div>`:''}
     <div class="det-total"><span class="tl">${(c.status==='concluido')?'⏱ Tempo total de execução':'⏱ Tempo decorrido'}</span><span class="tv">${totVal}</span></div>
     ${notaV!=null?`<div style="margin-top:10px"><span class="det-nota">⭐ Nota ${notaV}</span></div>`:''}
     <div class="det-sec"><div class="st">📋 Histórico · tempo de cada etapa</div>${rows||'<div style="color:var(--txt3);font-size:12px">Sem etapas registradas ainda.</div>'}</div>
@@ -761,6 +865,24 @@ function openDetalhe(id){
       ${c.abertoPor?`<div class="det-moto"><span>✍</span><span class="pl">${esc(c.abertoPor)}</span><span class="mo">abriu · ${fmtDataHora(c.abertoEm||c.ts)}</span></div>`:''}
     </div></div>`;
   $('#det').classList.add('on');
+  if(c.placa && !motos.length) preencherDetIot(c);
+}
+// Principais dados do IoT da moto no detalhe (status, último ping, distância do endereço, mapa)
+async function preencherDetIot(c){
+  const box=$('#detIot'); if(!box) return;
+  if(c._fake){ box.innerHTML = `<div class="kv on"><b>Status</b>🟢 online</div><div class="kv"><b>Último ping</b>agora</div><div class="kv on"><b>No local</b>✓ demo</div>`; return; }
+  const iot = await iotDaMoto(c.placa);
+  if(!iot){ box.innerHTML = `<div class="kv"><b>IoT</b>sem dados</div>`; return; }
+  const quando = iot.lp ? ('há '+fmtElapsed(iot.lp)) : '—';
+  let distTxt='';
+  if(iot.lat!=null && iot.lon!=null && c.lat!=null && c.lng!=null){
+    const d=haversine({lat:c.lat,lng:c.lng},{lat:iot.lat,lng:iot.lon});
+    distTxt = d>FORA_LOCAL_M
+      ? `<div class="kv off"><b>vs. endereço</b>⚠ ~${(d/1000).toFixed(1)}km fora</div>`
+      : `<div class="kv on"><b>vs. endereço</b>✓ no local (${Math.round(d)}m)</div>`;
+  }
+  const mapBtn = (iot.lat!=null&&iot.lon!=null) ? `<a class="kv" style="text-decoration:none;color:var(--acc-br)" href="https://www.google.com/maps?q=${iot.lat},${iot.lon}" target="_blank" rel="noopener"><b>Localização</b>📍 ver no mapa</a>` : '';
+  box.innerHTML = `<div class="kv ${iot.online?'on':'off'}"><b>Status</b>${iot.online?'🟢 online':'⚫ offline'}</div><div class="kv"><b>Último ping</b>${quando}</div>${distTxt}${mapBtn}`;
 }
 function closeDetalhe(){ $('#det').classList.remove('on'); }
 $('#det').addEventListener('click', e=>{ if(e.target.id==='det') closeDetalhe(); });
