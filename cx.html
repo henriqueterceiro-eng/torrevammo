@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Vammo · CX Assist</title>
+<link rel="icon" href="/icon-192.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" as="image" href="/fleet-intro.jpg">
+<style>
+:root{
+  --acc:#00B4E5; --acc-br:#3CCDF6;
+  --txt:#EAF2FB; --txt2:#AEC0D8; --txt3:#8195B0;
+  --novo:#FF5C79; --aceito:#FFB020; --atrib:#A78BFA; --rota:#3CCDF6; --conc:#34D399;
+  --bdr:rgba(255,255,255,.10); --bdr2:rgba(255,255,255,.17);
+  --glass:rgba(16,31,55,.50); --glass2:rgba(9,20,40,.28); --glassmod:rgba(13,25,46,.92);
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --sh-sm:0 2px 8px rgba(0,0,0,.24);
+  --sh-md:0 12px 34px rgba(0,0,0,.38);
+  --sh-lg:0 30px 74px rgba(0,0,0,.58);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);color:var(--txt);display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  background:
+    linear-gradient(180deg, rgba(6,14,26,.60), rgba(3,9,18,.85)),
+    url('/fleet-intro.jpg') center/cover no-repeat fixed,
+    #06101d;}
+button{font-family:inherit;cursor:pointer;border:none;color:inherit}
+::-webkit-scrollbar{height:10px;width:10px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:8px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.30);background-clip:content-box}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ===== INTRO SPLASH ===== */
+#intro{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  background:
+    radial-gradient(700px 470px at 50% 46%, rgba(2,8,16,.48), transparent 72%),
+    linear-gradient(180deg, rgba(4,14,26,.42), rgba(3,9,17,.82)),
+    url('/fleet-intro.jpg') center/cover no-repeat,
+    radial-gradient(1200px 760px at 50% 34%, #0d3a52, #061019 72%);
+  opacity:1;transition:opacity .6s ease}
+#intro.done{opacity:0;pointer-events:none}
+#intro .glow{position:absolute;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle, rgba(0,180,229,.4), transparent 62%);filter:blur(28px);animation:introGlow 2.6s ease-in-out infinite}
+@keyframes introGlow{0%,100%{transform:scale(.9);opacity:.55}50%{transform:scale(1.1);opacity:1}}
+.intro-in{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:20px}
+.intro-logo{color:#fff;line-height:0;opacity:0;transform:scale(.82) translateY(8px);animation:introLogo .95s cubic-bezier(.2,.85,.25,1) .12s forwards}
+.intro-logo svg{width:min(58vw,240px);height:auto;filter:drop-shadow(0 8px 34px rgba(0,180,229,.55))}
+@keyframes introLogo{to{opacity:1;transform:none}}
+.intro-word{display:flex;align-items:center;font-family:var(--sans);font-weight:800;font-size:clamp(15px,4.4vw,23px);letter-spacing:4px;text-transform:uppercase;height:26px}
+.intro-word span{opacity:0;transform:translateY(12px);display:inline-block;color:#cfe9f5;animation:introLetter .55s cubic-bezier(.2,.85,.25,1) forwards}
+.intro-word span.hl{color:#3CCDF6;text-shadow:0 0 18px rgba(0,180,229,.6)}
+.intro-word span.sp{width:.55em}
+@keyframes introLetter{to{opacity:1;transform:none}}
+.intro-line{height:2px;width:0;background:linear-gradient(90deg,transparent,#3CCDF6,transparent);margin-top:2px;animation:introLine .8s ease 1.35s forwards}
+@keyframes introLine{to{width:min(58vw,240px)}}
+
+/* ===== HEADER ===== */
+#top{flex:0 0 auto;display:flex;align-items:center;gap:16px;padding:12px 22px;background:rgba(8,18,34,.55);backdrop-filter:blur(18px) saturate(150%);-webkit-backdrop-filter:blur(18px) saturate(150%);border-bottom:1px solid var(--bdr);box-shadow:0 6px 26px rgba(0,0,0,.32);z-index:20}
+#top .logo{color:var(--acc);line-height:0;flex:0 0 auto}
+#top .logo svg{width:96px;height:auto;display:block;filter:drop-shadow(0 0 12px rgba(0,180,229,.4))}
+#top .sub{font-size:11px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;color:var(--txt3);border-left:1.5px solid var(--bdr2);padding-left:16px}
+#top .sub b{color:#fff;font-weight:800}
+#top .spacer{flex:1}
+#top .stat{display:flex;gap:9px;align-items:center}
+#top .stat>span{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.06);border:1px solid var(--bdr);border-radius:11px;padding:6px 11px;font-size:11px;font-weight:600;color:var(--txt2)}
+#top .stat b{color:#fff;font-size:14px;font-family:var(--mono);font-weight:700}
+#syncdot{width:8px;height:8px;border-radius:50%;background:var(--aceito);box-shadow:0 0 0 3px rgba(255,176,32,.18),0 0 8px var(--aceito);display:inline-block}
+#syncdot.on{background:var(--conc);box-shadow:0 0 0 3px rgba(52,211,153,.18),0 0 8px var(--conc)}
+.btn-open{display:flex;align-items:center;gap:7px;background:linear-gradient(135deg,#12C4F5,#0098CC);color:#fff;font-weight:700;font-size:13px;padding:10px 17px;border-radius:12px;box-shadow:0 6px 20px rgba(0,180,229,.42),inset 0 1px 0 rgba(255,255,255,.3);transition:transform .12s,box-shadow .12s;letter-spacing:.2px}
+.btn-open:hover{transform:translateY(-1.5px);box-shadow:0 11px 28px rgba(0,180,229,.55),inset 0 1px 0 rgba(255,255,255,.3)}
+.btn-open:active{transform:translateY(0)}
+.btn-demo{background:rgba(255,255,255,.06);border:1px solid var(--bdr2);color:var(--txt2);font-weight:700;font-size:11.5px;padding:8px 12px;border-radius:11px;transition:.12s;white-space:nowrap}
+.btn-demo:hover{border-color:var(--acc);color:var(--acc-br)}
+.btn-demo.on{background:rgba(255,176,32,.16);border-color:var(--aceito);color:#FFC969}
+#userchip{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.06);border:1px solid var(--bdr);border-radius:22px;padding:4px 6px 4px 4px}
+#userchip img{width:28px;height:28px;border-radius:50%}
+#userchip .un{font-size:12px;font-weight:700;color:#fff;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#userchip .lo{background:transparent;border:none;color:var(--txt3);font-size:14px;padding:0 5px}
+#userchip .lo:hover{color:var(--novo)}
+
+/* ===== BOARD ===== */
+#board{flex:1;min-height:0;display:flex;gap:16px;padding:20px 22px;overflow-x:auto;overflow-y:hidden;align-items:stretch}
+.col{flex:0 0 308px;display:flex;flex-direction:column;min-height:0;background:var(--glass2);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--bdr);border-radius:18px;overflow:hidden;box-shadow:0 10px 34px rgba(0,0,0,.26)}
+.col .ch{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 15px;border-bottom:1px solid var(--bdr);
+  background:rgba(14,28,50,.5);background:color-mix(in srgb, var(--c) 20%, rgba(10,22,42,.42));
+  border-bottom-color:color-mix(in srgb, var(--c) 30%, var(--bdr))}
+.col .ch .ci{font-size:17px}
+.col .ch .ct{font-weight:800;font-size:13px;color:#fff;letter-spacing:.1px}
+.col .ch .cs{font-size:9.5px;color:var(--txt2);font-weight:600;margin-top:1px;line-height:1.25;opacity:.92}
+.col .ch .cn{margin-left:auto;background:var(--c);color:#08121c;font-weight:800;font-size:12px;font-family:var(--mono);min-width:26px;text-align:center;padding:4px 9px;border-radius:20px;box-shadow:0 0 14px -3px var(--c)}
+.col .body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:11px}
+.col .empty{margin:auto;text-align:center;color:var(--txt3);font-size:11.5px;padding:26px 12px;line-height:1.55}
+.col .empty .e{font-size:32px;opacity:.32;display:block;margin-bottom:8px}
+
+/* ===== CARD (glass) ===== */
+.kc{background:var(--glass);backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);border:1px solid var(--bdr);border-radius:16px;padding:13px 14px;cursor:pointer;color:var(--txt);box-shadow:0 8px 26px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.06);transition:transform .14s ease,box-shadow .14s ease,border-color .14s}
+.kc:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--c) 60%, var(--bdr));box-shadow:0 16px 42px rgba(0,0,0,.44),0 0 26px -8px var(--c),inset 0 1px 0 rgba(255,255,255,.09)}
+.kc.aguard{border-color:color-mix(in srgb,#34D399 55%, var(--bdr));box-shadow:0 8px 26px rgba(0,0,0,.30),0 0 22px -9px #34D399,inset 0 1px 0 rgba(255,255,255,.06)}
+.kc .r1{display:flex;align-items:center;gap:8px}
+.kc .num{font-family:var(--mono);font-size:11px;font-weight:800;color:var(--c);background:rgba(255,255,255,.08);background:color-mix(in srgb,var(--c) 20%, transparent);border:1px solid color-mix(in srgb,var(--c) 32%, transparent);padding:2px 7px;border-radius:7px}
+.kc .cli{font-weight:800;font-size:14px;color:#fff;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.1px}
+.kc .ico{font-size:16px;opacity:.92}
+.kc .mv{font-size:11.5px;color:var(--txt2);margin-top:6px;line-height:1.35;font-weight:500}
+.kc .end{font-size:10.5px;color:var(--txt3);margin-top:4px;line-height:1.3;display:flex;gap:4px;font-weight:500}
+.kc .end span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kc .meta{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--txt3);font-family:var(--mono);margin-top:9px;font-weight:600}
+.kc .badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.kc .b{font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;letter-spacing:.1px;white-space:nowrap;background:rgba(255,255,255,.07);color:var(--txt2);border:1px solid var(--bdr)}
+.b-moto{background:rgba(0,180,229,.16);color:#8FE0F7;border-color:rgba(0,180,229,.38)}
+.b-aguard{background:#10B981;color:#04160f;border-color:#10B981;box-shadow:0 2px 12px rgba(16,185,129,.42)}
+.b-transf{background:rgba(167,139,250,.18);color:#CDBBFB;border-color:rgba(167,139,250,.38)}
+.b-ext{background:rgba(255,176,32,.16);color:#FFCB6B;border-color:rgba(255,176,32,.38)}
+.b-warn{background:rgba(255,176,32,.16);color:#FFCB6B;border-color:rgba(255,176,32,.38)}
+.kc .who{display:flex;flex-direction:column;gap:7px;margin-top:11px;padding-top:11px;border-top:1px solid var(--bdr)}
+.kc .wl{display:flex;align-items:center;gap:9px}
+.kc .wl .av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:0 0 26px;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.kc .wl .wi{min-width:0}
+.kc .wl .wr{font-size:8.5px;color:var(--txt3);font-weight:800;text-transform:uppercase;letter-spacing:.5px;line-height:1}
+.kc .wl .wn{font-size:12.5px;font-weight:700;color:#fff;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.kc .rotahint{margin-top:11px;padding:8px;text-align:center;background:rgba(0,180,229,.13);border:1px solid rgba(0,180,229,.4);color:#8FE0F7;font-weight:700;font-size:10.5px;border-radius:9px}
+.kc .aberto{font-size:9.5px;color:var(--txt3);margin-top:10px;padding-top:9px;border-top:1px solid var(--bdr);line-height:1.35;font-weight:500}
+.kc .aberto b{color:var(--txt2);font-weight:700}
+
+/* ===== LOGIN GATE ===== */
+#gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(180deg, rgba(6,14,26,.58), rgba(3,9,18,.84)),url('/fleet-intro.jpg') center/cover no-repeat}
+#gate .card{background:var(--glassmod);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);border:1px solid var(--bdr2);border-radius:24px;padding:42px 34px;max-width:400px;width:100%;text-align:center;box-shadow:var(--sh-lg)}
+#gate .lg{color:var(--acc);line-height:0}
+#gate .lg svg{width:150px;height:auto;margin:0 auto 2px;display:block;filter:drop-shadow(0 0 16px rgba(0,180,229,.45))}
+#gate .sub{font-size:12px;color:var(--txt3);font-weight:800;letter-spacing:2.5px;text-transform:uppercase;margin:8px 0 20px}
+#gate .txt{font-size:13.5px;color:var(--txt2);margin-bottom:24px;line-height:1.55}
+#gbtn{display:flex;justify-content:center;min-height:44px}
+#gerr{font-size:12px;color:var(--novo);margin-top:14px;min-height:16px;line-height:1.4;font-weight:600}
+
+/* ===== MODAIS (base glass) ===== */
+#modal,#det,#sim{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(2,8,16,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#modal{z-index:90}#det{z-index:95}#sim{z-index:110}
+#modal.on,#det.on,#sim.on{display:flex}
+#modal .m,#det .m{background:var(--glassmod);backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid var(--bdr2);border-radius:20px;width:460px;max-width:94vw;max-height:92vh;overflow:auto;padding:24px;box-shadow:var(--sh-lg);color:var(--txt);animation:modalIn .22s cubic-bezier(.2,.8,.25,1)}
+#det .m{width:450px}
+@keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+.mhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px}
+.mx{background:transparent;border:none;color:var(--txt3);font-size:20px;line-height:1;padding:2px 6px;border-radius:8px}
+.mx:hover{color:#fff;background:rgba(255,255,255,.08)}
+#modal h2,#det h2{font-size:18px;color:#fff;line-height:1.25;letter-spacing:-.2px}
+#modal .msub{font-size:12px;color:var(--txt2);margin-bottom:4px;line-height:1.4}
+#modal label{display:block;font-size:11px;color:var(--txt2);font-weight:700;margin:12px 0 5px}
+#modal input,#modal select,#modal textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--bdr2);color:#fff;border-radius:10px;padding:11px 13px;font-size:13px;font-family:inherit;transition:.12s}
+#modal select option{background:#0e1c34;color:#fff}
+#modal input:focus,#modal select:focus,#modal textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(0,180,229,.2);background:rgba(255,255,255,.09)}
+.mrow{display:flex;gap:8px;margin-top:20px}
+.mrow button{flex:1;padding:12px;border-radius:11px;font-weight:800;font-size:13px}
+.mrow .cancel{flex:0 0 34%;background:rgba(255,255,255,.05);border:1px solid var(--bdr2);color:var(--txt2)}
+.mrow .cancel:hover{border-color:var(--txt3);color:#fff}
+.mrow .go{background:linear-gradient(135deg,#12C4F5,#0098CC);color:#fff;box-shadow:0 6px 18px rgba(0,180,229,.4)}
+.mrow .go:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.wsec{margin-top:18px;animation:wfade .2s ease}
+@keyframes wfade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.wlabel{font-size:11px;color:var(--txt2);font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-bottom:9px;display:flex;align-items:center;gap:8px}
+.wlabel .wn{background:linear-gradient(135deg,#12C4F5,#0098CC);color:#fff;width:19px;height:19px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex:0 0 19px}
+.wtipo{display:flex;flex-direction:column;gap:8px}
+.wtipo button{display:flex;align-items:center;gap:12px;padding:14px;background:rgba(255,255,255,.05);border:1.5px solid var(--bdr2);border-radius:12px;text-align:left;color:var(--txt);width:100%;transition:.12s}
+.wtipo button:hover{border-color:var(--acc);background:rgba(0,180,229,.08)}
+.wtipo button.sel{border-color:var(--acc);background:rgba(0,180,229,.16);box-shadow:0 0 0 3px rgba(0,180,229,.15)}
+.wtipo .em{font-size:23px;flex:0 0 auto}
+.wtipo .tt{font-weight:800;font-size:13px;color:#fff}
+.wtipo .ts{font-size:10.5px;color:var(--txt2);font-weight:600}
+.wqty{display:flex;align-items:center;gap:14px}
+.wqty button{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.05);border:1.5px solid var(--bdr2);color:var(--acc-br);font-size:24px;font-weight:800;line-height:1;transition:.12s}
+.wqty button:hover{border-color:var(--acc);background:rgba(0,180,229,.1)}
+.wqty .qn{font-size:32px;font-weight:800;font-family:var(--mono);min-width:54px;text-align:center;color:#fff}
+.moto-card{background:rgba(255,255,255,.05);border:1px solid var(--bdr2);border-radius:12px;padding:12px;margin-top:9px}
+.moto-card .mh{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;font-weight:800;color:var(--txt2)}
+.moto-card .mnum{background:var(--atrib);color:#1a1230;width:20px;height:20px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex:0 0 20px}
+.moto-card input{text-transform:uppercase;font-family:var(--mono);letter-spacing:2px;font-weight:800;font-size:16px;text-align:center}
+.mstat{font-size:11px;margin-top:7px;line-height:1.4;min-height:15px;font-weight:600}
+.mstat.ok{color:#34D399}
+.mstat.warn{color:#FFB020}
+.mstat.err{color:#FF6B85}
+.mstat.info{color:var(--txt2)}
+/* autocomplete de placa */
+.acwrap{position:relative}
+.acdd{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:6;background:var(--glassmod);backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);border:1px solid var(--bdr2);border-radius:12px;box-shadow:var(--sh-md);overflow:hidden auto;display:none;max-height:240px}
+.acdd.on{display:block}
+.acitem{display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.06)}
+.acitem:last-child{border-bottom:none}
+.acitem:hover{background:rgba(0,180,229,.16)}
+.acpl{font-family:var(--mono);font-weight:800;color:#fff;font-size:13px;letter-spacing:1px}
+.acmo{font-size:10.5px;color:var(--txt2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acempty{padding:11px;font-size:11px;color:var(--txt3)}
+/* tag de status da moto no sistema */
+.mstag{display:inline-block;font-size:9px;font-weight:800;padding:2px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.3px;margin-right:6px;vertical-align:middle}
+.mstag.ok{background:rgba(52,211,153,.18);color:#5FE0B0;border:1px solid rgba(52,211,153,.4)}
+.mstag.info{background:rgba(0,180,229,.16);color:#8FE0F7;border:1px solid rgba(0,180,229,.36)}
+.mstag.warn{background:rgba(255,176,32,.16);color:#FFCB6B;border:1px solid rgba(255,176,32,.38)}
+.mstag.err{background:rgba(255,92,121,.16);color:#FF9DAC;border:1px solid rgba(255,92,121,.4)}
+.mstag.muted{background:rgba(255,255,255,.08);color:var(--txt2);border:1px solid var(--bdr)}
+/* CX: placa Mercosul + info/hint do formulário */
+.mplate{background:linear-gradient(180deg,#0b3a6b,#0a2c52);border:2px solid #1560a8;border-radius:10px;padding:5px 6px 8px;text-align:center;margin-bottom:4px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.mplate .mplate-top{display:flex;justify-content:space-between;align-items:center;font-size:8px;font-weight:800;color:#bfe3ff;padding:1px 5px;letter-spacing:.5px}
+.mplate-in{width:100%;background:#fff !important;color:#0a1420 !important;border:none !important;text-align:center;font-family:var(--mono);font-weight:800;font-size:23px;letter-spacing:4px;text-transform:uppercase;margin-top:4px;border-radius:6px;padding:8px}
+.mplate-in:focus{outline:none;box-shadow:none !important}
+.cxinfo{text-align:center;font-size:11.5px;color:var(--txt2);min-height:15px;margin:7px 0}
+.cxhint{text-align:center;font-size:12px;color:var(--acc-br);font-weight:700;margin:2px 0 8px;line-height:1.5}
+.cxhint a{color:var(--txt2);text-decoration:underline;font-weight:600;font-size:11px}
+.cxresult{margin-top:12px;padding:10px;background:rgba(255,255,255,.05);border:1px solid var(--bdr);border-radius:9px;font-size:11px;color:var(--txt2);display:none;line-height:1.4}
+/* remover placa + adicionar placa */
+.moto-card .mrm{margin-left:auto;background:transparent;border:none;color:var(--txt3);font-size:12px;cursor:pointer;padding:2px 7px;border-radius:6px;line-height:1}
+.moto-card .mrm:hover{color:var(--novo);background:rgba(255,92,121,.14)}
+.wadd{width:100%;margin-top:10px;padding:11px;background:rgba(0,180,229,.10);border:1px dashed rgba(0,180,229,.45);color:var(--acc-br);font-weight:700;font-size:12.5px;border-radius:11px;transition:.12s}
+.wadd:hover{background:rgba(0,180,229,.17);border-style:solid}
+
+/* ===== DETALHE / HISTÓRICO ===== */
+.deth{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:2px}
+.deth h2{font-size:16px;line-height:1.25}
+.det-chip{display:inline-block;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.3px;margin-top:8px;box-shadow:0 0 14px -4px currentColor}
+.det-sec{margin-top:18px}
+.det-sec .st{font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.det-total{display:flex;align-items:center;justify-content:space-between;background:rgba(0,180,229,.12);border:1px solid rgba(0,180,229,.32);border-radius:13px;padding:13px 15px;margin-top:14px}
+.det-total .tl{font-size:11.5px;color:var(--txt2);font-weight:700}
+.det-total .tv{font-size:23px;font-weight:800;font-family:var(--mono);color:#8FE0F7}
+.tl-row{display:flex;gap:12px;position:relative;padding-bottom:16px}
+.tl-row:last-child{padding-bottom:0}
+.tl-row .tl-ic{flex:0 0 32px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:2px solid var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;z-index:2;box-shadow:0 0 12px -2px rgba(0,180,229,.5)}
+.tl-row::before{content:'';position:absolute;left:15px;top:32px;bottom:-2px;width:2px;background:var(--bdr2)}
+.tl-row:last-child::before{display:none}
+.tl-bd{flex:1;padding-top:4px}
+.tl-bd .tl-l{font-size:12.5px;font-weight:700;color:#fff}
+.tl-bd .tl-t{font-size:10.5px;color:var(--txt3);font-family:var(--mono);margin-top:2px}
+.tl-dur{margin-left:auto;font-size:11px;font-weight:800;font-family:var(--mono);color:#8FE0F7;background:rgba(0,180,229,.14);padding:3px 9px;border-radius:8px;height:fit-content;align-self:center}
+.det-motos{display:flex;flex-direction:column;gap:6px}
+.det-moto{display:flex;align-items:center;gap:9px;font-size:12px;background:rgba(255,255,255,.05);border:1px solid var(--bdr);border-radius:9px;padding:8px 10px}
+.det-moto .pl{font-family:var(--mono);font-weight:800;color:#fff}
+.det-moto .mo{color:var(--txt2);font-size:10.5px}
+.det-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:16px;padding:13px;background:linear-gradient(135deg,#12C4F5,#0098CC);color:#fff;font-weight:800;font-size:13px;border-radius:12px;text-decoration:none;box-shadow:0 6px 18px rgba(0,180,229,.4)}
+.det-btn:hover{transform:translateY(-1px)}
+.det-nota{display:inline-flex;align-items:center;gap:5px;background:rgba(52,211,153,.16);border:1px solid rgba(52,211,153,.4);color:#5FE0B0;font-weight:800;font-size:12px;padding:5px 11px;border-radius:20px}
+
+/* ===== SIMULADOR ===== */
+.simcard{background:var(--glassmod);backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid var(--bdr2);border-radius:20px;width:640px;max-width:96vw;max-height:94vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--sh-lg);animation:modalIn .22s cubic-bezier(.2,.8,.25,1)}
+.simhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 20px;border-bottom:1px solid var(--bdr)}
+.simt{font-size:15px;font-weight:800;color:#fff}
+.simsub{font-size:11px;color:var(--txt2);margin-top:2px}
+#simMap{height:min(56vh,440px);width:100%;background:#0a1428}
+.leaflet-container{background:#0a1428 !important;font-family:var(--sans)}
+.simfoot{padding:14px 20px;border-top:1px solid var(--bdr);display:flex;flex-direction:column;gap:11px}
+.simstat{font-size:12.5px;font-weight:700;color:#fff}
+.simstat #simEta{color:#8FE0F7}
+.simprog{height:8px;background:rgba(255,255,255,.1);border-radius:6px;overflow:hidden}
+.simprog #simBar{height:100%;width:0;background:linear-gradient(90deg,var(--acc),#34D399);transition:width .12s linear}
+.simctrls{display:flex;gap:8px}
+.simctrls button{flex:1;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--bdr2);color:var(--txt);font-weight:700;font-size:12px}
+.simctrls button:hover{border-color:var(--acc);color:var(--acc-br)}
+.sim-marker div{width:34px;height:34px;border-radius:50%;background:var(--acc);border:3px solid #fff;box-shadow:0 3px 14px rgba(0,180,229,.7);display:flex;align-items:center;justify-content:center;font-size:17px}
+.sim-pin div{font-size:22px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+
+/* ===== TOAST ===== */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--glassmod);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--bdr2);color:#fff;padding:12px 18px;border-radius:13px;font-size:13px;font-weight:600;box-shadow:var(--sh-lg);opacity:0;pointer-events:none;transition:all .25s;z-index:130;max-width:90vw;border-left:4px solid var(--acc)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{border-left-color:var(--novo)}
+
+@media(max-width:640px){
+  #top{flex-wrap:wrap;gap:10px;padding:10px 12px}
+  #top .sub{display:none}
+  #board{padding:12px;gap:12px}
+  .col{flex-basis:84vw}
+}
+</style>
+</head>
+<body>
+
+<!-- INTRO / SPLASH animada -->
+<div id="intro">
+  <div class="glow"></div>
+  <div class="intro-in">
+    <div class="intro-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo"><path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/><path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/><path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/><path d="M475.6293 139.81909V140.23909H475.9093Z"/><path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/></svg></div>
+    <div class="intro-word" id="introWord"></div>
+    <div class="intro-line"></div>
+  </div>
+</div>
+
+<!-- LOGIN GATE -->
+<div id="gate">
+  <div class="card">
+    <div class="lg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo"><path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/><path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/><path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/><path d="M475.6293 139.81909V140.23909H475.9093Z"/><path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/></svg></div>
+    <div class="sub">Vammo Assist · CX</div>
+    <div class="txt">Entre com sua conta <strong>@vammo.com</strong> para abrir e acompanhar chamados.</div>
+    <div id="gbtn"></div>
+    <div id="gerr"></div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div id="top">
+  <div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo"><path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/><path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/><path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/><path d="M475.6293 139.81909V140.23909H475.9093Z"/><path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/></svg></div>
+  <div class="sub">Vammo <b>Assist</b> · CX</div>
+  <button class="btn-open" onclick="openModal()">➕ Abrir chamado</button>
+  <div class="spacer"></div>
+  <div class="stat">
+    <span><span id="syncdot"></span> <span id="synctxt">conectando…</span></span>
+    <span>ativos <b id="statAtivos">0</b></span>
+    <span>em rota <b id="statRota">0</b></span>
+  </div>
+  <button id="demoBtn" class="btn-demo" onclick="toggleDemo()" title="Plotar chamados fictícios pra apresentação (só na sua tela — não afeta a torre nem outros)">🧪 Demo</button>
+  <div id="userchip" style="display:none"></div>
+</div>
+
+<!-- BOARD -->
+<div id="board"></div>
+
+<!-- MODAL Abrir chamado (CX) -->
+<div id="modal">
+  <div class="m">
+    <div class="mhead">
+      <div><h2>➕ Abrir chamado</h2><div class="msub">Socorro / atendimento — cai direto na Torre de Controle</div></div>
+      <button class="mx" onclick="closeModal()">✕</button>
+    </div>
+
+    <label>Placa da moto</label>
+    <div class="mplate">
+      <div class="mplate-top"><span>◈ MERCOSUL</span><span>BRASIL 🇧🇷</span></div>
+      <input id="cxPlaca" class="mplate-in" placeholder="ABC1D23" maxlength="8" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="cxMotoInfo" class="cxinfo"></div>
+    <div id="cxPlacaHint" class="cxhint">👆 Digite a placa pra puxar o cliente do Backoffice.<br><a href="#" id="cxSemPlaca">não tenho a placa →</a></div>
+
+    <div id="cxRest" style="display:none">
+      <label>Endereço (onde está a moto)</label>
+      <input id="cxEnd" placeholder="Ex: Av. Paulista, 1578, São Paulo">
+      <label>Cliente</label>
+      <input id="cxCliente" placeholder="Nome do cliente">
+      <label>Telefone <small style="color:var(--txt3)">(vira WhatsApp pro colaborador)</small></label>
+      <input id="cxTel" placeholder="(11) 99999-9999">
+      <label>Motivo</label>
+      <select id="cxMotivo"></select>
+      <input id="cxMotivoCustom" placeholder="Descreva o motivo" style="display:none;margin-top:6px">
+      <label>Cliente aguardando no local?</label>
+      <select id="cxAguard">
+        <option value="sim">✅ Sim — cliente aguardando no local</option>
+        <option value="nao">❌ Não — cliente não está no local</option>
+      </select>
+      <div id="cxResult" class="cxresult"></div>
+    </div>
+
+    <div class="mrow">
+      <button class="cancel" onclick="closeModal()">Cancelar</button>
+      <button class="go" id="cxGo" onclick="abrirCX()">📢 Abrir chamado</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL Detalhe / histórico do chamado -->
+<div id="det">
+  <div class="m"><div id="detBody"></div></div>
+</div>
+
+<!-- MODAL Simulador de rota (demo) -->
+<div id="sim">
+  <div class="simcard">
+    <div class="simhead">
+      <div><div class="simt" id="simTitle">Simulação de rota</div><div class="simsub" id="simSub">carregando…</div></div>
+      <button class="mx" onclick="closeSimulador()">✕</button>
+    </div>
+    <div id="simMap"></div>
+    <div class="simfoot">
+      <div class="simstat"><span id="simDriverN">Motorista</span> · <span id="simEta">—</span></div>
+      <div class="simprog"><div id="simBar"></div></div>
+      <div class="simctrls">
+        <button id="simPlay" onclick="simTogglePlay()">⏸ Pausar</button>
+        <button onclick="simRestart()">↺ Reiniciar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2,6);
+
+const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
+const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
+const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
+const CX_VERSION = 'v1 · 2026-08-04';
+
+// Motivos oficiais (mesmos do CX/torre)
+// Motivos oficiais do CX (mesmos da torre, SEM os de Fleet/logística — Deslocamento entre bases,
+// Movimentação Comercial/Live Ops ficam no app de Fleet).
+const MOTIVOS = [
+  'Troca de pneu - roda traseira','Troca de pneu - roda dianteira',
+  'Moto não liga - VAMMO','Moto liga, mas não anda - VAMMO','Código de erro eletrônico - VAMMO',
+  'Paralama - VAMMO','Acidente','Moto travada no P','Freio','Socorro de Bateria','Chave perdida',
+  'Caixa de direção/Garfo/Guidão','Troca da Ignição','Problema no pedal de descanso',
+  'Manete de freio com defeito','Retrovisor com defeito','Quebra de Contrato',
+  'Recolhimento por inadimplência','Devolução a pedido do cliente','Remoção de pátio cobrar',
+  'Remoção de pátio n cobrar','Solicitação de congelamento','Moto de vendas com defeito',
+  'Time de Pronta Resposta','Outros'
+];
+
+let chamados = {}, motoristas = {}, bases = {}, corridas = {};   // corridas: chamadoId -> ride (tempos/nota)
+let currentUser = null, fb = null;
+// DEMO (apresentação): chamados fictícios só em memória — NÃO vão pro Firebase,
+// não aparecem na torre nem pra outros. Ver plotarDemo()/limparDemo().
+let demoOn = false, demoChamados = [];
+
+// ================= TOAST =================
+let _tt = null;
+function toast(msg, err){
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err?' err':'');
+  clearTimeout(_tt); _tt = setTimeout(()=>t.className='', 3200);
+}
+
+// ================= GEO =================
+function haversine(a, b){
+  const R=6371000, toR=x=>x*Math.PI/180;
+  const dLat=toR(b.lat-a.lat), dLng=toR(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+function nearestBase(pos){
+  let best=null, bd=Infinity;
+  for(const id in bases){ const b=bases[id]; if(!b||b.lat==null||b.lng==null) continue;
+    const d=haversine(pos,{lat:b.lat,lng:b.lng}); if(d<bd){ bd=d; best={id,base:b,dist:d}; } }
+  return best;
+}
+function motoristaNaBase(motId){
+  const m=motoristas[motId]; if(!m||m.lat==null||m.lng==null) return null;
+  const nb=nearestBase({lat:m.lat,lng:m.lng});
+  return (nb && nb.dist<=BASE_RADIUS_M) ? nb : null;
+}
+function motoristaForaDaBase(motId){
+  const m=motoristas[motId]; if(!m||m.lat==null||m.lng==null) return false;
+  return !motoristaNaBase(motId); // tem posição e NÃO está em nenhuma base = se deslocando
+}
+
+// ================= TEMPO =================
+function fmtElapsed(ts){
+  if(!ts) return '—'; const s=Math.floor((Date.now()-ts)/1000);
+  if(s<60) return s+'s'; const m=Math.floor(s/60); if(m<60) return m+'min';
+  const h=Math.floor(m/60); return h+'h'+(m%60?(' '+(m%60)+'min'):'');
+}
+function fmtTime(ts){ if(!ts) return ''; const d=new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function fmtDataHora(ts){ if(!ts) return '—'; const d=new Date(ts); const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function ehHoje(ts){ if(!ts) return false; const d=new Date(ts), n=new Date(); return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate(); }
+const baseNome = id => (bases[id] && bases[id].nome) || id || '';
+
+function icoMotivo(m){
+  m=(m||'').toLowerCase();
+  if(m.includes('pneu')||m.includes('roda')) return '🛞';
+  if(m.includes('não liga')||m.includes('nao liga')||m.includes('bateria')) return '🔋';
+  if(m.includes('acidente')) return '🚨';
+  if(m.includes('freio')) return '🛑';
+  if(m.includes('vazamento')||m.includes('óleo')) return '💧';
+  if(m.includes('travada')||m.includes('tracksolution')) return '🔒';
+  if(m.includes('deslocamento')||m.includes('transfer')||m.includes('movimenta')) return '🚚';
+  if(m.includes('recolhimento')||m.includes('inadimpl')) return '🚛';
+  if(m.includes('devolução')||m.includes('devolucao')) return '📦';
+  return '🔧';
+}
+function ehTransf(c){ return !!(c.baseSaida||c.baseEntrega||/deslocamento|movimenta/i.test(c.motivo||'')); }
+
+// ================= ETAPAS =================
+// 1 aberto · 2 aceito · 3 atribuído · 4 em rota · 6 concluído  (5 = roster de motoristas na base)
+function etapa(c){
+  if(c._fakeEtapa) return c._fakeEtapa;   // chamado de demonstração: etapa forçada
+  if(c.status==='concluido'||c.status==='cancelado') return 6;
+  const hasDriver=!!c.motoristaId, hasTerc=!!c.terceiroId;
+  if(hasDriver || hasTerc){
+    if(hasDriver && motoristaForaDaBase(c.motoristaId)) return 4;
+    return 3;
+  }
+  if(c.aceitoPor) return 2;
+  return 1;
+}
+// controlador responsável: quem aceitou > quem atribuiu > quem abriu
+function controladorDe(c){ return c.aceitoPor || c.atribuidoPor || null; }
+function driverDe(c){ return c.motoristaNome || (c.terceiroNome ? c.terceiroNome+' (externo)' : null); }
+function corDriver(c){ const m=c.motoristaId&&motoristas[c.motoristaId]; return (m&&m.color) || (c.terceiroId?'#f59e0b':'#00B4E5'); }
+
+const COLS = [
+  {n:1, ic:'📢', t:'Aberto',      s:'aguardando a torre', c:'var(--novo)'},
+  {n:3, ic:'🧑‍🔧', t:'Atribuído',  s:'colaborador designado', c:'var(--atrib)'},
+  {n:4, ic:'🚚', t:'Em rota',     s:'colaborador a caminho', c:'var(--rota)'},
+  {n:6, ic:'✅', t:'Concluídos',  s:'finalizados hoje', c:'var(--conc)'}
+];
+
+// ================= RENDER =================
+// A dash do Fleet mostra SÓ os chamados abertos pelo próprio operador logado.
+function ehMeuChamado(c){
+  if(c && c._fake) return true;
+  const meu = (currentUser && currentUser.email || '').toLowerCase();
+  return !!meu && (c.abertoPorEmail||'').toLowerCase() === meu;
+}
+function chamadosVisiveis(){
+  const reais = Object.values(chamados).filter(c=>{
+    if(!c||!c.id || !ehMeuChamado(c)) return false;
+    if(c.status==='concluido'||c.status==='cancelado') return ehHoje(c.concluidoEm||c.ts);
+    return true;
+  });
+  return demoOn ? reais.concat(demoChamados) : reais;
+}
+
+let _renderTimer=null;
+function scheduleRender(){ if(_renderTimer) return; _renderTimer=setTimeout(()=>{ _renderTimer=null; render(); }, 80); }
+function render(){
+  const board=$('#board');
+  const list=chamadosVisiveis();
+  const porEtapa={1:[],3:[],4:[],6:[]};
+  list.forEach(c=>{ let e=etapa(c); if(e===2) e=1; (porEtapa[e]=porEtapa[e]||[]).push(c); });  // CX não tem etapa "aceito" — dobra em Aberto
+  // ordena por prioridade (aguardando) depois por ts
+  for(const k in porEtapa) porEtapa[k].sort((a,b)=> (prioridade(b)-prioridade(a)) || ((a.ts||0)-(b.ts||0)) );
+
+  const ativos=list.filter(c=>c.status!=='concluido'&&c.status!=='cancelado').length;
+  $('#statAtivos').textContent=ativos;
+  $('#statRota').textContent=(porEtapa[4]||[]).length;
+
+  board.innerHTML = COLS.map(col=>{
+    const arr=porEtapa[col.n]||[];
+    const inner = arr.length ? arr.map(c=>card(c,col.n)).join('')
+      : emptyCol(col.ic, col.n===6?'Nada concluído hoje':'Nenhum chamado aqui');
+    return `<div class="col" style="--c:${col.c}">
+      <div class="ch"><span class="ci">${col.ic}</span>
+        <div><div class="ct">${col.t}</div><div class="cs">${col.s}</div></div>
+        <span class="cn">${arr.length}</span>
+      </div>
+      <div class="body">${inner}</div>
+    </div>`;
+  }).join('');
+  board.querySelectorAll('.kc[data-cid]').forEach(el=> el.onclick=()=> openDetalhe(el.dataset.cid));
+}
+function emptyCol(e,txt){ return `<div class="empty"><span class="e">${e}</span>${esc(txt)}</div>`; }
+function prioridade(c){ return c.clienteAguardando===true ? 1 : 0; }
+
+function card(c, etapaN){
+  const num = c.seq!=null ? `<span class="num">#${c.seq}</span>` : '';
+  const ctrl = controladorDe(c);
+  const drv = driverDe(c);
+  const aguard = c.clienteAguardando===true;
+  const motos = Array.isArray(c.motos) ? c.motos : null;
+  const badges=[];
+  if(aguard) badges.push(`<span class="b b-aguard">🙋 AGUARDANDO</span>`);
+  if(motos && motos.length) badges.push(`<span class="b b-moto">🏍 ${motos.length} moto${motos.length>1?'s':''}</span>`);
+  if(ehTransf(c)) badges.push(`<span class="b b-transf">🚚 ${esc(baseNome(c.baseSaida)||'?')} → ${esc(baseNome(c.baseEntrega)||'?')}</span>`);
+  if(motos && motos.some(m=>m.iotForaDaBase)) badges.push(`<span class="b b-warn" title="Uma ou mais motos com IoT fora da base de saída">⚠ moto fora da base</span>`);
+  if(c.terceiroId) badges.push(`<span class="b b-ext">🤝 externo</span>`);
+  const whoLines=[];
+  if(etapaN>=2 && ctrl) whoLines.push(whoLine('👮','Controlador',ctrl,'#00B4E5'));
+  if(etapaN>=3 && drv) whoLines.push(whoLine('🛵','Motorista',drv,corDriver(c)));
+  const rotaHint = (etapaN===4) ? `<div class="rotahint">🛰 em trajeto · clique pra ${c._fake?'simular':'ver'} no mapa</div>` : '';
+  const abertoFoot = c.abertoPor
+    ? `<div class="aberto">✍ Aberto por <b>${esc(c.abertoPor)}</b> · ${fmtDataHora(c.abertoEm||c.ts)}</div>` : '';
+  return `<div class="kc${aguard?' aguard':''}" data-cid="${esc(c.id)}" style="--c:${etapaN===4?'var(--rota)':etapaN===3?'var(--atrib)':etapaN===2?'var(--aceito)':etapaN===6?'var(--conc)':'var(--novo)'}">
+    <div class="r1">${num}<span class="cli">${esc(c.cliente||'Sem nome')}</span><span class="ico">${icoMotivo(c.motivo)}</span></div>
+    <div class="mv">${esc(c.motivo||'—')}</div>
+    ${c.endereco?`<div class="end">📍<span>${esc(c.endereco)}</span></div>`:''}
+    ${badges.length?`<div class="badges">${badges.join('')}</div>`:''}
+    ${whoLines.length?`<div class="who">${whoLines.join('')}</div>`:''}
+    ${rotaHint}
+    ${abertoFoot}
+    <div class="meta"><span>${(motos&&motos.length)?'':esc((c.placa||'').slice(0,22))}</span><span>${etapaN===6?('✓ '+fmtTime(c.concluidoEm||c.ts)):('⏱ '+fmtElapsed(c.ts))}</span></div>
+  </div>`;
+}
+function whoLine(ic,role,nome,cor){
+  return `<div class="wl"><div class="av" style="background:${cor}">${esc((nome||'?').charAt(0).toUpperCase())}</div>
+    <div class="wi"><div class="wr">${ic} ${role}</div><div class="wn">${esc(nome)}</div></div></div>`;
+}
+// ================= DEMO (chamados de socorro fictícios pra apresentação) =================
+function plotarDemo(){
+  const now = Date.now(), M = 60000;
+  const baseCoord = { lat:-23.5557, lng:-46.6099 };   // "base" só p/ o simulador de rota (etapa 4)
+  const mk = (agoMin, extra) => Object.assign({
+    id:'demo_'+Math.random().toString(36).slice(2,9), _fake:true,
+    ts: now - agoMin*M, abertoEm: now - agoMin*M, status:'novo', origemCX:true,
+    abertoPor:(currentUser&&currentUser.nome)||'CX', abertoPorEmail:(currentUser&&currentUser.email)||''
+  }, extra);
+  demoChamados = [
+    mk(3,  {_fakeEtapa:1, seq:901, cliente:'João Silva', placa:'FCA9F31', motivo:'Troca de pneu - roda traseira', endereco:'Av. Paulista, 1578 - Bela Vista', lat:-23.5615, lng:-46.6559, clienteAguardando:true, motoModelo:'VMOTO CPX'}),
+    mk(11, {_fakeEtapa:1, seq:902, cliente:'Marina Costa', placa:'BPY9E44', motivo:'Socorro de Bateria', endereco:'R. dos Pinheiros, 200 - Pinheiros', lat:-23.5635, lng:-46.6863, clienteAguardando:false, motoModelo:'VMOTO VS1'}),
+    mk(26, {_fakeEtapa:3, seq:903, cliente:'Ana Prado', placa:'BRQ9I17', motivo:'Moto não liga - VAMMO', endereco:'Av. Ibirapuera, 3000 - Moema', lat:-23.6018, lng:-46.6664, clienteAguardando:true, atribuidoEm:now-20*M, motoristaNome:'Carlos Souza', motoristaId:'demo_m1'}),
+    mk(48, {_fakeEtapa:4, seq:904, status:'em_rota', cliente:'Pedro Alves', placa:'FCB6E24', motivo:'Acidente', endereco:'R. Tuim, 500 - Moema', lat:-23.6035, lng:-46.6600, clienteAguardando:true, atribuidoEm:now-44*M, emRotaEm:now-40*M, motoristaNome:'Diego Lima', motoristaId:'demo_m2', _simFrom:baseCoord, _simTo:{lat:-23.6035,lng:-46.6600}}),
+    mk(120,{_fakeEtapa:6, seq:905, status:'concluido', cliente:'Bruno Reis', placa:'AFXT6H75', motivo:'Freio', endereco:'R. Augusta, 1200 - Consolação', lat:-23.5540, lng:-46.6620, atribuidoEm:now-116*M, emRotaEm:now-112*M, chegouEm:now-70*M, concluidoEm:now-40*M, motoristaNome:'Eduardo Reis', nota:{final:9.3}})
+  ];
+  demoOn = true; updateDemoBtn(); render();
+  toast('🧪 5 chamados de demonstração plotados (só na sua tela)');
+}
+function limparDemo(){ demoChamados=[]; demoOn=false; updateDemoBtn(); render(); toast('🧹 Demonstração removida'); }
+function toggleDemo(){ demoOn ? limparDemo() : plotarDemo(); }
+function updateDemoBtn(){ const b=$('#demoBtn'); if(b){ b.textContent = demoOn ? '🧹 Limpar demo' : '🧪 Demo'; b.classList.toggle('on', demoOn); } }
+
+// ================= FIREBASE =================
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+async function initFirebase(){
+  await loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
+  await loadScript('https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js');
+  firebase.initializeApp(FIREBASE_CONFIG);
+  fb = firebase.database().ref('vammo');
+  const dot=$('#syncdot'), txt=$('#synctxt');
+  firebase.database().ref('.info/connected').on('value', s=>{
+    const on=!!s.val(); dot.classList.toggle('on',on); txt.textContent=on?'ao vivo':'reconectando…';
+  });
+  fb.child('chamados').on('value', s=>{ chamados=s.val()||{}; scheduleRender(); });
+  fb.child('motoristas').on('value', s=>{ motoristas=s.val()||{}; scheduleRender(); });
+  fb.child('bases').on('value', s=>{ bases=s.val()||{}; scheduleRender(); });
+  // corridas: pega tempos reais (em rota/chegou/concluiu) + nota pra o histórico do chamado
+  fb.child('corridas').on('value', s=>{ const all=s.val()||{}; const map={}; for(const k in all){ const r=all[k]; if(r&&r.chamadoId) map[r.chamadoId]=r; } corridas=map; });
+}
+
+// ================= ABRIR CHAMADO (WIZARD DE MOVIMENTAÇÃO) =================
+// ================= ABRIR CHAMADO (CX — mesmo fluxo da torre) =================
+function clean(o){ const r={}; for(const k in o){ if(o[k]!==undefined&&o[k]!==null) r[k]=o[k]; } return r; }
+// Status da moto no sistema (bike.status) → rótulo PT + classe de cor (usado no lookup da placa)
+const MOTO_STATUS = {
+  IN_STREET:['Na rua','ok'], RENTED:['Alugada','ok'], STORED:['Estocada','info'],
+  AWAITING_ARRIVAL:['Aguard. chegada','warn'], AWAITING_ACTIVATION:['Aguard. ativação','warn'],
+  AWAITING_INSPECTION:['Aguard. inspeção','warn'], AWAITING_CX:['Aguard. CX','warn'],
+  AWAITING_SERVICE:['Aguard. serviço','warn'], AWAITING_PARTS:['Aguard. peças','warn'],
+  AWAITING_VMGMT:['Aguard. gestão','warn'], AWAITING_INSURANCE:['Aguard. seguro','warn'],
+  AWAITING_PLATE:['Aguard. placa','warn'], IN_MAINTENANCE:['Em manutenção','warn'],
+  IN_FLEET_MAINTENANCE:['Manut. frota','warn'], DEFLEETED:['Desfrotada','muted'],
+  UNASSIGNED:['Não atribuída','muted'], LOST:['Perdida','err'], MISSING:['Desaparecida','err']
+};
+function statusMoto(code){ const m=MOTO_STATUS[code]; return m?{l:m[0],c:m[1]}:{l:(code||'—'),c:'muted'}; }
+
+let _cxLookup = null, _cxLookupTimer = null;
+
+function openModal(){
+  _cxLookup = null;
+  $('#cxPlaca').value=''; $('#cxEnd').value=''; $('#cxCliente').value=''; $('#cxTel').value='';
+  $('#cxMotoInfo').innerHTML=''; $('#cxResult').style.display='none';
+  $('#cxRest').style.display='none'; $('#cxPlacaHint').style.display='block';
+  $('#cxMotivo').innerHTML = MOTIVOS.map(m=>`<option value="${esc(m)}">${icoMotivo(m)} ${esc(m)}</option>`).join('') + '<option value="__custom">✏ Outro (digitar)</option>';
+  $('#cxMotivo').value = MOTIVOS[0];
+  $('#cxMotivoCustom').style.display='none'; $('#cxMotivoCustom').value='';
+  $('#cxAguard').value='sim';
+  const g=$('#cxGo'); g.disabled=false; g.textContent='📢 Abrir chamado';
+  _wireCXPlaca();
+  $('#modal').classList.add('on');
+  setTimeout(()=>{ const p=$('#cxPlaca'); if(p) p.focus(); }, 80);
+}
+function closeModal(){ $('#modal').classList.remove('on'); }
+$('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
+
+function _cxRevelarRest(){ $('#cxRest').style.display='block'; $('#cxPlacaHint').style.display='none'; }
+
+// Busca a moto no Backoffice (mesmo endpoint da torre) e pré-preenche cliente/telefone/modelo + status.
+async function buscarMotoCX(placa){
+  const info = $('#cxMotoInfo'); if(!info) return;
+  info.innerHTML = '🔎 Buscando a moto no Backoffice…';
+  try{
+    const d = await (await fetch('/api/moto_lookup?placa='+encodeURIComponent(placa))).json();
+    if(!d || !d.found){ info.innerHTML = '<span style="color:var(--txt3)">Placa não encontrada no Backoffice — preencha manualmente.</span>'; _cxRevelarRest(); return; }
+    _cxLookup = Object.assign({}, d, { _searched: placa });
+    const cli=$('#cxCliente'); if(cli && !cli.value.trim() && d.cliente) cli.value = d.cliente;
+    const tel=$('#cxTel');     if(tel && !tel.value.trim() && d.telefone) tel.value = d.telefone;
+    const st = d.status ? statusMoto(d.status) : null;
+    info.innerHTML = `🏍 <b style="color:var(--acc-br)">${esc(d.modelo||'moto')}</b> · 👤 ${esc(d.cliente||'?')}${st?` <span class="mstag ${st.c}">${esc(st.l)}</span>`:''}`;
+    _cxRevelarRest();
+  }catch(e){ info.innerHTML='<span style="color:var(--txt3)">Erro ao buscar no Backoffice.</span>'; _cxRevelarRest(); }
+}
+function _wireCXPlaca(){
+  const inp=$('#cxPlaca'); if(!inp) return;
+  inp.oninput = () => {
+    const v = inp.value.toUpperCase().replace(/[^A-Z0-9]/g,''); if(inp.value!==v) inp.value=v;
+    clearTimeout(_cxLookupTimer);
+    if(v.length>=6){ _cxLookupTimer = setTimeout(()=>buscarMotoCX(v), 450); }
+  };
+  const sp=$('#cxSemPlaca'); if(sp) sp.onclick=(ev)=>{ ev.preventDefault(); _cxRevelarRest(); setTimeout(()=>{ const e=$('#cxEnd'); if(e) e.focus(); },50); };
+  const mv=$('#cxMotivo'); if(mv) mv.onchange=(e)=>{ $('#cxMotivoCustom').style.display = e.target.value==='__custom'?'block':'none'; if(e.target.value==='__custom') setTimeout(()=>$('#cxMotivoCustom').focus(),50); };
+}
+
+async function abrirCX(){
+  const placa = ($('#cxPlaca').value.trim().toUpperCase()) || ('XYZ'+Math.floor(Math.random()*9000+1000));
+  const endereco = $('#cxEnd').value.trim();
+  const cliente = $('#cxCliente').value.trim();
+  let motivo = $('#cxMotivo').value; if(motivo==='__custom') motivo = $('#cxMotivoCustom').value.trim() || 'Atendimento';
+  const clienteAguardando = $('#cxAguard').value==='sim';
+  if(!endereco){ toast('⚠ Informe o endereço', true); return; }
+  if(!cliente){ toast('⚠ Informe o cliente', true); return; }
+  const g=$('#cxGo'); g.disabled=true; g.textContent='⏳ Geocodificando…';
+  try{
+    let lat=null,lng=null,endOfic=endereco;
+    try{ const r=await fetch('/geocode?addr='+encodeURIComponent(endereco)); if(r.ok){ const d=await r.json(); if(d&&!d.error&&d.lat!=null){ lat=d.lat; lng=d.lng; endOfic=d.formatted||endereco; } } }catch(_){}
+    if(lat==null||lng==null) throw new Error('Endereço não encontrado — revise a grafia ou inclua bairro/cidade.');
+    const ch = {
+      id:genId(), ts:Date.now(), cliente, motivo, placa,
+      endereco:endOfic, lat, lng, status:'novo',
+      travada:/travada|trava/i.test(motivo), clienteAguardando,
+      telefone: ($('#cxTel').value.trim() || null),
+      origemCX:true, abertoPor:currentUser.nome, abertoPorEmail:currentUser.email, abertoEm:Date.now()
+    };
+    if(_cxLookup && _cxLookup._searched===placa){
+      if(_cxLookup.modelo) ch.motoModelo = _cxLookup.modelo;
+      if(_cxLookup.user_id) ch.clienteUserId = _cxLookup.user_id;
+      if(_cxLookup.backofficeUrl) ch.backofficeUrl = _cxLookup.backofficeUrl;
+    }
+    await new Promise(res=>{ try{ fb.child('counters/chamadoSeq').transaction(n=>(n||0)+1,(e,ok,s)=>{ if(ok&&s&&s.val()!=null) ch.seq=s.val(); res(); }); }catch(_){ res(); } });
+    await fb.child('chamados/'+ch.id).set(clean(ch));
+    toast(`📢 Chamado #${ch.seq||''} aberto na Torre!`);
+    closeModal();
+  }catch(err){ toast('❌ '+err.message, true); g.disabled=false; g.textContent='📢 Abrir chamado'; }
+}
+
+// ================= DETALHE / HISTÓRICO DO CHAMADO =================
+function findChamado(id){ return demoChamados.find(x=>x.id===id) || chamados[id] || Object.values(chamados).find(x=>x.id===id) || null; }
+function fmtDur(ms){ if(ms==null||ms<0) return '—'; const s=Math.round(ms/1000); if(s<60) return s+'s'; const m=Math.floor(s/60); if(m<60) return m+'min'; const h=Math.floor(m/60); const r=m%60; return h+'h'+(r?(' '+r+'min'):''); }
+const STAGE_DEFS = [
+  {ic:'📢', label:'Chamado aberto',        get:(c,r)=>c.abertoEm||c.ts},
+  {ic:'✋', label:'Aceito pela torre',      get:(c,r)=>c.aceitoEm},
+  {ic:'🧑‍🔧', label:'Atribuído ao motorista', get:(c,r)=>c.atribuidoEm||(r&&r.assignedTs)},
+  {ic:'🚚', label:'Em rota (saiu da base)', get:(c,r)=>c.emRotaEm||(r&&r.enRouteTs)},
+  {ic:'📍', label:'Chegou no destino',      get:(c,r)=>c.chegouEm||(r&&r.arrivedTs)},
+  {ic:'✅', label:'Concluído',              get:(c,r)=>c.concluidoEm||(r&&r.completedTs)}
+];
+function detStatusChip(c){
+  const map={1:['Aberto','var(--novo)'],2:['Aceito','var(--aceito)'],3:['Atribuído','var(--atrib)'],4:['Em rota','var(--rota)'],6:['Concluído','var(--conc)']};
+  const [t,cor]=map[etapa(c)]||['—','var(--txt3)'];
+  return `<span class="det-chip" style="background:${cor};color:#04121e">${t}</span>`;
+}
+function openDetalhe(id){
+  const c=findChamado(id); if(!c) return;
+  const r=corridas[c.id]||null, e=etapa(c);
+  // Timeline: só as etapas que já aconteceram (têm timestamp)
+  let prev=null;
+  const rows = STAGE_DEFS.map(s=>{
+    const ts=s.get(c,r); if(!ts) return null;
+    const dur = prev ? `<div class="tl-dur">+${fmtDur(ts-prev)}</div>` : '';
+    prev=ts;
+    return `<div class="tl-row"><div class="tl-ic">${s.ic}</div><div class="tl-bd"><div class="tl-l">${s.label}</div><div class="tl-t">${fmtDataHora(ts)}</div></div>${dur}</div>`;
+  }).filter(Boolean).join('');
+  const abTs=c.abertoEm||c.ts, endTs=c.concluidoEm||(r&&r.completedTs)||Date.now();
+  const totVal=fmtDur(endTs-abTs);
+  const nota=c.nota||(r&&r.nota)||null, notaV=nota?(nota.final!=null?nota.final:nota):null;
+  const motos=Array.isArray(c.motos)?c.motos:[], ctrl=controladorDe(c), drv=driverDe(c);
+  const rotaBtn = (e===4)
+    ? (c._fake
+       ? `<button class="det-btn" onclick="openSimulador('${esc(c.id)}')">▶ Simular rota em tempo real</button>`
+       : `<a class="det-btn" href="/track?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">🛰 Ver trajeto ao vivo</a>`)
+    : '';
+  $('#detBody').innerHTML = `
+    <div class="deth">
+      <div><h2>${c.seq!=null?`<span style="font-family:var(--mono);color:var(--acc)">#${c.seq}</span> `:''}${esc(c.cliente||'Chamado')}</h2>${detStatusChip(c)}</div>
+      <button class="mx" onclick="closeDetalhe()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--txt2);margin-top:8px">${icoMotivo(c.motivo)} ${esc(c.motivo||'—')}</div>
+    ${ehTransf(c)?`<div style="font-size:13px;font-weight:700;margin-top:6px;color:#d8b4fe">🚚 ${esc(baseNome(c.baseSaida))} → ${esc(baseNome(c.baseEntrega))}</div>`:''}
+    ${rotaBtn}
+    <div class="det-total"><span class="tl">${(c.status==='concluido')?'⏱ Tempo total de execução':'⏱ Tempo decorrido'}</span><span class="tv">${totVal}</span></div>
+    ${notaV!=null?`<div style="margin-top:10px"><span class="det-nota">⭐ Nota ${notaV}</span></div>`:''}
+    <div class="det-sec"><div class="st">📋 Histórico · tempo de cada etapa</div>${rows||'<div style="color:var(--txt3);font-size:12px">Sem etapas registradas ainda.</div>'}</div>
+    ${motos.length?`<div class="det-sec"><div class="st">🏍 ${motos.length} moto${motos.length>1?'s':''}</div><div class="det-motos">${motos.map(m=>`<div class="det-moto"><span class="pl">${esc(m.placa)}</span><span class="mo">${esc(m.modelo||'')}</span>${m.iotForaDaBase?'<span style="margin-left:auto;font-size:9px;font-weight:800;color:#1a1200;background:#f59e0b;padding:1px 6px;border-radius:5px">⚠ fora da base</span>':''}</div>`).join('')}</div></div>`:''}
+    <div class="det-sec"><div class="st">👥 Responsáveis</div><div class="det-motos">
+      ${ctrl?`<div class="det-moto"><span>👮</span><span class="pl">${esc(ctrl)}</span><span class="mo">controlador</span></div>`:''}
+      ${drv?`<div class="det-moto"><span>🛵</span><span class="pl">${esc(drv)}</span><span class="mo">motorista</span></div>`:''}
+      ${c.abertoPor?`<div class="det-moto"><span>✍</span><span class="pl">${esc(c.abertoPor)}</span><span class="mo">abriu · ${fmtDataHora(c.abertoEm||c.ts)}</span></div>`:''}
+    </div></div>`;
+  $('#det').classList.add('on');
+}
+function closeDetalhe(){ $('#det').classList.remove('on'); }
+$('#det').addEventListener('click', e=>{ if(e.target.id==='det') closeDetalhe(); });
+
+// ================= SIMULADOR DE ROTA (demo — motorista em rota no mapa) =================
+let _leaflet=false;
+async function ensureLeaflet(){
+  if(_leaflet && window.L) return;
+  if(!document.querySelector('link[data-lf]')){ const l=document.createElement('link'); l.rel='stylesheet'; l.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; l.setAttribute('data-lf','1'); document.head.appendChild(l); }
+  if(!window.L) await loadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
+  _leaflet=true;
+}
+let sim={ map:null, timer:null, coords:[], idx:0, marker:null, playing:false, durMs:34000, routeMin:0 };
+async function openSimulador(id){
+  const c=findChamado(id); if(!c) return;
+  const from=c._simFrom||(c.baseSaida&&bases[c.baseSaida]&&bases[c.baseSaida].lat!=null?{lat:bases[c.baseSaida].lat,lng:bases[c.baseSaida].lng}:null);
+  const to  =c._simTo  ||(c.baseEntrega&&bases[c.baseEntrega]&&bases[c.baseEntrega].lat!=null?{lat:bases[c.baseEntrega].lat,lng:bases[c.baseEntrega].lng}:null);
+  if(!from||!to){ toast('Sem coordenadas das bases pra simular', true); return; }
+  closeDetalhe();
+  $('#sim').classList.add('on');
+  $('#simTitle').textContent = `${baseNome(c.baseSaida)} → ${baseNome(c.baseEntrega)}`;
+  $('#simSub').textContent='carregando rota…';
+  $('#simDriverN').textContent = driverDe(c)||'Motorista';
+  await ensureLeaflet();
+  await simInit(from, to);
+}
+async function simInit(from, to){
+  simStop();
+  if(sim.map){ sim.map.remove(); sim.map=null; }
+  sim.map = L.map($('#simMap'), {zoomControl:true, attributionControl:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19}).addTo(sim.map);
+  const pin=(emoji)=>L.divIcon({className:'sim-pin', html:`<div>${emoji}</div>`, iconSize:[26,26], iconAnchor:[13,24]});
+  L.marker([from.lat,from.lng], {icon:pin('🏁')}).addTo(sim.map);
+  L.marker([to.lat,to.lng], {icon:pin('🎯')}).addTo(sim.map);
+  let coords=[[from.lat,from.lng],[to.lat,to.lng]], mins=0, real=false;
+  try{
+    const u=`https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+    const d=await (await fetch(u)).json();
+    const rt=d.routes&&d.routes[0];
+    if(rt && rt.geometry){ coords=rt.geometry.coordinates.map(p=>[p[1],p[0]]); mins=Math.round(rt.duration/60); real=true; }
+  }catch(_){}
+  sim.coords=coords; sim.routeMin=mins; sim.idx=0;
+  L.polyline(coords, {color:'#00B4E5', weight:5, opacity:.85, dashArray:'10,8'}).addTo(sim.map);
+  sim.marker = L.marker(coords[0], {icon:L.divIcon({className:'sim-marker', html:'<div>🛵</div>', iconSize:[34,34], iconAnchor:[17,17]}), zIndexOffset:1000}).addTo(sim.map);
+  sim.map.fitBounds(L.latLngBounds(coords).pad(0.15));
+  setTimeout(()=>{ if(sim.map) sim.map.invalidateSize(); }, 80);
+  $('#simSub').textContent = `${real?'trajeto real (OSRM)':'linha reta'} · ETA ~${mins||'—'} min`;
+  simPlay();
+}
+function simRender(){
+  const n=sim.coords.length; if(!n) return;
+  const pos=sim.coords[Math.min(Math.floor(sim.idx),n-1)];
+  if(sim.marker&&pos) sim.marker.setLatLng(pos);
+  const prog=n>1?Math.min(1, sim.idx/(n-1)):1;
+  $('#simBar').style.width=(prog*100).toFixed(1)+'%';
+  $('#simEta').textContent = prog>=1 ? '✓ chegou no destino' : `ETA ~${Math.max(0,Math.round(sim.routeMin*(1-prog)))} min · ${Math.round(prog*100)}%`;
+}
+function simStep(){
+  const n=sim.coords.length; if(n<2) return;
+  sim.idx += n/(sim.durMs/120);
+  if(sim.idx>=n-1){ sim.idx=n-1; simRender(); simStop(); sim.playing=false; $('#simPlay').textContent='↺ Refazer'; return; }
+  simRender();
+}
+function simStop(){ if(sim.timer){ clearInterval(sim.timer); sim.timer=null; } }
+function simPlay(){ simStop(); if(sim.idx>=sim.coords.length-1) sim.idx=0; sim.playing=true; $('#simPlay').textContent='⏸ Pausar'; sim.timer=setInterval(simStep,120); simRender(); }
+function simTogglePlay(){ if(sim.playing){ simStop(); sim.playing=false; $('#simPlay').textContent='▶ Continuar'; } else { simPlay(); } }
+function simRestart(){ sim.idx=0; simPlay(); }
+function closeSimulador(){ simStop(); $('#sim').classList.remove('on'); if(sim.map){ sim.map.remove(); sim.map=null; } }
+$('#sim').addEventListener('click', e=>{ if(e.target.id==='sim') closeSimulador(); });
+
+// ================= AUTH (Google @vammo.com) =================
+function parseJwt(t){
+  try{ return JSON.parse(decodeURIComponent(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''))); }
+  catch(_){ return null; }
+}
+function entrar(u){
+  currentUser=u; localStorage.setItem('fleet_user', JSON.stringify(u));
+  $('#gate').style.display='none';
+  const uc=$('#userchip'); uc.style.display='flex';
+  uc.innerHTML=`${u.picture?`<img src="${esc(u.picture)}" referrerpolicy="no-referrer">`:''}<span class="un">${esc((u.nome||u.email).split(' ')[0])}</span><button class="lo" title="Sair" onclick="sair()">⏻</button>`;
+  initFirebase().catch(e=>{ console.error(e); toast('Erro ao conectar ao Firebase', true); });
+}
+function sair(){ localStorage.removeItem('fleet_user'); location.reload(); }
+function onCredential(resp){
+  const p=parseJwt(resp.credential);
+  if(!p||!p.email){ $('#gerr').textContent='Não consegui ler a conta. Tente de novo.'; return; }
+  if(!/@vammo\.com$/i.test(p.email)){ $('#gerr').textContent='Use uma conta @vammo.com para acessar.'; return; }
+  entrar({ email:p.email, nome:p.name||p.email, picture:p.picture||'' });
+}
+function initAuth(){
+  const saved=(()=>{ try{ return JSON.parse(localStorage.getItem('fleet_user')||'null'); }catch(_){ return null; } })();
+  if(saved && saved.email && /@vammo\.com$/i.test(saved.email)){ entrar(saved); return; }
+  loadScript('https://accounts.google.com/gsi/client').then(()=>{
+    try{
+      google.accounts.id.initialize({ client_id:GOOGLE_CLIENT_ID, callback:onCredential });
+      google.accounts.id.renderButton($('#gbtn'), { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:280 });
+      google.accounts.id.prompt();
+    }catch(e){ $('#gerr').textContent='Falha ao carregar o login do Google.'; }
+  }).catch(()=>{ $('#gerr').textContent='Sem conexão com o login do Google.'; });
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSimulador(); closeDetalhe(); closeModal(); } });
+
+// ================= INTRO / SPLASH =================
+function runIntro(){
+  const w=document.getElementById('introWord');
+  if(w){
+    const txt='VAMMO ASSIST', hl=txt.indexOf('ASSIST');
+    let html='', d=0.72;
+    for(let i=0;i<txt.length;i++){
+      const ch=txt[i];
+      if(ch===' '){ html+='<span class="sp"></span>'; continue; }
+      html+=`<span class="${i>=hl?'hl':''}" style="animation-delay:${d.toFixed(2)}s">${ch}</span>`;
+      d+=0.05;
+    }
+    w.innerHTML=html;
+  }
+  const intro=document.getElementById('intro');
+  setTimeout(()=>{ if(intro) intro.classList.add('done'); }, 2650);
+  setTimeout(()=>{ if(intro){ intro.style.display='none'; } }, 3320);
+}
+runIntro();
+initAuth();
+console.log('Vammo CX Assist', CX_VERSION);
+</script>
+</body>
+</html>
