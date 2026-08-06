@@ -997,7 +997,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v73 · 2026-08-04';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v74 · 2026-08-06';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3218,7 +3218,7 @@ function renderDetail(){
   const motIds = Object.keys(motoristas);
   const onlineMots = motIds.filter(id => {
     const m = motoristas[id];
-    return m.status !== 'off' && (Date.now() - (m.lastSeen||0)) <= MOTORISTA_TTL_MS;
+    return m.status !== 'off' && ((m.online === true) || (Date.now() - (m.lastSeen||0)) <= MOTORISTA_TTL_MS);
   });
   // Responsável atrelado — se estiver OFFLINE (fora do mapa), usa o nome/placa gravados no chamado
   // pra NÃO sumir o responsável (o admin precisa saber de quem é, mesmo offline). Só a torre troca.
@@ -4923,7 +4923,7 @@ function renderMotDetail(){
   const now = Date.now();
   const ageS = Math.round((now - (m.lastSeen||0))/1000);
   const emAtend = motEmAtendimento(m, ageS);
-  const isOff = m.status === 'off' || (ageS > MOTORISTA_TTL_MS/1000 && !emAtend);
+  const isOff = m.status === 'off' || (m.online !== true && ageS > MOTORISTA_TTL_MS/1000 && !emAtend);
   const isStale = !isOff && !emAtend && ageS > 60;
   const stCor = emAtend ? '#0ea5e9' : isOff ? '#6b7280' : isStale ? '#fbbf24' : m.status === 'busy' ? '#d97706' : '#16a34a';
   const stLbl = emAtend ? motTrabShort(m) : isOff ? 'offline' : isStale ? 'sem GPS' : m.status === 'busy' ? 'em rota' : 'online';
@@ -7343,14 +7343,16 @@ function checkMotoristasTTL(){
     // (janela longa de 45min p/ fantasma real) nem alerta "caiu" — mantém o pino no último ponto.
     const trabalhando = motTrabalhando(m);
     const limite = trabalhando ? MOTORISTA_GHOST_MS : MOTORISTA_REMOVE_MS;
-    if(age > limite){
+    if(m.online !== true && age > limite){
       toRemove.push({ id, nome: m.nome });
-    } else if(age > MOTORISTA_TTL_MS && m.status !== 'off'){
+    } else if(m.online !== true && age > MOTORISTA_TTL_MS && m.status !== 'off'){
       changed = true;
     }
     // --- Aviso de colab que CAIU (perdeu sinal). Logout/checkout (status 'off') NÃO alerta. ---
     // Quem está trabalhando também NÃO alerta — é esperado ficar sem ping (parado/estrada).
-    const conectado = age <= MOTORISTA_TTL_MS; // heartbeat vivo (independe do status)
+    // online:true (presença viva pelo onDisconnect) = CONECTADO mesmo com ping velho — o GPS nativo
+    // só dispara ao MOVER, então parado o ping envelhece porém o socket segue vivo → não é queda.
+    const conectado = (m.online === true) || (age <= MOTORISTA_TTL_MS);
     const caiu = _motConectado[id] === true && !conectado && m.status !== 'off' && !trabalhando;
     if(!_ttlPrimeiraVez && caiu){
       const mins = Math.max(1, Math.round(age/60000));
