@@ -209,6 +209,9 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #topbar .stbtn.off{background:var(--off);color:var(--txt)}
 #topbar .out{padding:5px 8px;border-radius:6px;background:transparent;border:1px solid var(--bdr);color:var(--txt2);font-size:11px;font-weight:700;flex:0 0 auto}
 #topbar .slotsbtn{padding:4px 8px;border-radius:10px;font-size:11px;font-weight:800;background:rgba(0,180,229,0.12);color:var(--acc);border:1px solid var(--acc);cursor:pointer;display:none;align-items:center;gap:3px;font-family:'IBM Plex Mono',monospace;flex:0 0 auto}
+/* Ícone de moto na cor Vammo (substitui os emoji <span class="mic"></span>/<span class="mic"></span> — emoji não pinta) */
+.mic{display:inline-block;width:1.05em;height:1.05em;vertical-align:-0.16em;background:var(--acc);flex:0 0 auto;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19.44 9.03L15.41 5H11v2h3.59l2 2H5c-2.8 0-5 2.2-5 5s2.2 5 5 5c2.46 0 4.45-1.69 4.9-4h1.65l2.77-2.77c-.21.54-.32 1.14-.32 1.77 0 2.8 2.2 5 5 5s5-2.2 5-5c0-2.79-2.61-5.16-5.56-4.97zM7.82 15C7.4 16.15 6.28 17 5 17c-1.63 0-3-1.37-3-3s1.37-3 3-3c1.28 0 2.4.85 2.82 2H5v2h2.82zM19 17c-1.63 0-3-1.37-3-3s1.37-3 3-3 3 1.37 3 3-1.37 3-3 3z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19.44 9.03L15.41 5H11v2h3.59l2 2H5c-2.8 0-5 2.2-5 5s2.2 5 5 5c2.46 0 4.45-1.69 4.9-4h1.65l2.77-2.77c-.21.54-.32 1.14-.32 1.77 0 2.8 2.2 5 5 5s5-2.2 5-5c0-2.79-2.61-5.16-5.56-4.97zM7.82 15C7.4 16.15 6.28 17 5 17c-1.63 0-3-1.37-3-3s1.37-3 3-3c1.28 0 2.4.85 2.82 2H5v2h2.82zM19 17c-1.63 0-3-1.37-3-3s1.37-3 3-3 3 1.37 3 3-1.37 3-3 3z'/%3E%3C/svg%3E") center/contain no-repeat}
+#empty>.ic .mic,#chamadocard .arrivedbanner .ic .mic{width:1em;height:1em}
 #topbar .slotsbtn.show{display:flex}
 #topbar .slotsbtn.full{background:rgba(220,38,38,0.15);color:#fca5a5;border-color:#dc2626;animation:pulseFull 1.5s infinite}
 #topbar .slotsbtn.descarregando{background:rgba(220,38,38,0.2);color:#fff;border-color:#dc2626}
@@ -457,7 +460,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
       <div class="nm" id="tbnome">—</div>
       <div class="pl"><span id="syncdot"></span><span id="tbplaca">—</span><span id="wakedot"></span></div>
     </div>
-    <button class="slotsbtn" id="slotsbtn" title="Ver / descarregar motos em uma base">🏍 <span id="slotsbtnTxt">0/0</span></button>
+    <button class="slotsbtn" id="slotsbtn" title="Ver / descarregar motos em uma base"><span class="mic"></span> <span id="slotsbtnTxt">0/0</span></button>
     <button class="stbtn" id="ststatus">ONLINE</button>
     <button class="out" id="btlogout" title="Sair">Sair</button>
   </div>
@@ -479,7 +482,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
     </div>
     <div id="appver">v · </div>
     <div id="empty">
-      <div class="ic">🛵</div>
+      <div class="ic"><span class="mic"></span></div>
       <div>Aguardando chamado…</div>
       <div style="font-size:10px;margin-top:4px;color:var(--txt3)">Você está visível para a torre</div>
     </div>
@@ -554,7 +557,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 <div id="cargaModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:none;align-items:flex-end;justify-content:center;z-index:200">
   <div style="background:var(--surf);border-radius:14px 14px 0 0;width:100%;max-width:440px;max-height:92dvh;display:flex;flex-direction:column">
     <div style="padding:16px 18px 8px;flex:0 0 auto">
-      <div style="font-size:20px;font-weight:800;text-align:center">🏍 Atualize a carga</div>
+      <div style="font-size:20px;font-weight:800;text-align:center"><span class="mic"></span> Atualize a carga</div>
       <div style="text-align:center;color:var(--txt2);font-size:12px;margin-top:4px">Marque o que houve com as motos antes de concluir:</div>
     </div>
     <div style="flex:1 1 auto;overflow-y:auto;padding:0 18px 4px;min-height:0">
@@ -818,7 +821,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v55 · 2026-08-04';
+const APP_VERSION = 'v56 · 2026-08-06';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2737,8 +2740,8 @@ function renderChamadoCard(){
     </div>
     ${aguardaBanner}
     ${c.endereco ? `<div class="row"><div class="lbl">📍</div><div class="val">${esc(c.endereco)}</div></div>` : ''}
-    ${_motoLonge ? `<div class="row"><div class="lbl">🛵</div><div class="val" style="color:#fbbf24"><b>Moto a ${_distLblMoto} do endereço</b> (IoT) — dá pra iniciar no endereço OU onde a moto está.</div></div>` : ''}
-    ${c.placa ? `<div class="row"><div class="lbl">🏍</div><div class="val">${esc(c.placa)}</div></div>` : ''}
+    ${_motoLonge ? `<div class="row"><div class="lbl"><span class="mic"></span></div><div class="val" style="color:#fbbf24"><b>Moto a ${_distLblMoto} do endereço</b> (IoT) — dá pra iniciar no endereço OU onde a moto está.</div></div>` : ''}
+    ${c.placa ? `<div class="row"><div class="lbl"><span class="mic"></span></div><div class="val">${esc(c.placa)}</div></div>` : ''}
     ${c.comentario ? `<div class="row"><div class="lbl">💬</div><div class="val">${esc(c.comentario)}</div></div>` : ''}
     ${(c.lat && c.lng) ? `<div class="local-shot">
       <div class="ls-cap">📷 Local do atendimento</div>
@@ -2750,7 +2753,7 @@ function renderChamadoCard(){
     </div>` : ''}
     ${routeBlock}
     <a class="nav-primary" href="${gmaps}" target="_blank" rel="noopener">🧭 Navegar até o cliente (GPS)</a>
-    ${_motoLonge ? `<a class="nav-primary" href="${_gmapsMoto}" target="_blank" rel="noopener" style="background:#f59e0b;margin-top:8px">🛵 Navegar até a MOTO (${_distLblMoto})</a>` : ''}
+    ${_motoLonge ? `<a class="nav-primary" href="${_gmapsMoto}" target="_blank" rel="noopener" style="background:#f59e0b;margin-top:8px"><span class="mic"></span> Navegar até a MOTO (${_distLblMoto})</a>` : ''}
     <div class="extras" style="margin-top:8px">
       ${waze ? `<a href="${waze}" target="_blank" rel="noopener">🚗 Waze</a>` : ''}
       ${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}
@@ -3341,7 +3344,7 @@ function atualizaCargaUI(){
     : '<div style="font-size:11px;color:var(--txt3);text-align:center;padding:4px">Nenhuma moto adicionada</div>';
   list.innerHTML = _cargaPegouList.map((m, i) => `
     <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(0,180,229,0.1);border:1px solid var(--acc);border-radius:6px;font-size:12px">
-      <span style="font-weight:800;color:var(--acc)">🏍 #${i+1}</span>
+      <span style="font-weight:800;color:var(--acc)"><span class="mic"></span> #${i+1}</span>
       <span style="flex:1;font-family:'IBM Plex Mono',monospace;font-weight:700">${m.placa ? esc(m.placa) : '<span style="color:var(--txt3)">sem placa</span>'}</span>
       <button data-rm="${i}" style="padding:2px 8px;background:var(--surf);border:1px solid var(--bdr);color:var(--novo);border-radius:4px;font-size:11px;font-weight:700">✕</button>
     </div>
@@ -3362,7 +3365,7 @@ function atualizaCargaUI(){
   const cor = slotsAposOp >= total ? '#dc2626' : slotsAposOp >= total * 0.7 ? '#fbbf24' : '#16a34a';
   document.getElementById('cargaSlotsInfo').innerHTML = `
     <div style="color:var(--txt2);font-size:11px">Slots agora: <strong style="color:var(--txt)">${slotsAtuais}/${total}</strong></div>
-    <div style="font-size:13px;font-weight:700;color:${cor};margin-top:4px">Após operação: ${slotsAposOp}/${total} 🏍 ${slotsAposOp >= total ? '· FULL!' : ''}</div>
+    <div style="font-size:13px;font-weight:700;color:${cor};margin-top:4px">Após operação: ${slotsAposOp}/${total} <span class="mic"></span> ${slotsAposOp >= total ? '· FULL!' : ''}</div>
   `;
 
   // Limites
@@ -3412,7 +3415,7 @@ function abrirModalBase(autoFull){
   // autoFull = true → texto de full; false → voluntário
   const oc = slotsCount();
   const tot = slotsTotalCount();
-  document.getElementById('baseModalIcon').textContent = autoFull ? '🏍🏍🏍' : '🏠';
+  document.getElementById('baseModalIcon').innerHTML = autoFull ? '<span class="mic"></span><span class="mic"></span><span class="mic"></span>' : '🏠';
   document.getElementById('baseModalTit').textContent = autoFull
     ? 'Slots cheios!'
     : `Descarregar em base · ${oc}/${tot} motos`;
@@ -3477,12 +3480,12 @@ function renderDescList(){
     const idadeTxt = idade < 60 ? idade+'min' : Math.floor(idade/60)+'h'+(idade%60)+'min';
     const origem = s.source === 'saida' ? '🚪 Saída da base'
       : s.source === 'cliente' ? `👤 Cliente${s.clienteName ? ' · '+esc(s.clienteName) : ''}`
-      : '🏍 Moto';
+      : '<span class="mic"></span> Moto';
     const marcada = _descSelecionadas[s.id];
     return `<label data-slotid="${s.id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${marcada ? 'rgba(22,163,74,0.12)' : 'var(--surf2)'};border:1px solid ${marcada ? '#16a34a' : 'var(--bdr)'};border-radius:8px;cursor:pointer">
       <input type="checkbox" ${marcada?'checked':''} style="width:18px;height:18px;accent-color:#16a34a;flex-shrink:0">
       <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:13px">🏍 Moto ${i+1}${s.placa ? ' · '+esc(s.placa) : ''}</div>
+        <div style="font-weight:700;font-size:13px"><span class="mic"></span> Moto ${i+1}${s.placa ? ' · '+esc(s.placa) : ''}</div>
         <div style="color:var(--txt2);font-size:10px;margin-top:1px">${origem} · há ${idadeTxt}</div>
       </div>
       <div style="font-size:11px;color:${marcada?'#16a34a':'var(--txt3)'};font-weight:700">${marcada ? '✓ deixar' : '↩ manter'}</div>
@@ -4339,7 +4342,7 @@ function renderStepVeiculo(){
     const isOther = v.atribuidoA && v.atribuidoA !== me.id;
     const isSel = v.id === sel;
     const cls = isOther ? 'vitem disabled' : isSel ? 'vitem selected' : 'vitem';
-    const tip = { carro:'🚗', moto:'🏍', caminhao:'🚛' }[v.tipo] || '🚗';
+    const tip = { carro:'🚗', moto:'<span class="mic"></span>', caminhao:'🚛' }[v.tipo] || '🚗';
     return `<div class="${cls}" data-vid="${v.id}">
       <div class="placa">${tip} ${esc(v.placa||'?')}${isOther?'<span class="lock">EM USO</span>':''}</div>
       <div class="modelo">${esc((v.marca||'')+' '+(v.modelo||'')).trim() || '—'}${v.ano?' · '+v.ano:''}</div>
@@ -4474,7 +4477,7 @@ function renderStepVeiculoOut(){
     <div class="step-sub">Confirme o KM final e tire TODAS as fotos. Sem foto, o veículo não é liberado.</div>
 
     <div class="vitem selected">
-      <div class="placa">${({carro:'🚗',moto:'🏍',caminhao:'🚛'}[v?.tipo]||'🚗')} ${esc(v?.placa||'?')}</div>
+      <div class="placa">${({carro:'🚗',moto:'<span class="mic"></span>',caminhao:'🚛'}[v?.tipo]||'🚗')} ${esc(v?.placa||'?')}</div>
       <div class="modelo">${esc((v?.marca||'')+' '+(v?.modelo||'')).trim()}</div>
       <div class="meta">KM inicial: ${turnoAtivo?.kmInicial?.toLocaleString('pt-BR') || '—'}</div>
     </div>
@@ -5427,7 +5430,7 @@ function atualizarCarregarUI(){
   document.getElementById('carregarList').innerHTML = _carregarList.length === 0
     ? '<div style="font-size:11px;color:var(--txt3);text-align:center;padding:8px">Nenhuma moto adicionada</div>'
     : _carregarList.map((m, i) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(0,180,229,0.1);border:1px solid var(--acc);border-radius:6px;font-size:12px">
-        <span style="font-weight:800;color:var(--acc)">🏍 #${i+1}</span>
+        <span style="font-weight:800;color:var(--acc)"><span class="mic"></span> #${i+1}</span>
         <span style="flex:1;font-family:'IBM Plex Mono',monospace;font-weight:700">${m.placa ? esc(m.placa) : '<span style="color:var(--txt3)">sem placa</span>'}</span>
         <button data-rm="${i}" style="padding:2px 8px;background:var(--surf);border:1px solid var(--bdr);color:var(--novo);border-radius:4px;font-size:11px;font-weight:700">✕</button>
       </div>`).join('');
