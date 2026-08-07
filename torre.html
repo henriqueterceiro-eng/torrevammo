@@ -97,6 +97,9 @@ body.sidehide #sidebar:hover::after{opacity:0}
 #syncind .d.ok{background:var(--on);box-shadow:0 0 4px var(--on)}
 #syncind #synctxt{display:none}
 #syncind:hover #synctxt{display:inline}
+/* Tooltip global didático (elementos com [data-tip]) — posicionado por JS, some nas bordas */
+#uitip{position:fixed;z-index:5000;pointer-events:none;max-width:280px;background:rgba(8,18,36,0.98);color:#e6f6fd;border:1px solid var(--acc);padding:8px 11px;border-radius:9px;font-size:11.5px;font-weight:600;line-height:1.4;box-shadow:0 12px 30px rgba(0,0,0,0.55);opacity:0;transform:translateY(-4px);transition:opacity .12s ease,transform .12s ease;white-space:normal;text-align:left}
+#uitip.show{opacity:1;transform:translateY(0)}
 
 /* MAIN */
 #main{flex:1;display:flex;min-height:0;overflow:hidden;position:relative}
@@ -544,18 +547,18 @@ body.selmode .card .mcheck{display:flex}
     </div>
     <div class="pills" id="pills"></div>
     <div class="spacer"></div>
-    <div id="syncind" title="Status da sincronização"><span class="d" id="syncdot"></span><span id="synctxt">conectando…</span></div>
-    <div id="sesschip" style="display:none;align-items:center;gap:10px;background:rgba(255,255,255,0.06);border:1px solid var(--bdr);border-radius:16px;padding:4px 10px;font-size:10px;font-weight:700;font-family:var(--mono);white-space:nowrap" title="Tempo com a torre aberta · tempo sem interagir"></div>
-    <div id="userchip" style="display:none;align-items:center;gap:8px;background:rgba(255,255,255,0.06);border:1px solid var(--bdr);border-radius:20px;padding:3px 6px 3px 3px;margin-right:2px"></div>
-    <button class="iconbtn" id="cadbtn" title="Cadastros de colaboradores e veículos">📋 Cadastros</button>
-    <button class="iconbtn" id="rankbtn" title="Ver ranking e estatísticas dos colaboradores">📊 Ranking</button>
-    <button class="iconbtn" id="repbtn" title="Relatórios de Chamados — filtráveis e exportáveis">📈 Chamados</button>
-    <button class="iconbtn" id="logcolabbtn" title="Log de colaboradores — check-in/out, tempos, km, online/ocioso">👣 Log de colabs</button>
-    <button class="iconbtn" id="rkmbtn" title="Ranking mensal dos colaboradores">🏆 Mensal</button>
-    <button class="iconbtn" id="frotabtn" title="Revisão de frota — veículos pendentes">🔧 Frota <span id="frotabadge" style="display:none;background:var(--novo);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:800;margin-left:2px"></span></button>
-    <button class="iconbtn" id="demobtn" title="Modo demo: crie chamados manualmente sem Slack">🧪 Demo</button>
-    <button class="iconbtn" id="configbtn" title="Configurações">⚙</button>
-    <button class="iconbtn" id="colaburlbtn" title="Link do app do colaborador">📱 Colab</button>
+    <div id="syncind" data-tip="Conexão em tempo real com o servidor · verde = conectado, vermelho = sem sinal"><span class="d" id="syncdot"></span><span id="synctxt">conectando…</span></div>
+    <div id="sesschip" style="display:none;align-items:center;gap:10px;background:rgba(255,255,255,0.06);border:1px solid var(--bdr);border-radius:16px;padding:4px 10px;font-size:10px;font-weight:700;font-family:var(--mono);white-space:nowrap" data-tip="⏱ Tempo com a torre aberta · ⏳ tempo sem nenhuma interação (ocioso)"></div>
+    <div id="userchip" style="display:none;align-items:center;gap:8px;background:rgba(255,255,255,0.06);border:1px solid var(--bdr);border-radius:20px;padding:3px 6px 3px 3px;margin-right:2px" data-tip="Você — conta logada e papel de acesso na torre"></div>
+    <button class="iconbtn" id="cadbtn" data-tip="Cadastrar e editar colaboradores, veículos, bases e parceiros">📋 Cadastros</button>
+    <button class="iconbtn" id="rankbtn" data-tip="Ranking e estatísticas de produção dos colaboradores">📊 Ranking</button>
+    <button class="iconbtn" id="repbtn" data-tip="Relatórios de chamados — filtra por período/status e exporta CSV">📈 Chamados</button>
+    <button class="iconbtn" id="logcolabbtn" data-tip="Histórico de cada colaborador: check-in/out, tempos, km rodado, online/ocioso">👣 Log de colabs</button>
+    <button class="iconbtn" id="rkmbtn" data-tip="Ranking mensal consolidado dos colaboradores">🏆 Mensal</button>
+    <button class="iconbtn" id="frotabtn" data-tip="Revisão de frota — veículos com pendências de manutenção">🔧 Frota <span id="frotabadge" style="display:none;background:var(--novo);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:800;margin-left:2px"></span></button>
+    <button class="iconbtn" id="demobtn" data-tip="Modo demonstração: cria chamados manualmente pra treinar, sem depender do Slack">🧪 Demo</button>
+    <button class="iconbtn" id="configbtn" data-tip="Configurações da torre — SLA, raios de atendimento, chaves de API e operadores">⚙</button>
+    <button class="iconbtn" id="colaburlbtn" data-tip="Copia o link do app do colaborador (motorista) pra compartilhar">📱 Colab</button>
   </div>
 
   <!-- Modo navegação — botão flutuante grande no canto inferior direito (entra/sai) -->
@@ -998,7 +1001,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v76 · 2026-08-07';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v77 · 2026-08-07';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2694,12 +2697,54 @@ function renderKPIs(){
   });
 }
 
+// Tooltip global didático: qualquer elemento com [data-tip] mostra uma dica estilizada no hover.
+// Posicionado por JS (fixed + clamp na viewport) pra nunca ser cortado nas bordas da tela.
+(function initUiTip(){
+  if(!document.body){ document.addEventListener('DOMContentLoaded', initUiTip); return; }
+  const tip = document.createElement('div');
+  tip.id = 'uitip';
+  document.body.appendChild(tip);
+  let cur = null;
+  function show(el){
+    const t = el.getAttribute('data-tip'); if(!t){ hide(); return; }
+    tip.textContent = t;
+    tip.classList.add('show');
+    const r = el.getBoundingClientRect();
+    const tw = tip.offsetWidth;
+    let left = r.left + r.width/2 - tw/2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+    tip.style.left = left + 'px';
+    tip.style.top = (r.bottom + 8) + 'px';
+  }
+  function hide(){ tip.classList.remove('show'); cur = null; }
+  document.addEventListener('mouseover', e => {
+    const el = e.target && e.target.closest && e.target.closest('[data-tip]');
+    if(el && el !== cur){ cur = el; show(el); }
+  });
+  document.addEventListener('mouseout', e => {
+    if(!cur) return;
+    const to = e.relatedTarget;
+    if(to && cur.contains(to)) return;   // ainda dentro do mesmo alvo → não esconde
+    hide();
+  });
+  window.addEventListener('scroll', hide, true);
+  document.addEventListener('click', hide, true);
+})();
+
 function renderPills(){
   const cs = counts();
   const total = chamados.length;
-  $('#pills').innerHTML = `<div class="pill${!filtro?' active':''}" data-f="">Todos <span class="n">${total}</span></div>` +
+  // Dica didática de cada filtro de status (aparece no hover via [data-tip])
+  const PILL_TIP = {
+    '': 'Mostra TODOS os chamados · o número é o total',
+    novo: '🔴 NOVOS — chamados abertos e ainda SEM colaborador atribuído. Clique pra ver só estes.',
+    em_rota: '🟡 EM ROTA — colaborador já a caminho ou atendendo no local. Clique pra filtrar.',
+    concluido: '🟢 CONCLUÍDOS — chamados finalizados. Clique pra filtrar.',
+    cancelado: '⚫ CANCELADOS — encerrados sem atendimento. Clique pra filtrar.'
+  };
+  $('#pills').innerHTML = `<div class="pill${!filtro?' active':''}" data-f="" data-tip="${PILL_TIP['']}">Todos <span class="n">${total}</span></div>` +
     [['novo','🔴'],['em_rota','🟡'],['concluido','🟢'],['cancelado','⚫']].map(([k,e]) =>
-      `<div class="pill${filtro===k?' active':''}" data-f="${k}">${e} <span class="n">${cs[k]||0}</span></div>`
+      `<div class="pill${filtro===k?' active':''}" data-f="${k}" data-tip="${PILL_TIP[k]}">${e} <span class="n">${cs[k]||0}</span></div>`
     ).join('');
   $$('#pills .pill').forEach(el => el.onclick = () => {
     filtro = el.dataset.f || null;
