@@ -821,7 +821,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v56 · 2026-08-06';
+const APP_VERSION = 'v57 · 2026-08-07';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1142,11 +1142,26 @@ function marcarConcluidoLocal(id){
 // estão na ordem da torre (recém-criados) caem no fim, mantendo a ordem relativa entre eles.
 // É o que garante que o colab NUNCA mostre uma sequência diferente da torre.
 function orderFila(arr){
-  if(!queueOrder.length) return arr.slice();
+  // FIX v57 — "chamado que some ao chegar": o ativo é SEMPRE fila[0] e a torre controla a
+  // ordem via queueOrder (inclui a prioridade "cliente aguardando" da v66). Sem trava, uma
+  // reordenação/atribuição remota podia empurrar OUTRO chamado pro índice 0 no MEIO do
+  // atendimento — o chamado em curso sumia do card e uma corrida nova era iniciada, mesmo
+  // seguindo aberto na torre. Solução: FIXAR no topo o chamado em andamento. Ancoramos no
+  // currentRide (a verdade do que o motorista faz) e SÓ quando o ride já saiu do lugar
+  // (enRouteTs = "iniciar rota" / arrivedTs = "chegou") — assim um chamado ainda 'novo' NÃO
+  // é fixado e a torre segue reprioritizando livremente tudo que ainda não começou.
+  const pinId = (currentRide && (currentRide.enRouteTs || currentRide.arrivedTs)) ? currentRide.chamadoId : null;
+  let head = [], rest = arr;
+  if(pinId && arr.some(c => c.id === pinId)){
+    head = arr.filter(c => c.id === pinId);
+    rest = arr.filter(c => c.id !== pinId);
+  }
+  if(!queueOrder.length) return head.concat(rest);
   const pos = id => { const i = queueOrder.indexOf(id); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
-  return arr.map((c, i) => [c, i])
-            .sort((a, b) => (pos(a[0].id) - pos(b[0].id)) || (a[1] - b[1]))
-            .map(x => x[0]);
+  rest = rest.map((c, i) => [c, i])
+             .sort((a, b) => (pos(a[0].id) - pos(b[0].id)) || (a[1] - b[1]))
+             .map(x => x[0]);
+  return head.concat(rest);
 }
 function applyQueueOrder(){
   const before = fila.map(c => c.id).join(',');
@@ -1178,6 +1193,15 @@ function syncFilaFromSnapshot(data){
         novaFila.push({
           ...c,
           ...fromFb,
+          // Preserva o PROGRESSO local que o Firebase pode ainda não ter ecoado — senão o
+          // atendimento em curso reseta no meio (respostas/fotos da rotina somem, "chegada"
+          // re-arma, a rotina desaparece do card por perder iniciadoEm).
+          iniciadoEm: c.iniciadoEm || fromFb.iniciadoEm,
+          arrived: c.arrived || fromFb.arrived,
+          arrivedAt: c.arrivedAt || fromFb.arrivedAt,
+          _nearingNotified: c._nearingNotified || fromFb._nearingNotified,
+          rotinaSteps: Object.assign({}, fromFb.rotinaSteps, c.rotinaSteps),
+          status: (c.status === 'em_rota' && fromFb.status === 'novo') ? 'em_rota' : (fromFb.status || c.status),
           icon: c.icon || iconFromMotivo(fromFb.motivo)
         });
       }
@@ -1238,6 +1262,10 @@ document.addEventListener('visibilitychange', () => {
 function rideStart(ch){
   // Se já tem corrida com esse chamadoId, preserva (recovery)
   if(currentRide && currentRide.chamadoId === ch.id) return;
+  // Defesa: NÃO descarta uma corrida JÁ EM ANDAMENTO (em rota/chegou) de OUTRO chamado que
+  // ainda está na fila — isso perderia trajeto/tempos/nota. Com o pin do orderFila isto não
+  // deve acontecer, mas fica como cinto de segurança.
+  if(currentRide && (currentRide.enRouteTs || currentRide.arrivedTs) && fila.some(c => c.id === currentRide.chamadoId)) return;
   currentRide = {
     id: 'r_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2,6),
     chamadoId: ch.id,
@@ -1534,10 +1562,11 @@ function buildFlow(c){
   const steps = [];
   // MOTO NÃO ENCONTRADA — vale pra TODO chamado (qualquer motivo/fluxo). Se a moto não está no
   // local, finaliza aqui com evidência. É a PRIMEIRA pergunta de qualquer atendimento.
-  steps.push({ id:'moto_encontrada', label:'A moto foi encontrada no local?', tipo:'bool' });
+  steps.push({ id:'moto_encontrada', label:'A moto está no local?', tipo:'bool' });
   if(S.moto_encontrada === undefined) return steps;
   if(S.moto_encontrada === false){
-    steps.push({ id:'foto_local_vazio', label:'Foto do local (sem a moto)', tipo:'foto' });
+    steps.push({ id:'foto_local_vazio', label:'Foto do local do chamado (sem a moto)', tipo:'foto',
+      aviso:'📷 Moto NÃO está no local: a foto do local é OBRIGATÓRIA. Tire a foto e descreva onde procurou pra encerrar como "Moto não encontrada".' });
     steps.push({ id:'obs_nao_encontrada', label:'Onde procurou / observações', tipo:'obs', placeholder:'Descreva onde procurou a moto e por que não encontrou' });
     return steps; // fim do fluxo → desfecho 'nao_encontrada' → finaliza
   }
@@ -1581,9 +1610,10 @@ function buildFlow(c){
   if(fx === 'recolhimento'){ recolhimento(); return steps; }
   if(fx === 'inadimplencia'){
     if(!presente){ recolhimento(); return steps; }
-    steps.push({ id:'quitou', label:'Cliente irá quitar o débito?', tipo:'bool' });
+    steps.push({ id:'quitou', label:'Cliente pagou no local?', tipo:'bool' });
     if(S.quitou === undefined) return steps;
-    if(S.quitou === true) steps.push({ id:'foto_comprovante', label:'Foto do comprovante de pagamento', tipo:'foto' });
+    if(S.quitou === true) steps.push({ id:'foto_comprovante', label:'Foto do comprovante de pagamento', tipo:'foto',
+      aviso:'💵 Cliente pagou: a foto do comprovante é OBRIGATÓRIA e o cliente assina no fim confirmando o pagamento — encerra como "Pago no local".' });
     else recolhimento();
     return steps;
   }
