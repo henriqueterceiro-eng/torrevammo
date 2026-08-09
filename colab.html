@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v62 · 2026-08-09';
+const APP_VERSION = 'v63 · 2026-08-09';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -6194,26 +6194,42 @@ document.getElementById('installclose').addEventListener('click', () => {
 });
 
 // ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
-const NOV_VER = 'v51';
+const NOV_VER = 'diadospais-2026';
 const NOV_ITENS = [
-  { ic:'🏠', t:'Sua central quando está livre', d:'Enquanto aguarda chamado, você vê seus chamados do dia, sua nota média e o veículo logado.' },
-  { ic:'🔎', t:'Botões com nome', d:'Os atalhos do canto agora mostram pra que servem: 🏠 Base · 📄 Docs · 📍 Eu.' },
-  { ic:'📸', t:'Acidente com até 4 fotos', d:'Nos atendimentos de ACIDENTE dá pra tirar até 4 fotos dos danos (3 obrigatórias).' }
+  { ic:'🛡️', t:'Você nunca mais some do mapa', d:'A torre te enxerga mesmo parado ou em área de sinal fraco. Você nunca fica sozinho na rua.' },
+  { ic:'▶️', t:'Nunca mais travado pra começar', d:'Mesmo com o GPS ruim, você consegue iniciar o atendimento e seguir seu trabalho — sem perder tempo parado.' },
+  { ic:'👀', t:'Veja o local antes de chegar', d:'Toque na foto do chamado e olhe a rua em 360°: você chega sabendo onde é, com mais segurança.' }
 ];
 function mostrarNovidades(force){
   try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER)) return; }catch(e){}
   if(document.getElementById('novOverlay')) return;
+  if(!document.getElementById('ndp-anim')){
+    const st = document.createElement('style'); st.id = 'ndp-anim';
+    st.textContent = '@keyframes ndpIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}@keyframes ndpHeart{0%,100%{transform:scale(1)}50%{transform:scale(1.13)}}';
+    document.head.appendChild(st);
+  }
   const ov = document.createElement('div');
   ov.id = 'novOverlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,15,0.78);backdrop-filter:blur(6px);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px';
-  const itens = NOV_ITENS.map(i => `<li style="display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,0.04);border:1px solid rgba(125,165,215,0.16);border-radius:10px;padding:11px 13px;margin-bottom:10px;list-style:none">
-      <span style="font-size:18px">${i.ic}</span><div><b style="display:block;font-size:13.5px">${i.t}</b><span style="color:#9aa8bd;font-size:12px">${i.d}</span></div></li>`).join('');
-  ov.innerHTML = `<div style="background:linear-gradient(180deg,#0e1a30,#0b1526);border:1px solid rgba(0,180,229,0.34);border-radius:18px;max-width:420px;width:100%;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,0.6)">
-      <div style="text-align:center;margin-bottom:16px"><div style="font-size:38px">🎉</div>
-        <h3 style="font-size:19px;margin-top:6px">Novidades da atualização</h3>
-        <div style="color:var(--acc);font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:800;margin-top:4px">versão ${NOV_VER}</div></div>
-      <ul style="margin:14px 0;padding:0">${itens}</ul>
-      <button id="novOk" style="width:100%;padding:13px;background:var(--acc);color:#001823;font-weight:800;border:none;border-radius:10px;font-size:14px;cursor:pointer">Entendi 👍</button>
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,15,0.87);backdrop-filter:blur(7px);z-index:9500;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto';
+  const itens = NOV_ITENS.map(i => `<li style="display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,0.05);border:1px solid rgba(125,165,215,0.16);border-radius:11px;padding:10px 12px;margin-bottom:8px;list-style:none">
+      <span style="font-size:18px;flex:0 0 auto">${i.ic}</span><div><b style="display:block;font-size:13px;color:#eaf4ff">${i.t}</b><span style="color:#9aa8bd;font-size:11.5px;line-height:1.4">${i.d}</span></div></li>`).join('');
+  ov.innerHTML = `<div style="background:linear-gradient(180deg,#12233f 0%,#0b1526 55%);border:1px solid rgba(0,180,229,0.4);border-radius:20px;max-width:430px;width:100%;box-shadow:0 30px 90px rgba(0,0,0,0.7);overflow:hidden;animation:ndpIn .45s cubic-bezier(.2,.8,.2,1) both;max-height:94vh;display:flex;flex-direction:column">
+      <div style="background:radial-gradient(120% 100% at 50% 0%,rgba(245,180,80,0.30),rgba(0,180,229,0.12) 55%,transparent 82%);padding:26px 22px 14px;text-align:center;flex:0 0 auto">
+        <div style="font-size:46px;animation:ndpHeart 1.8s ease-in-out infinite">💙</div>
+        <h3 style="font-size:23px;margin:8px 0 2px;font-weight:900;letter-spacing:-.3px;background:linear-gradient(90deg,#ffd9a0,#7cf0ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">Feliz Dia dos Pais!</h3>
+        <div style="color:#bcd0e6;font-size:12.5px;line-height:1.4;max-width:330px;margin:6px auto 0">pra você que tá na rua cuidando de todo mundo — e de quem te espera em casa 🏠</div>
+      </div>
+      <div style="padding:2px 22px 18px;overflow:auto">
+        <p style="color:#d7e3f2;font-size:13px;line-height:1.6;margin:10px 0 6px">Hoje é domingo, é <b>Dia dos Pais</b> — e você tá aqui, firme, na estrada. Enquanto muita gente descansa, é o seu trabalho que socorre quem ficou na mão e mantém a Vammo girando.</p>
+        <p style="color:#d7e3f2;font-size:13px;line-height:1.6;margin:0 0 6px">A gente sabe o tamanho disso: cada moto que você atende vira <b style="color:#ffd9a0">o sustento, o orgulho e o exemplo</b> pra sua família. Obrigado por ser esse profissional — e esse pai. 🙏</p>
+        <div style="font-size:11px;font-weight:800;color:var(--acc);text-transform:uppercase;letter-spacing:.6px;margin:18px 0 9px">E a gente melhorou o app PRA VOCÊ 💙</div>
+        <ul style="margin:0;padding:0">${itens}</ul>
+        <p style="color:#bcd0e6;font-size:12.5px;line-height:1.55;margin:14px 0 2px;text-align:center">Tudo isso foi feito pensando na <b style="color:#eaf4ff">sua segurança</b> e no seu dia a dia. Você não é só resultado: você é <b style="color:#eaf4ff">peça essencial da Vammo</b> e faz parte da nossa família.</p>
+        <p style="color:#ffd9a0;font-size:13px;line-height:1.5;margin:12px 0 0;text-align:center;font-weight:700">Que Deus proteja você em cada quilômetro. 🛵💨</p>
+      </div>
+      <div style="padding:0 22px 22px;flex:0 0 auto">
+        <button id="novOk" style="width:100%;padding:14px;background:linear-gradient(135deg,#00B4E5,#0894c0);color:#001823;font-weight:900;border:none;border-radius:12px;font-size:15px;cursor:pointer;box-shadow:0 8px 22px rgba(0,180,229,0.35)">Valeu, Vammo! 💙</button>
+      </div>
     </div>`;
   document.body.appendChild(ov);
   const close = () => { try{ localStorage.setItem('novidades_vista_'+NOV_VER,'1'); }catch(e){} ov.remove(); };
