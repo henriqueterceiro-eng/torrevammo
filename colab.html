@@ -270,6 +270,15 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #chamadocard .local-shot .ls-img.nofoto img,#chamadocard .local-shot .ls-img.nofoto .ls-tag{display:none}
 #chamadocard .local-shot .ls-img.nofoto .ls-fb{display:flex;align-items:center;gap:8px;color:var(--acc);font-weight:800;font-size:13px;padding:16px}
 
+/* Street View interativo (panorama que gira/anda) — tela cheia ao tocar a foto */
+#svModal{position:fixed;inset:0;background:#000;display:none;flex-direction:column;z-index:99999}
+#svModal .svhd{display:flex;align-items:center;gap:8px;padding:12px 14px;background:#0a1428;color:#fff;font-weight:800;font-size:14px}
+#svModal .svhd .svclose{margin-left:auto;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.28);color:#fff;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:800;cursor:pointer}
+#svModal iframe{flex:1;width:100%;border:0;display:block}
+#svModal .svhint{position:absolute;left:50%;top:64px;transform:translateX(-50%);background:rgba(6,12,22,0.9);color:#fff;font-size:12px;font-weight:700;padding:7px 13px;border-radius:20px;pointer-events:none;animation:svhintfade 4.5s ease-out forwards;z-index:2}
+@keyframes svhintfade{0%,55%{opacity:1}100%{opacity:0}}
+#svModal .svmaps{margin:10px 12px 14px;text-align:center;background:var(--acc);color:#001823;font-weight:800;padding:13px;border-radius:10px;text-decoration:none;display:block}
+
 /* GPS Status overlay */
 #gpsstatus{position:absolute;top:12px;left:12px;background:rgba(10,20,40,0.9);padding:8px 12px;border-radius:8px;font-size:11px;color:var(--txt2);display:flex;align-items:center;gap:6px;z-index:500;backdrop-filter:blur(8px)}
 #appver{position:absolute;bottom:8px;left:8px;font-size:10px;color:rgba(255,255,255,0.6);font-family:'IBM Plex Mono',monospace;z-index:500;pointer-events:none;background:rgba(0,0,0,0.35);padding:1px 6px;border-radius:6px}
@@ -629,6 +638,13 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 </div>
 
 <!-- Modal: opções ao chegar numa base (descarregar, carregar, peças) -->
+<div id="svModal">
+  <div class="svhd">👀 Olhar ao redor · Street View<button class="svclose" onclick="fecharStreetView()">✕ Fechar</button></div>
+  <iframe id="svFrame" allowfullscreen src="about:blank" title="Street View do local"></iframe>
+  <div class="svhint">👆 arraste pra girar a câmera e olhar ao redor</div>
+  <a id="svMapsBtn" class="svmaps" target="_blank" rel="noopener" href="#">↗ Abrir no Google Maps (Street View)</a>
+</div>
+
 <div id="baseOpcoesModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);display:none;align-items:center;justify-content:center;padding:18px;z-index:203">
   <div style="background:var(--surf);border:2px solid var(--acc);border-radius:14px;padding:18px;max-width:420px;width:100%">
     <div style="font-size:36px;text-align:center">🏠</div>
@@ -821,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v60 · 2026-08-09';
+const APP_VERSION = 'v61 · 2026-08-09';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2673,6 +2689,24 @@ function renderIdleHub(){
       <div class="hub-veic"><span class="ic">🚚</span><div><div class="vk">Veículo logado</div><div class="vv">${veic}</div></div></div>
     </div>`;
 }
+// Street View INTERATIVO (panorama que gira 360° + anda na rua). Abre em tela cheia ao tocar a
+// foto do local. Usa a chave CLIENT-SIDE do app (FIREBASE_CONFIG.apiKey, referrer-restrita) via
+// Maps Embed API (grátis). Se a Embed API não estiver habilitada ainda, o botão "Abrir no Google
+// Maps" continua funcionando (link externo, sem chave).
+const SV_EMBED_KEY = (typeof FIREBASE_CONFIG !== 'undefined' && FIREBASE_CONFIG.apiKey) || '';
+function abrirStreetView(lat, lng){
+  if(lat == null || lng == null) return;
+  const f = document.getElementById('svFrame');
+  if(f) f.src = `https://www.google.com/maps/embed/v1/streetview?key=${SV_EMBED_KEY}&location=${lat},${lng}&heading=0&pitch=0&fov=90`;
+  const mb = document.getElementById('svMapsBtn');
+  if(mb) mb.href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+  const m = document.getElementById('svModal'); if(m) m.style.display = 'flex';
+}
+function fecharStreetView(){
+  const m = document.getElementById('svModal'); if(m) m.style.display = 'none';
+  const f = document.getElementById('svFrame'); if(f) f.src = 'about:blank';   // para o iframe ao fechar
+}
+
 function renderChamadoCard(){
   if(_slideDragging) return;   // colab arrastando o slide de iniciar → não reescreve o card por baixo do dedo
   const el = document.getElementById('chamadocard');
@@ -2806,11 +2840,11 @@ function renderChamadoCard(){
     ${c.comentario ? `<div class="row"><div class="lbl">💬</div><div class="val">${esc(c.comentario)}</div></div>` : ''}
     ${(c.lat && c.lng) ? `<div class="local-shot">
       <div class="ls-cap">📷 Local do atendimento</div>
-      <a class="ls-img" href="https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}" target="_blank" rel="noopener">
+      <div class="ls-img" style="cursor:pointer" onclick="abrirStreetView(${c.lat},${c.lng})">
         <img src="/streetview?lat=${c.lat}&lng=${c.lng}" alt="Local do chamado" loading="lazy" onerror="var a=this.closest('.ls-img'); if(a) a.classList.add('nofoto');">
-        <span class="ls-tag">📍 toque pra ver o local</span>
+        <span class="ls-tag">👀 toque pra olhar ao redor</span>
         <span class="ls-fb">📍 Ver o local no Google Maps</span>
-      </a>
+      </div>
     </div>` : ''}
     ${routeBlock}
     <a class="nav-primary" href="${gmaps}" target="_blank" rel="noopener">🧭 Navegar até o cliente (GPS)</a>
