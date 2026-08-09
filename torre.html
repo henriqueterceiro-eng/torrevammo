@@ -1001,7 +1001,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v81 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v82 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3366,6 +3366,11 @@ function renderDetail(){
       ${c.travada?'<span class="b b-trav" style="margin-left:6px">⚠ TRAV</span>':''}
       ${c.clienteAguardando === true ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : (c.clienteAguardando === false ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}
     </div>
+    ${(c.inicioDistM != null && c.inicioDistM > 120) ? `<div style="margin-top:10px;padding:9px 12px;background:rgba(245,158,11,0.12);border:1px solid #f59e0b;border-radius:9px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:18px">📍</span>
+      <div style="flex:1;min-width:0"><div style="font-size:9px;color:#fbbf24;font-weight:800;text-transform:uppercase;letter-spacing:0.5px">Iniciado longe do local</div>
+      <div style="font-size:12px;font-weight:700;line-height:1.25">Atendimento começou a <b style="color:#fbbf24">${c.inicioDistM >= 1000 ? (c.inicioDistM/1000).toFixed(1)+'km' : c.inicioDistM+'m'}</b> do endereço original do chamado</div></div>
+    </div>` : ''}
     ${chamadoPrioritario(c) ? `<div style="margin-top:10px;padding:9px 12px;background:linear-gradient(135deg,rgba(34,197,94,0.22),rgba(34,197,94,0.08));border:1px solid #22c55e;border-radius:9px;display:flex;align-items:center;gap:10px">
       <span style="font-size:20px">🙋</span>
       <div style="flex:1;min-width:0"><div style="font-size:9px;color:#4ade80;font-weight:800;text-transform:uppercase;letter-spacing:0.5px">Cliente aguardando no local</div>

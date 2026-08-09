@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v61 · 2026-08-09';
+const APP_VERSION = 'v62 · 2026-08-09';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1758,9 +1758,21 @@ function atualizarDistInfo(chamado){
   }
 }
 
+const AVISO_INICIO_LONGE_M = 120;   // acima disso: avisa o colab e registra a distância do início
+function fmtDist(m){ if(m == null) return '?'; return m >= 1000 ? (m/1000).toFixed(1) + 'km' : Math.round(m) + 'm'; }
+// Distância de ONDE o colab está agora até o LOCAL ORIGINAL do chamado (endereço) — pra governança.
+function distInicioAoLocal(chamado){
+  if(!myPos || chamado.lat == null || chamado.lng == null) return null;
+  return haversine(myPos, { lat: chamado.lat, lng: chamado.lng });
+}
 function onIniciarConfirmado(chamado){
   const d = distanciaAteChamado(chamado);
   if(d <= RANGE_INICIO_M){
+    // Dentro do range operacional — mas se estiver LONGE do local do chamado, avisa e deixa registrado.
+    const dAddr = distInicioAoLocal(chamado);
+    if(dAddr != null && dAddr > AVISO_INICIO_LONGE_M){
+      if(!confirm(`⚠ Você está a ${fmtDist(dAddr)} do local do chamado.\n\nIniciar o atendimento aqui mesmo assim?\n\nℹ Vai ficar REGISTRADO que o atendimento começou a ${fmtDist(dAddr)} do endereço original.`)) return;
+    }
     iniciarAtendimento(chamado);
   } else {
     pedirAutorizacaoTorre(chamado, d);
@@ -1771,16 +1783,32 @@ function iniciarAtendimento(chamado){
   chamado.iniciadoEm = Date.now();
   chamado.status = 'em_rota';
   chamado.rotinaSteps = chamado.rotinaSteps || {};
+  // GOVERNANÇA: registra A QUE DISTÂNCIA do local original o atendimento foi iniciado (durável no nó).
+  const dAddr = distInicioAoLocal(chamado);
+  chamado.inicioDistM = (dAddr != null) ? Math.round(dAddr) : null;
+  chamado.inicioLat = myPos?.lat ?? null; chamado.inicioLng = myPos?.lng ?? null;
+  if(currentRide) currentRide.inicioDistM = chamado.inicioDistM;
   rideMarkArrived();
   sync.send('chamado:atendimento-iniciado', {
     chamadoId: chamado.id,
     motoristaId: me.id,
+    inicioDistM: chamado.inicioDistM,
     pos: { lat: myPos?.lat, lng: myPos?.lng }
   });
+  try {
+    if(typeof firebase !== 'undefined' && firebase.apps?.length){
+      firebase.database().ref('vammo/chamados/' + chamado.id).update({
+        iniciadoEm: chamado.iniciadoEm, inicioDistM: chamado.inicioDistM,
+        inicioLat: chamado.inicioLat, inicioLng: chamado.inicioLng
+      }).catch(()=>{});
+    }
+  } catch(_){}
   persistRotina(chamado);
   fecharModalIniciar();
   vibrate([50, 30, 50]);
-  showToast(`▶ Atendimento iniciado: ${chamado.cliente}`);
+  showToast((chamado.inicioDistM != null && chamado.inicioDistM > AVISO_INICIO_LONGE_M)
+    ? `▶ Iniciado a ${fmtDist(chamado.inicioDistM)} do local (registrado)`
+    : `▶ Atendimento iniciado: ${chamado.cliente}`);
   renderChamadoCard();
 }
 
