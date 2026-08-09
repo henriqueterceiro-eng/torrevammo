@@ -1001,7 +1001,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v79 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v80 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1032,6 +1032,7 @@ cfg.fbKey = cfg.fbKey || 'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I';
 cfg.tomtomKey = cfg.tomtomKey || 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 cfg.showTraffic = cfg.showTraffic !== false; // default ON
 cfg.showIncidents = cfg.showIncidents !== false;
+cfg.rotasSmart = cfg.rotasSmart !== false; // KILL-SWITCH das rotas inteligentes (ETA no despacho + auto-otimização). Default ON; pra desligar sem redeploy: cfg.rotasSmart=false + saveCfg2(cfg)
 cfg.showHeatmap = cfg.showHeatmap === true; // default OFF
 cfg.routeType = cfg.routeType || 'fastest';     // fastest | shortest | eco
 cfg.travelMode = cfg.travelMode || 'car';        // car | truck
@@ -3204,6 +3205,47 @@ function renderMot(){
   });
 }
 
+// Enriquece o select de atribuição com ETA-COM-TRÂNSITO (⚡) via /matrix e reordena por tempo.
+// Cache por (chamado + origens arredondadas) 30s pra não repetir chamada paga. Best-effort: se
+// /matrix falhar, fica o ranking haversine. Respeita o kill-switch cfg.rotasSmart.
+let _etaCache = {};
+async function enriquecerSelectEta(c, motIds, onlineMots){
+  if(cfg.rotasSmart === false) return;
+  if(!c || c.lat == null || c.lng == null) return;
+  const sel = document.getElementById('dasel'); if(!sel) return;
+  const origins = onlineMots.map(id => motoristas[id]).filter(m => m && m.lat != null && m.lng != null && m.modo !== 'descarregando').map(m => ({ id: m.id, lat: m.lat, lng: m.lng }));
+  if(!origins.length) return;
+  const key = c.id + '|' + origins.map(o => o.id + ':' + o.lat.toFixed(3) + ',' + o.lng.toFixed(3)).join(';');
+  let data = _etaCache[key];
+  if(!data || Date.now() - data.ts > 30000){
+    try {
+      const originsStr = origins.map(o => `${o.lat},${o.lng}`).join('|');
+      const mr = await fetch(`/matrix?origins=${encodeURIComponent(originsStr)}&dest=${c.lat},${c.lng}`);
+      if(!mr.ok) return; const md = await mr.json(); if(!md || md.error || !md.elements) return;
+      const byId = {};
+      md.elements.forEach(e => { if(e && e.ok){ const o = origins[e.i]; if(o) byId[o.id] = { min: Math.round((e.durationInTraffic || e.duration || 0)/60), km: ((e.distance||0)/1000).toFixed(1), delay: Math.round(Math.max(0,(e.durationInTraffic||0)-(e.duration||0))/60) }; } });
+      data = { ts: Date.now(), byId }; _etaCache[key] = data;
+    } catch(_){ return; }
+  }
+  // Só aplica se o detalhe ainda é ESTE chamado (operador pode ter fechado/trocado no meio do fetch)
+  if(document.getElementById('dasel') !== sel || selId !== c.id) return;
+  const cur = sel.value;
+  const rank = motIds.slice().sort((a, b) => {
+    const ea = data.byId[a] ? data.byId[a].min : Infinity, eb = data.byId[b] ? data.byId[b].min : Infinity;
+    return ea - eb;
+  });
+  sel.innerHTML = '<option value="">— selecionar (⚡ tempo c/ trânsito) —</option>' + rank.map(id => {
+    const m = motoristas[id]; if(!m) return '';
+    const isOn = onlineMots.includes(id);
+    const fullMark = m.isFull ? ' 🔒FULL' : '';
+    const desc = m.modo === 'descarregando' ? ' 🔴' : '';
+    const eta = data.byId[id];
+    const etaTxt = eta ? ` ⚡${eta.min}min·${eta.km}km${eta.delay>0?' +'+eta.delay:''}` : '';
+    return `<option value="${id}"${id===c.motoristaId?' selected':''}>${esc(m.nome)} ${m.placa?'('+esc(m.placa)+')':''} ${isOn?'🟢':'⚫'}${fullMark}${desc}${etaTxt}</option>`;
+  }).join('');
+  sel.value = cur;
+}
+
 async function otimizarFila(motoristaId, btn){
   const m = motoristas[motoristaId];
   if(!m || !m.lat) return;
@@ -3278,13 +3320,19 @@ function renderDetail(){
     curMot = { id: c.motoristaId, nome: c.motoristaNome || 'Colaborador', placa: c.motoristaPlaca || '', color: '#6b7280', _offline: true };
     curMotOffline = true;
   }
+  // Ordena por PROXIMIDADE (haversine, instantâneo) — mais perto primeiro; sem GPS/offline no fim.
+  // A ordem por TEMPO-com-trânsito (⚡) chega logo depois, via enriquecerSelectEta (/matrix).
+  const _distCh = id => { const m = motoristas[id]; return (c.lat != null && m && m.lat != null) ? haversine({ lat: m.lat, lng: m.lng }, { lat: c.lat, lng: c.lng }) : Infinity; };
+  const motIdsRank = motIds.slice().sort((a, b) => _distCh(a) - _distCh(b));
   const motOpts = '<option value="">— selecionar colaborador —</option>' +
-    motIds.map(id => {
+    motIdsRank.map(id => {
       const m = motoristas[id];
       const isOn = onlineMots.includes(id);
       const fullMark = m.isFull ? ' 🔒 FULL' : '';
       const descarregando = m.modo === 'descarregando' ? ' 🔴 descarregando' : '';
-      return `<option value="${id}"${id===c.motoristaId?' selected':''}>${esc(m.nome)} ${m.placa?'('+esc(m.placa)+')':''} ${isOn?'🟢':'⚫'}${fullMark}${descarregando}</option>`;
+      const d = _distCh(id);
+      const kmTxt = isFinite(d) ? ` · ${(d/1000).toFixed(1)}km` : '';
+      return `<option value="${id}"${id===c.motoristaId?' selected':''}>${esc(m.nome)} ${m.placa?'('+esc(m.placa)+')':''} ${isOn?'🟢':'⚫'}${fullMark}${descarregando}${kmTxt}</option>`;
     }).join('');
 
   const gmaps = c.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.endereco + ', São Paulo, SP')}` : '';
@@ -3516,6 +3564,7 @@ function renderDetail(){
     }
   };
   const ok = $('#daok'); if(ok) ok.onclick = () => assignWithMotoCheck(c.id, $('#dasel').value);
+  if(motIds.length) enriquecerSelectEta(c, motIds, onlineMots);   // ⚡ ETA-com-trânsito no select (async, best-effort)
   { const t = $('#tercok'); if(t) t.onclick = () => { const tid = $('#tercsel').value; if(tid) atribuirTerceiro(c.id, tid); }; }
   { const t = $('#datercun'); if(t) t.onclick = () => { if(confirm('Desvincular o terceiro deste chamado?\n\nO chamado volta pra fila aberta.')) atribuirTerceiro(c.id, ''); }; }
   { const t = $('#daconcluir'); if(t) t.onclick = () => abrirConcluirTerceiro(c.id); }
