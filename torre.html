@@ -1001,7 +1001,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v77 · 2026-08-07';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v78 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1015,6 +1015,7 @@ const KIT_CONSUMIVEIS_TORRE = [
 ];
 const MOTORISTA_REMOVE_MS = 5 * 60 * 1000;  // OCIOSO 5min sem update = remove do mapa automaticamente
 const MOTORISTA_GHOST_MS  = 45 * 60 * 1000; // colab TRABALHANDO só some após 45min (fantasma real); antes disso fica "sem sinal" no último ponto
+const MOTORISTA_DEAD_MS   = 3 * 60 * 60 * 1000; // TETO DURO: mesmo com online:true, ping > 3h = app morto sem onDisconnect OU nó de dia anterior (colab de FOLGA) → remove. Acima de qualquer buraco de sinal/Doze real (o socket cai bem antes de 3h).
 
 let cfg = loadCfg();
 
@@ -7289,8 +7290,9 @@ function applyMotoristaTelemetry(data, opts){
       (existe && (existe.activeCount||0) > 0)
     );
     const limite = trabalhando ? MOTORISTA_GHOST_MS : MOTORISTA_REMOVE_MS;
-    // online=true (conexão viva pelo onDisconnect) NUNCA é removido no seed, mesmo com ts velho.
-    if(data.status === 'off' || (data.online !== true && idade > limite)){
+    // online=true (conexão viva pelo onDisconnect) segura o nó — MAS não é carência infinita:
+    // ping > MOTORISTA_DEAD_MS (3h) = app morto sem onDisconnect / nó de dia anterior (folga) → remove.
+    if(data.status === 'off' || (data.online !== true && idade > limite) || idade > MOTORISTA_DEAD_MS){
       if(existe) removeMotorista(data.id);
       return;
     }
@@ -7421,7 +7423,7 @@ function checkMotoristasTTL(){
     // (janela longa de 45min p/ fantasma real) nem alerta "caiu" — mantém o pino no último ponto.
     const trabalhando = motTrabalhando(m);
     const limite = trabalhando ? MOTORISTA_GHOST_MS : MOTORISTA_REMOVE_MS;
-    if(m.online !== true && age > limite){
+    if((m.online !== true && age > limite) || age > MOTORISTA_DEAD_MS){   // teto duro: online:true preso > 3h (app morto/folga) também sai
       toRemove.push({ id, nome: m.nome });
     } else if(m.online !== true && age > MOTORISTA_TTL_MS && m.status !== 'off'){
       changed = true;

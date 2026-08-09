@@ -821,7 +821,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v57 · 2026-08-07';
+const APP_VERSION = 'v58 · 2026-08-09';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1792,7 +1792,15 @@ function resetSlide(container){
   container.classList.remove('armed');
 }
 
+// _slideDragging: enquanto o colab arrasta um slide, o card NÃO deve ser re-renderizado
+// (renderChamadoCard dá early-return) — senão um re-render de GPS/IoT/snapshot reescreve o
+// innerHTML e RESETA o slide embaixo do dedo, e o gesto se perde ("deslizei e não iniciou").
+let _slideDragging = false;
+let _slideWinCleanup = null;
 function setupSlideConfirm(container, onConfirm){
+  // Remove os listeners de window de um slide anterior — sem isso cada re-render acumulava
+  // um par move/up vivo (vazamento), e um thumb órfão de render antigo ainda disparava onConfirm.
+  if(_slideWinCleanup){ try { _slideWinCleanup(); } catch(_){} _slideWinCleanup = null; }
   const thumb = container.querySelector('.slide-thumb');
   const fill = container.querySelector('.slide-fill');
   const text = container.querySelector('.slide-text');
@@ -1803,7 +1811,7 @@ function setupSlideConfirm(container, onConfirm){
 
   function start(e){
     e.preventDefault();
-    dragging = true;
+    dragging = true; _slideDragging = true;
     const t = e.touches ? e.touches[0] : e;
     const rect = thumb.getBoundingClientRect();
     startX = t.clientX - rect.left;
@@ -1823,7 +1831,7 @@ function setupSlideConfirm(container, onConfirm){
     fill.style.width = (x + thumb.offsetWidth) + 'px';
     if(text) text.style.opacity = String(Math.max(0, 1 - progress * 1.3));
     if(progress >= 0.95){
-      dragging = false;
+      dragging = false; _slideDragging = false;   // libera ANTES do onConfirm (senão o render da rotina fica travado)
       thumb.classList.remove('dragging');
       container.classList.add('armed');
       thumb.style.left = maxX + 'px';
@@ -1833,6 +1841,7 @@ function setupSlideConfirm(container, onConfirm){
     }
   }
   function end(){
+    _slideDragging = false;
     if(!dragging) return;
     dragging = false;
     thumb.classList.remove('dragging');
@@ -1844,6 +1853,12 @@ function setupSlideConfirm(container, onConfirm){
   window.addEventListener('touchmove', move, {passive:false});
   window.addEventListener('mouseup', end);
   window.addEventListener('touchend', end);
+  _slideWinCleanup = () => {
+    window.removeEventListener('mousemove', move);
+    window.removeEventListener('touchmove', move);
+    window.removeEventListener('mouseup', end);
+    window.removeEventListener('touchend', end);
+  };
 }
 
 function rotinaCompleta(chamado){
@@ -2280,7 +2295,11 @@ function consumirPeca(key, qtd){
 // + km/h consistente). O `ts` muda sempre → garante child_changed na torre mesmo parado.
 function writeMotoristaNode(extra){
   if(!me) return;
-  const data = { ...cleanForFb(extra || {}), online: true, ts: Date.now() };  // todo write vivo reassere online
+  // NÃO reassere online aqui. A flag `online` é propriedade EXCLUSIVA de setupPresence (onDisconnect
+  // server-side + reassert no .info/connected). Antes, este write — inclusive o PATCH REST com
+  // keepalive, que sobrevive ao fechamento do app — recravava online:true POR CIMA do online:false
+  // que o onDisconnect grava na queda, deixando o motorista "colado" online pra sempre (fantasma no mapa).
+  const data = { ...cleanForFb(extra || {}), ts: Date.now() };
   // 1) SDK (WebSocket) — rápido em foreground
   try {
     if(typeof firebase !== 'undefined' && firebase.apps?.length){
@@ -2647,6 +2666,7 @@ function renderIdleHub(){
     </div>`;
 }
 function renderChamadoCard(){
+  if(_slideDragging) return;   // colab arrastando o slide de iniciar → não reescreve o card por baixo do dedo
   const el = document.getElementById('chamadocard');
   const empty = document.getElementById('empty');
   if(fila.length === 0){
@@ -2806,7 +2826,9 @@ function renderChamadoCard(){
   const inlineSlide = el.querySelector('#iniSlideInline');
   if(inlineSlide){
     resetSlide(inlineSlide);
-    setupSlideConfirm(inlineSlide, () => onIniciarConfirmado(c));
+    // Resolve o chamado VIVO por id no momento do confirm (não confia no closure 'c', que um
+    // merge do snapshot pode ter trocado por outro objeto de mesmo id → iniciadoEm ia pro objeto morto).
+    setupSlideConfirm(inlineSlide, () => { const live = fila.find(x => x.id === c.id) || fila[0]; if(live) onIniciarConfirmado(live); });
   }
   bindRotinaInputs(c);
 }
@@ -3759,7 +3781,7 @@ function startColabOnlineTracker(){
 // mantém vivo mesmo com a tela apagada), `online:true` persiste no nó SEM precisar de nenhum timer.
 // Se a conexão cair de verdade, o SERVIDOR roda o onDisconnect e marca `online:false`. Ao reconectar,
 // reassere `online:true`. A torre passa a honrar essa flag (não decide só pelo TTL de lastSeen).
-let _presenceRef = null, _presenceConn = null;
+let _presenceRef = null, _presenceConn = null, _heartbeatTimer = null;
 function setupPresence(){
   try{
     if(!me || !me.id || typeof firebase === 'undefined' || !firebase.apps?.length) return;
@@ -3776,6 +3798,7 @@ function setupPresence(){
 function cancelPresence(){   // chamado no checkout/logout intencional (evita nó-fantasma {online:false})
   try { if(_presenceConn) _presenceConn.off(); } catch(_){}
   try { if(_presenceRef) _presenceRef.onDisconnect().cancel(); } catch(_){}
+  try { if(_heartbeatTimer){ clearInterval(_heartbeatTimer); _heartbeatTimer = null; } } catch(_){}   // para de recriar o nó após o .remove() do checkout
 }
 
 function bootApp(){
@@ -3802,8 +3825,9 @@ function bootApp(){
     setTimeout(() => syncTurnoToTorre(), 800);
   }
 
-  // Heartbeat: re-anuncia a cada 15s pra torre saber que tá vivo
-  setInterval(() => {
+  // Heartbeat: re-anuncia a cada 15s pra torre saber que tá vivo (handle guardado p/ limpar no checkout)
+  if(_heartbeatTimer) clearInterval(_heartbeatTimer);
+  _heartbeatTimer = setInterval(() => {
     if(myPos) sendPos(myPos);
     else {
       const hb = { id: me.id, nome: me.nome, placa: me.placa, color: me.color, status: me.status };
