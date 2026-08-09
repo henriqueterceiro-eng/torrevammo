@@ -22,10 +22,11 @@ export async function onRequestGet(context){
   const stops = (url.searchParams.get('stops') || '').split('|').map(s => s.trim()).filter(s => okpt(s));
   if(!stops.length) return json({ error:'stops vazio' }, 400);
 
+  const wantOpt = url.searchParams.get('optimize') === '1';   // opt-in: otimiza a ORDEM dos waypoints
   const destination = stops[stops.length - 1];
   const waypoints = stops.slice(0, -1);
   const p = new URLSearchParams({ origin: from, destination, mode: 'driving', departure_time: 'now', key: env.GMAPS_KEY });
-  if(waypoints.length) p.set('waypoints', waypoints.join('|'));
+  if(waypoints.length) p.set('waypoints', (wantOpt ? 'optimize:true|' : '') + waypoints.join('|'));
 
   try {
     const r = await fetch('https://maps.googleapis.com/maps/api/directions/json?' + p.toString());
@@ -41,7 +42,7 @@ export async function onRequestGet(context){
       distance += dv; duration += uv; durTraffic += tv;
       return { distance: dv, duration: uv, trafficDelay: Math.max(0, tv - uv) };
     });
-    return json({ coords, distance, duration, trafficDelay: Math.max(0, durTraffic - duration), legs, provider: 'google' });
+    return json({ coords, distance, duration, trafficDelay: Math.max(0, durTraffic - duration), legs, waypointOrder: route.waypoint_order || null, provider: 'google' });
   } catch(e){
     return json({ error: 'falha google directions' }, 502);
   }

@@ -1001,7 +1001,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v80 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v81 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3096,7 +3096,7 @@ function renderMot(){
       }).join('');
       filaHtml += `<div class="filaacts">
         ${hasGeo ? `<button data-act="locate">📍 Ver no mapa</button>` : ''}
-        ${hasGeo && fila.length > 1 && TT.has() ? `<button data-act="optimize" style="background:rgba(0,180,229,0.15);color:var(--acc);border-color:var(--acc);font-weight:700">✨ Otimizar ordem</button>` : ''}
+        ${hasGeo && fila.length > 1 && cfg.rotasSmart !== false ? `<button data-act="optimize" style="background:rgba(0,180,229,0.15);color:var(--acc);border-color:var(--acc);font-weight:700">✨ Otimizar ordem</button>` : ''}
         <button class="clear-all" data-act="clear-all">🗑 Limpar fila</button>
       </div>`;
     }
@@ -3265,7 +3265,23 @@ async function otimizarFila(motoristaId, btn){
   const oldText = btn ? btn.textContent : '';
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Otimizando…'; }
   try {
-    const newOrder = await TT.optimize({lat:m.lat, lng:m.lng}, stops);
+    // Melhor ordem de visita. GOOGLE primeiro (já pago, sem depender do TomTom): "round-trip trick"
+    // — manda todos os pickups como waypoints e o PRÓPRIO colab como destino (última parada), com
+    // optimize:true; o Google devolve a ordem ótima dos waypoints e a gente descarta a volta. Isso
+    // otimiza o caminho ABERTO sem TRAVAR o último ponto (a limitação do destino-fixo). Fallback:
+    // TomTom (se ligado) → vizinho-mais-próximo por linha reta.
+    let newOrder = null;
+    try {
+      const stopsStr = stops.map(s => `${s.lat},${s.lng}`).join('|') + `|${m.lat},${m.lng}`;
+      const rr = await fetch(`/route?from=${m.lat},${m.lng}&stops=${encodeURIComponent(stopsStr)}&optimize=1`);
+      if(rr.ok){ const rd = await rr.json(); if(rd && Array.isArray(rd.waypointOrder) && rd.waypointOrder.length === stops.length) newOrder = rd.waypointOrder; }
+    } catch(_){}
+    if(!newOrder && TT.has()){ try { newOrder = await TT.optimize({lat:m.lat, lng:m.lng}, stops); } catch(_){} }
+    if(!newOrder){   // vizinho-mais-próximo (linha reta) — sempre funciona, sem API
+      const rem = stops.map((_, i) => i), nn = []; let cur = { lat: m.lat, lng: m.lng };
+      while(rem.length){ let bj = 0, bd = Infinity; rem.forEach((idx, j) => { const d = haversine(cur, stops[idx]); if(d < bd){ bd = d; bj = j; } }); const idx = rem.splice(bj, 1)[0]; nn.push(idx); cur = stops[idx]; }
+      newOrder = nn;
+    }
     if(!newOrder || newOrder.length !== stops.length){ throw new Error('Resposta inválida'); }
     // Verifica se mudou de fato
     const same = newOrder.every((v, i) => v === i);
@@ -8340,11 +8356,12 @@ function init(){
 }
 
 // ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
-const NOV_VER_TORRE = 'v66';
+const NOV_VER_TORRE = 'v81-rotas';
 const NOV_ITENS_TORRE = [
-  { ic:'🖱️', t:'Atribuição em massa', d:'Clique com o botão DIREITO num chamado pra entrar no modo seleção, marque vários e atribua todos de uma vez — a um colaborador ou a um prestador.' },
-  { ic:'🙋', t:'Prioridade pra cliente aguardando', d:'Chamado com cliente aguardando no local ganha borda verde + selo AGUARDANDO e entra na FRENTE da fila e da roteirização.' },
-  { ic:'🔄', t:'Transferência entre bases', d:'Nos motivos de deslocamento/logística, informe Base de saída → Base de entrega. O chamado mostra a rota origem → destino no card e no detalhe.' }
+  { ic:'⚡', t:'Despacho por quem chega ANTES', d:'Ao atribuir um chamado, a lista de colaboradores já vem ordenada por <b>tempo real de chegada</b> — com trânsito ao vivo do Google — e mostra <b>⚡ min · km</b> de cada um. Acabou o "no olho": você manda quem chega primeiro de verdade.' },
+  { ic:'🧭', t:'Rota multi-parada otimizada em 1 clique', d:'Colaborador com vários chamados na fila? O botão <b>✨ Otimizar ordem</b> reorganiza a rota pelo <b>melhor caminho</b> (menos km, menos tempo, já contando o trânsito) — e mantém quem está <b>aguardando no local</b> na frente.' },
+  { ic:'🎯', t:'Mais perto no topo, na hora', d:'A lista abre instantaneamente com o colaborador <b>mais próximo em primeiro</b>, antes mesmo do cálculo de trânsito carregar. Zero espera pra ter uma boa decisão.' },
+  { ic:'🛡️', t:'Rápido, econômico e reversível', d:'Cálculos com <b>cache</b> pra não pesar nem estourar cota, tudo na infra que a gente já tem, e uma <b>trava-mestra</b> pra ligar/desligar a inteligência a qualquer momento. Feito com carinho. 💙' }
 ];
 function mostrarNovidadesTorre(force){
   try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER_TORRE)) return; }catch(e){}
@@ -8355,9 +8372,10 @@ function mostrarNovidadesTorre(force){
   const itens = NOV_ITENS_TORRE.map(i => `<li style="display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,0.04);border:1px solid rgba(125,165,215,0.16);border-radius:10px;padding:11px 13px;margin-bottom:9px;list-style:none">
       <span style="font-size:18px">${i.ic}</span><div><b style="display:block;font-size:13.5px">${i.t}</b><span style="color:#9aa8bd;font-size:12px;line-height:1.45">${i.d}</span></div></li>`).join('');
   ov.innerHTML = `<div style="background:linear-gradient(180deg,#0e1a30,#0b1526);border:1px solid rgba(0,180,229,0.34);border-radius:18px;max-width:460px;width:100%;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,0.6);max-height:90vh;overflow:auto">
-      <div style="text-align:center;margin-bottom:14px"><div style="font-size:38px">🎉</div>
-        <h3 style="font-size:19px;margin-top:6px">Novidades da Torre</h3>
-        <div style="color:var(--acc);font-family:var(--mono);font-size:12px;font-weight:800;margin-top:4px">versão ${NOV_VER_TORRE}</div></div>
+      <div style="text-align:center;margin-bottom:14px"><div style="font-size:42px">🧭</div>
+        <h3 style="font-size:21px;margin-top:6px;background:linear-gradient(90deg,#7cf0ff,#00B4E5);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-weight:900">Rotas mais inteligentes</h3>
+        <div style="color:var(--acc);font-family:var(--mono);font-size:11px;font-weight:800;margin-top:5px;letter-spacing:.5px">TORRE ${TORRE_VERSION.split(' ')[0]} · DESPACHO &amp; ROTEIRIZAÇÃO</div>
+        <div style="color:#9aa8bd;font-size:12px;margin-top:9px;line-height:1.45;max-width:360px;margin-left:auto;margin-right:auto">A torre agora escolhe sozinha <b style="color:#cfe9f5">quem chega mais rápido</b> e traça o <b style="color:#cfe9f5">melhor caminho</b> — com trânsito ao vivo.</div></div>
       <ul style="margin:12px 0;padding:0">${itens}</ul>
       <button id="novOkTorre" style="width:100%;padding:13px;background:var(--acc);color:#001823;font-weight:800;border:none;border-radius:10px;font-size:14px;cursor:pointer">Entendi 👍</button>
     </div>`;
