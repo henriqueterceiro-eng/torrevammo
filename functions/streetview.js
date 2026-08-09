@@ -40,9 +40,19 @@ export async function onRequestGet(context) {
 }
 
 function passImg(r, source) {
+  const ct = r.headers.get("content-type") || "";
+  // Se o Google recusou (API nao habilitada / key restrita), o corpo vem como texto de erro,
+  // NAO como imagem. Nesse caso NAO cacheia (senao o erro fica preso por 1 dia no CDN mesmo
+  // depois de habilitar a API) e devolve 502 limpo -> o <img> cai no fallback "nofoto" na hora.
+  if (!ct.startsWith("image/")) {
+    return new Response("streetview indisponivel (" + source + "): verifique se Street View Static API + Maps Static API estao habilitadas pra GMAPS_KEY", {
+      status: 502,
+      headers: { "X-Source": source + "-erro", "Cache-Control": "no-store" },
+    });
+  }
   return new Response(r.body, {
     headers: {
-      "Content-Type": r.headers.get("content-type") || "image/jpeg",
+      "Content-Type": ct || "image/jpeg",
       "Cache-Control": "public, max-age=86400", // 1 dia (o local nao muda) — ajuda offline/perf
       "X-Source": source,
     },
