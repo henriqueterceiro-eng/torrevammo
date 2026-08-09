@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v64 · 2026-08-09';
+const APP_VERSION = 'v65 · 2026-08-09';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3875,6 +3875,43 @@ function cancelPresence(){   // chamado no checkout/logout intencional (evita n�
   try { if(_heartbeatTimer){ clearInterval(_heartbeatTimer); _heartbeatTimer = null; } } catch(_){}   // para de recriar o nó após o .remove() do checkout
 }
 
+// ====================== BOLINHA FLUTUANTE (overlay nativo, estilo Uber) ======================
+// Só existe no APP NATIVO (plugin VammoBubble). No web/PWA não faz nada. Pede a permissão
+// "Exibir sobre outros apps" 1x (amigável) e habilita; o nativo mostra/esconde a bolinha sozinho
+// conforme o app vai pro background/foreground.
+let _bubbleOn = false;
+function _bubblePlugin(){ return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.VammoBubble) || null; }
+async function setupBubble(){
+  try {
+    const P = _bubblePlugin(); if(!P) return;
+    const res = await P.hasPermission();
+    if(res && res.granted){ await P.enable(); _bubbleOn = true; return; }
+    if(localStorage.getItem('bubble_prompt_dismissed')) return;
+    mostrarPromptBolinha(P);
+  } catch(_){}
+}
+function mostrarPromptBolinha(P){
+  if(document.getElementById('bubbleOv')) return;
+  const ov = document.createElement('div');
+  ov.id = 'bubbleOv';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,15,0.85);backdrop-filter:blur(6px);z-index:9600;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = `<div style="background:linear-gradient(180deg,#0e1a30,#0b1526);border:1px solid rgba(0,180,229,0.34);border-radius:18px;max-width:400px;width:100%;padding:24px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,0.6)">
+      <div style="font-size:42px">🔵</div>
+      <h3 style="font-size:18px;margin:8px 0 6px">Bolinha flutuante do Vammo</h3>
+      <p style="color:#9aa8bd;font-size:13px;line-height:1.55;margin:0 0 16px">Ative pra ter o Vammo <b style="color:#eaf4ff">sempre a um toque</b>, mesmo quando abrir o Waze ou o WhatsApp. Uma bolinha fica no canto da tela — é só tocar pra voltar pro atendimento na hora.</p>
+      <button id="bubbleAtivar" style="width:100%;padding:13px;background:var(--acc);color:#001823;font-weight:800;border:none;border-radius:10px;font-size:14px;margin-bottom:8px;cursor:pointer">Ativar bolinha 🔵</button>
+      <button id="bubbleDepois" style="width:100%;padding:11px;background:transparent;color:#9aa8bd;border:1px solid var(--bdr);border-radius:10px;font-size:12px;cursor:pointer">Agora não</button>
+    </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('bubbleAtivar').onclick = async () => { try { await P.requestPermission(); } catch(_){} ov.remove(); showToast('Depois de permitir, a bolinha liga sozinha 🔵'); };
+  document.getElementById('bubbleDepois').onclick = () => { try { localStorage.setItem('bubble_prompt_dismissed','1'); } catch(_){} ov.remove(); };
+}
+// Ao voltar pro app (ex.: concedeu a permissão nas Configurações), re-checa e liga a bolinha.
+document.addEventListener('visibilitychange', async () => {
+  if(document.hidden || _bubbleOn) return;
+  try { const P = _bubblePlugin(); if(!P) return; const r = await P.hasPermission(); if(r && r.granted){ await P.enable(); _bubbleOn = true; } } catch(_){}
+});
+
 function bootApp(){
   showApp();
   renderTopBar();
@@ -3883,6 +3920,7 @@ function bootApp(){
   startGPS();
   startColabOnlineTracker();
   setupPresence();   // presença server-side (onDisconnect) — não some mais em background/parado
+  setTimeout(setupBubble, 1600);   // bolinha flutuante "sempre por cima" (só no app nativo)
   const av = document.getElementById('appver');
   if(av) av.textContent = 'app ' + APP_VERSION;
 

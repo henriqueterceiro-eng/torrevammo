@@ -36,6 +36,10 @@ jobs:
         working-directory: native
         run: node scripts/patch-manifest.mjs
 
+      - name: Injetar plugin nativo (bolinha flutuante estilo Uber)
+        working-directory: native
+        run: node scripts/inject-native.mjs
+
       - name: Sincronizar
         working-directory: native
         run: npx cap sync android

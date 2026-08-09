@@ -11,7 +11,8 @@ const perms = [
   'android.permission.ACCESS_BACKGROUND_LOCATION',
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_LOCATION',
-  'android.permission.POST_NOTIFICATIONS'
+  'android.permission.POST_NOTIFICATIONS',
+  'android.permission.SYSTEM_ALERT_WINDOW'   // bolinha flutuante "sempre por cima" (overlay estilo Uber)
 ];
 
 let added = 0;
