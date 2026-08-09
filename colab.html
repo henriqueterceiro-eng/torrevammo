@@ -821,7 +821,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v59 · 2026-08-09';
+const APP_VERSION = 'v60 · 2026-08-09';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2754,17 +2754,20 @@ function renderChamadoCard(){
     </div>
   ` : '';
 
-  // Slide de iniciar atendimento — fica visível ATÉ ele iniciar, sempre que chegou no local
-  // Substitui o iniModal que era bottomsheet e podia cortar em telas pequenas.
-  const inicioSlide = (c.arrived && !c.iniciadoEm) ? `
+  // Slide de iniciar atendimento. Aparece quando CHEGOU (geofence) OU já está EM_ROTA — este 2º
+  // caso é o FALLBACK MANUAL: se o GPS estiver fraco/parado e a chegada automática não disparar,
+  // o colab ainda consegue iniciar (antes ficava travado sem nenhum botão). O onIniciarConfirmado
+  // segue protegendo: só inicia dentro de RANGE_INICIO_M (200m) OU com autorização da torre.
+  const _podeIniciar = (c.arrived || c.status === 'em_rota') && !c.iniciadoEm;
+  const inicioSlide = _podeIniciar ? `
     <div style="margin:14px 0;padding:14px;background:linear-gradient(135deg,rgba(0,180,229,0.15),rgba(0,180,229,0.05));border:2px solid var(--acc);border-radius:14px">
-      <div style="font-size:12px;font-weight:800;color:var(--acc);text-align:center;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">🎯 Confirme o início do atendimento</div>
+      <div style="font-size:12px;font-weight:800;color:var(--acc);text-align:center;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">🎯 ${c.arrived ? 'Confirme o início do atendimento' : 'Chegou no local? Deslize pra iniciar'}</div>
       <div class="slide-confirm cyan" id="iniSlideInline" style="height:64px">
         <div class="slide-fill"></div>
         <div class="slide-text" style="font-size:13px">→ deslize para iniciar →</div>
         <div class="slide-thumb" style="width:52px;height:52px;font-size:24px">▶</div>
       </div>
-      <div style="font-size:10px;color:var(--txt2);text-align:center;margin-top:8px">Use o slide pra evitar toque acidental</div>
+      <div style="font-size:10px;color:var(--txt2);text-align:center;margin-top:8px">${c.arrived ? 'Use o slide pra evitar toque acidental' : 'Deslize só quando estiver no local — se o GPS estiver fraco, a torre autoriza'}</div>
     </div>
   ` : '';
 
