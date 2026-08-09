@@ -1001,7 +1001,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v82 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v83 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -8213,7 +8213,7 @@ function init(){
   setTimeout(checkOciosidade, 8000);
   setInterval(checkOciosidade, 30000);
   // Popup de novidades da versão (1x por operador)
-  setTimeout(mostrarNovidadesTorre, 1400);
+  setTimeout(() => { if(!mostrarDiaDosPaisTorre()) mostrarNovidadesTorre(); }, 1400);   // hoje: Dia dos Pais; senão: novidades da versão
 
   // Demo panel
   $('#demobtn').onclick = () => {
@@ -8368,6 +8368,43 @@ const NOV_ITENS_TORRE = [
   { ic:'🎯', t:'Mais perto no topo, na hora', d:'A lista abre instantaneamente com o colaborador <b>mais próximo em primeiro</b>, antes mesmo do cálculo de trânsito carregar. Zero espera pra ter uma boa decisão.' },
   { ic:'🛡️', t:'Rápido, econômico e reversível', d:'Cálculos com <b>cache</b> pra não pesar nem estourar cota, tudo na infra que a gente já tem, e uma <b>trava-mestra</b> pra ligar/desligar a inteligência a qualquer momento. Feito com carinho. 💙' }
 ];
+// Mensagem de DIA DOS PAIS pro time da torre — SÓ aparece hoje (09/08/2026), 1x por operador.
+// Retorna true se exibiu (aí o init não mostra a novidades da versão em cima).
+function mostrarDiaDosPaisTorre(){
+  const h = new Date();
+  if(!(h.getFullYear() === 2026 && h.getMonth() === 7 && h.getDate() === 9)) return false;
+  const KEY = 'diadospais_2026_torre';
+  try{ if(localStorage.getItem(KEY)) return false; }catch(e){}
+  if(document.getElementById('dpTorreOv')) return true;
+  if(!document.getElementById('dp-anim')){
+    const st = document.createElement('style'); st.id = 'dp-anim';
+    st.textContent = '@keyframes dpIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}@keyframes dpHeart{0%,100%{transform:scale(1)}50%{transform:scale(1.13)}}';
+    document.head.appendChild(st);
+  }
+  const ov = document.createElement('div');
+  ov.id = 'dpTorreOv';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,15,0.87);backdrop-filter:blur(7px);z-index:13000;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML = `<div style="background:linear-gradient(180deg,#12233f,#0b1526 60%);border:1px solid rgba(0,180,229,0.4);border-radius:20px;max-width:460px;width:100%;box-shadow:0 30px 90px rgba(0,0,0,0.7);overflow:hidden;animation:dpIn .45s cubic-bezier(.2,.8,.2,1) both">
+      <div style="background:radial-gradient(120% 100% at 50% 0%,rgba(245,180,80,0.30),rgba(0,180,229,0.12) 55%,transparent 82%);padding:28px 24px 14px;text-align:center">
+        <div style="font-size:48px;animation:dpHeart 1.8s ease-in-out infinite">💙</div>
+        <h3 style="font-size:24px;margin:8px 0 2px;font-weight:900;letter-spacing:-.3px;background:linear-gradient(90deg,#ffd9a0,#7cf0ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">Feliz Dia dos Pais!</h3>
+        <div style="color:#bcd0e6;font-size:13px;margin:6px auto 0;max-width:360px">a cada pai desse time — na torre, na oficina e na rua</div>
+      </div>
+      <div style="padding:6px 26px 8px">
+        <p style="color:#d7e3f2;font-size:13.5px;line-height:1.65;margin:8px 0">Hoje é o dia de vocês. Um obrigado especial aos nossos <b style="color:#ffd9a0">motoristas na estrada</b>, mesmo no domingo — e a cada pessoa da operação que transforma esforço em cuidado: com o cliente, com o colega e, acima de tudo, com <b style="color:#eaf4ff">a própria família</b>.</p>
+        <p style="color:#d7e3f2;font-size:13.5px;line-height:1.65;margin:8px 0">Que seja um dia leve, feliz e ao lado de quem vocês amam. Vocês são a Vammo. 💙</p>
+      </div>
+      <div style="padding:8px 26px 24px">
+        <button id="dpTorreOk" style="width:100%;padding:14px;background:linear-gradient(135deg,#00B4E5,#0894c0);color:#001823;font-weight:900;border:none;border-radius:12px;font-size:15px;cursor:pointer;box-shadow:0 8px 22px rgba(0,180,229,0.35)">Obrigado 💙</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => { try{ localStorage.setItem(KEY, '1'); }catch(e){} ov.remove(); };
+  ov.querySelector('#dpTorreOk').onclick = close;
+  ov.onclick = (e) => { if(e.target === ov) close(); };
+  return true;
+}
+
 function mostrarNovidadesTorre(force){
   try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER_TORRE)) return; }catch(e){}
   if(document.getElementById('novOverlayTorre')) return;

@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v63 · 2026-08-09';
+const APP_VERSION = 'v64 · 2026-08-09';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -6201,6 +6201,9 @@ const NOV_ITENS = [
   { ic:'👀', t:'Veja o local antes de chegar', d:'Toque na foto do chamado e olhe a rua em 360°: você chega sabendo onde é, com mais segurança.' }
 ];
 function mostrarNovidades(force){
+  // Mensagem de DIA DOS PAIS: só aparece HOJE (09/08/2026). Depois de hoje, nunca mais.
+  const _h = new Date();
+  if(!(_h.getFullYear() === 2026 && _h.getMonth() === 7 && _h.getDate() === 9)) return;
   try{ if(!force && localStorage.getItem('novidades_vista_'+NOV_VER)) return; }catch(e){}
   if(document.getElementById('novOverlay')) return;
   if(!document.getElementById('ndp-anim')){
