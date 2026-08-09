@@ -20,16 +20,6 @@ export async function onRequestGet(context) {
   const staticMap = () =>
     fetch(`${G}/staticmap?center=${loc}&zoom=19&size=640x400&maptype=hybrid&markers=color:red%7C${loc}&key=${key}`);
 
-  // DEBUG TEMPORÁRIO: revela o erro cru do Google (traz o nº do projeto quando a API nao esta
-  // habilitada) pra descobrir a qual projeto a GMAPS_KEY pertence. Nao expoe a chave.
-  if (mode === "debug") {
-    const meta = await fetch(`${G}/streetview/metadata?location=${loc}&source=outdoor&key=${key}`).then((r) => r.text()).catch((e) => "metaerr:" + e.message);
-    const sm = await staticMap().then((r) => r.text()).catch((e) => "smerr:" + e.message);
-    return new Response(JSON.stringify({ metadata: meta, staticmap: sm.slice(0, 700), keyTail: key ? ("..." + key.slice(-6)) : "SEM_KEY" }), {
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-    });
-  }
-
   try {
     if (mode === "map") return passImg(await staticMap(), "map");
 
