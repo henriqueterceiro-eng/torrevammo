@@ -821,7 +821,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v58 · 2026-08-09';
+const APP_VERSION = 'v59 · 2026-08-09';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1036,14 +1036,22 @@ function setupChamadosListener(){
                    ![...remoteIds].every(id => localIds.has(id)) ||
                    ![...localIds].every(id => remoteIds.has(id));
       if(diff){
-        console.log('[colab] turno sincronizado: slotsOcupados', localCount, '→', remoteCount);
-        turnoAtivo.slotsOcupados = remote.slotsOcupados || [];
-        renderTopBar();
-        // Manda heartbeat imediato pra torre saber que o colab já tá ciente
-        if(myPos) sendPos(myPos);
-        if(remoteCount > localCount){
-          vibrate(80);
-          showToast('🏍 Moto registrada pela torre');
+        // PROTEÇÃO CONTRA CORRIDA: se o REMOTO tem MENOS slots que o local e eu acabei de mexer nos
+        // slots aqui (recolher/descarregar), é um snapshot ANTIGO chegando antes do meu próprio
+        // write ecoar — NÃO apaga o slot recém-criado (era isso que fazia "recolher e não ocupa slot").
+        const mexiAgora = turnoAtivo._slotsLocalTs && (Date.now() - turnoAtivo._slotsLocalTs < 12000);
+        if(remoteCount < localCount && mexiAgora){
+          console.log('[colab] ignora eco antigo de turno (protege slot local recém-criado)');
+        } else {
+          console.log('[colab] turno sincronizado: slotsOcupados', localCount, '→', remoteCount);
+          turnoAtivo.slotsOcupados = remote.slotsOcupados || [];
+          renderTopBar();
+          // Manda heartbeat imediato pra torre saber que o colab já tá ciente
+          if(myPos) sendPos(myPos);
+          if(remoteCount > localCount){
+            vibrate(80);
+            showToast('🏍 Moto registrada pela torre');
+          }
         }
       }
     });
@@ -3571,6 +3579,7 @@ function confirmarDescarga(){
   const aSair = slotsOriginal.filter(s => _descSelecionadas[s.id]);
   const aSair_ids = new Set(aSair.map(s => s.id));
   turnoAtivo.slotsOcupados = slotsOriginal.filter(s => !aSair_ids.has(s.id));
+  turnoAtivo._slotsLocalTs = Date.now();
   saveTurno();
   syncTurnoToTorre();
   renderTopBar();
@@ -5044,6 +5053,7 @@ function checkInMoto(opts){
     clienteName: opts.clienteName || null,
     placa: opts.placa || null
   });
+  turnoAtivo._slotsLocalTs = Date.now();   // marca mudança local p/ o listener não apagar por eco antigo
   saveTurno();
   syncTurnoToTorre();
   renderTopBar();
@@ -5063,6 +5073,7 @@ function checkOutMotos(qtd){
   turnoAtivo.slotsOcupados = turnoAtivo.slotsOcupados || [];
   const removed = Math.min(qtd, turnoAtivo.slotsOcupados.length);
   for(let i = 0; i < removed; i++) turnoAtivo.slotsOcupados.shift(); // FIFO
+  turnoAtivo._slotsLocalTs = Date.now();
   saveTurno();
   syncTurnoToTorre();
   renderTopBar();
