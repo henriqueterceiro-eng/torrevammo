@@ -1010,7 +1010,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v67 · 2026-08-11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v89 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v90 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3028,7 +3028,7 @@ function renderList(){
         <div class="nome">${numTag}${esc(c.cliente||'?')}</div>
         <div class="ico">${ico(c.motivo)}</div>
       </div>
-      <div class="badges">${aguardBadge}${esperaBadge}${stBadge}${aceitoBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
+      <div class="badges">${aguardBadge}${esperaBadge}${voucherBadge(c)}${stBadge}${aceitoBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
       <div class="motivo">${esc(c.motivo||'—')}</div>
       ${transfLine ? `<div class="transf">${transfLine}</div>` : ''}
       ${c.endereco ? `<div class="end">📍 ${esc(c.endereco)}</div>` : ''}
@@ -3414,7 +3414,7 @@ function renderDetail(){
       <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : (c.status||'novo').toUpperCase()}</span>
       <span style="margin-left:8px;color:var(--txt2);font-size:11px">⏱ ${fmtElapsed(c.ts)}</span>
       ${c.travada?'<span class="b b-trav" style="margin-left:6px">⚠ TRAV</span>':''}
-      ${(!chamadoLogistica(c) && c.clienteAguardando === true) ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : ((!chamadoLogistica(c) && c.clienteAguardando === false) ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}
+      ${(!chamadoLogistica(c) && c.clienteAguardando === true) ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : ((!chamadoLogistica(c) && c.clienteAguardando === false) ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}${c.voucher ? '<span style="margin-left:6px">'+voucherBadge(c)+'</span>' : ''}
     </div>
     ${(() => {
       const cands = [c.inicioDistM, c.inicioDistMotoM].filter(x => x != null);
@@ -3565,11 +3565,11 @@ function renderDetail(){
       <button id="dafinforce" style="width:100%;margin-top:8px;padding:9px;background:rgba(220,38,38,0.14);border:1px solid #dc2626;color:#fca5a5;font-size:12px;font-weight:800;border-radius:6px;cursor:pointer">🛑 Finalizar forçado pela Torre <span style="font-weight:500;opacity:0.8">(gera log)</span></button>
     ` : ''}
     ${c.finalizadoForcado ? `<div style="margin-top:8px;padding:7px 10px;background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.5);border-radius:6px;font-size:10px;color:#fca5a5;line-height:1.4">🛑 <strong>Finalizado forçado pela Torre</strong>${c.finalizadoForcadoPor?' por '+esc(c.finalizadoForcadoPor):''}${c.finalizadoForcadoEm?' · '+fmtTime(c.finalizadoForcadoEm):''}</div>` : ''}
-    ${(c.origemFleet && c.status === 'novo' && !c.motoristaId && !c.terceiroId) ? `
+    ${((c.origemFleet || c.origemCX) && c.status === 'novo' && !c.motoristaId && !c.terceiroId) ? `
       <div style="margin-top:10px">
         ${c.aceitoPor
-          ? `<div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.45);border-radius:8px;padding:8px 11px;font-size:11.5px"><span style="font-size:15px">✋</span><div><b style="color:#ffcf7a">Aceito por ${esc(c.aceitoPor)}</b>${c.aceitoEm?` <span style="color:var(--txt3)">· ${fmtTime(c.aceitoEm)}</span>`:''}<div style="font-size:10px;color:var(--txt2)">Fleet vê o controlador responsável. Agora atribua um motorista.</div></div></div>`
-          : `<button id="daaceitar" style="width:100%;padding:10px;background:rgba(245,158,11,0.16);border:1px solid #f59e0b;color:#fbbf24;font-size:12px;font-weight:800;border-radius:8px;cursor:pointer">✋ Aceitar chamado <span style="font-weight:500;opacity:0.85">(assume como controlador — aparece no Fleet)</span></button>`}
+          ? `<div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.45);border-radius:8px;padding:8px 11px;font-size:11.5px"><span style="font-size:15px">✋</span><div><b style="color:#ffcf7a">Aceito por ${esc(c.aceitoPor)}</b>${c.aceitoEm?` <span style="color:var(--txt3)">· ${fmtTime(c.aceitoEm)}</span>`:''}<div style="font-size:10px;color:var(--txt2)">Quem abriu (${c.origemCX?'CX':'Fleet'}) vê o controlador responsável. Agora atribua um motorista.</div></div></div>`
+          : `<button id="daaceitar" style="width:100%;padding:10px;background:rgba(245,158,11,0.16);border:1px solid #f59e0b;color:#fbbf24;font-size:12px;font-weight:800;border-radius:8px;cursor:pointer">✋ Aceitar chamado <span style="font-weight:500;opacity:0.85">(assume como controlador — aparece pra quem abriu)</span></button>`}
       </div>
     ` : ''}
     ${(c.status !== 'concluido' && c.status !== 'cancelado') ? `
@@ -5897,6 +5897,17 @@ function destinoDaCorrida(r){
   }
   return { txt: desf || '—', cor:'var(--txt2)' };
 }
+// ===== VOUCHER (corrida por app: 99 / Uber) — flag fica no chamado até o final =====
+function voucherSvg(v){
+  if(v === '99')   return '<svg viewBox="0 0 40 22" style="height:14px;width:auto;vertical-align:-3px"><rect width="40" height="22" rx="5" fill="#FFC400"/><text x="20" y="16" font-size="14" font-weight="900" text-anchor="middle" fill="#141414" font-family="Arial,Helvetica,sans-serif">99</text></svg>';
+  if(v === 'uber') return '<svg viewBox="0 0 46 22" style="height:14px;width:auto;vertical-align:-3px"><rect width="46" height="22" rx="5" fill="#000"/><text x="23" y="16" font-size="12" font-weight="800" text-anchor="middle" fill="#fff" font-family="Arial,Helvetica,sans-serif">Uber</text></svg>';
+  return '';
+}
+function voucherNome(v){ return v === 'uber' ? 'Uber' : v === '99' ? '99' : ''; }
+function voucherBadge(c){
+  const v = c && c.voucher; if(!v) return '';
+  return `<span class="b" title="Voucher de corrida por app (${voucherNome(v)}) — registrado no chamado" style="background:rgba(255,196,0,0.14);border:1px solid #FFC400;color:#ffd54a;display:inline-flex;align-items:center;gap:4px">🎟 ${voucherSvg(v)}</span>`;
+}
 // ===== SUBSTATUS "O QUE ACONTECEU" =====
 // Conta a história real do atendimento: o desfecho principal + os fatos gravados pelo colab
 // (moto tinha chave? pagou no local? recolhida/descarregada onde? cliente presente? assinou?).
@@ -5941,6 +5952,9 @@ function resumoDesfecho(src){
     const it = iniEf >= 1000 ? (iniEf/1000).toFixed(1)+'km' : iniEf+'m';
     chips.push({ icon:'📍', txt:`Iniciado a ${it} ${iref}`, cor:'#fbbf24', title:'Atendimento iniciado longe do alvo (colab avisado + registrado)' });
   }
+  // Voucher (99/Uber) — fica no chamado do início ao fim; aparece no desfecho/relatório.
+  const vouch = (ch && ch.voucher) || (ride && ride.voucher);
+  if(vouch) chips.push({ icon:'🎟', txt:`Voucher ${voucherNome(vouch)}`, cor:'#ffd54a', title:'Corrida paga por voucher de app' });
   return { principal, chips };
 }
 // Renderiza o substatus como uma linha de chips inline (relatório) — compacto.
@@ -6807,9 +6821,9 @@ function playIncomingRing(){
 }
 let incomingQueue = [];               // ids aguardando aceite (na tela deste operador)
 const incomingDismissed = new Set();  // ids que ESTE operador dispensou (não reaparecem)
-// SÓ chamados abertos no app de Fleet (origemFleet) pedem aceite/toque/slide na torre.
-// Chamados internos da torre (form manual / CX) NÃO tocam nem exigem aceite.
-function chamadoPrecisaAceite(c){ return !!(c && c.origemFleet === true && c.status === 'novo' && !c.aceitoPor && !c.motoristaId && !c.terceiroId); }
+// Chamados do app de Fleet (origemFleet) E do app de CX (origemCX) pedem aceite/toque/slide na
+// torre — precisam chamar a atenção do controlador pra INICIAR. Form manual da torre NÃO toca.
+function chamadoPrecisaAceite(c){ return !!(c && (c.origemFleet === true || c.origemCX === true) && c.status === 'novo' && !c.aceitoPor && !c.motoristaId && !c.terceiroId); }
 function syncIncoming(novosIds){
   let tocou = false;
   for(const id of (novosIds || [])){
@@ -6841,7 +6855,7 @@ function renderIncoming(){
     const nMotos = Array.isArray(c.motos) ? c.motos.length : (c.qtdMotos || 0);
     const transf = (c.baseSaida || c.baseEntrega) ? `🚚 ${esc(_baseNome(c.baseSaida) || '?')} → ${esc(_baseNome(c.baseEntrega) || '?')}` : '';
     const sub = [esc(c.motivo || '—'), nMotos ? `🏍 ${nMotos} moto${nMotos>1?'s':''}` : '', transf].filter(Boolean).join(' · ');
-    const aberto = c.abertoPor ? `✍ ${esc(c.abertoPor)}${c.origemFleet ? ' · Fleet' : ''}` : '';
+    const aberto = c.abertoPor ? `✍ ${esc(c.abertoPor)}${c.origemFleet ? ' · Fleet' : c.origemCX ? ' · CX' : ''}` : '';
     return `<div class="inc-card" data-cid="${c.id}">
       <div class="inc-top"><span class="inc-ring">📞</span><div class="inc-t">Novo chamado · aguardando aceite</div><button class="inc-x" data-x="${c.id}" title="Dispensar (outro operador ainda pode aceitar)">✕</button></div>
       <div class="inc-body">
