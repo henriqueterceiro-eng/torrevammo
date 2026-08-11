@@ -797,7 +797,7 @@ body.selmode .card .mcheck{display:flex}
       <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Colaborador</label><select id="repcolab" style="font-size:11px;padding:5px 8px"><option value="">Todos</option></select></div>
       <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Veículo (placa)</label><select id="repveh" style="font-size:11px;padding:5px 8px"><option value="">Todos</option></select></div>
       <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">🔎 Buscar placa</label><input type="text" id="repplaca" placeholder="Ex: GJE4G07" maxlength="8" style="font-size:11px;padding:5px 8px;text-transform:uppercase"></div>
-      <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Status</label><select id="repstatus" style="font-size:11px;padding:5px 8px"><option value="">Todos</option><option value="concluido">Concluído</option><option value="cancelado">Cancelado</option></select></div>
+      <div><label style="display:block;font-size:10px;color:var(--txt2);margin-bottom:3px;font-weight:600">Status</label><select id="repstatus" style="font-size:11px;padding:5px 8px"><option value="">Todos</option><option value="__abertos">🔵 Em aberto (novo + em rota)</option><option value="novo">Novo</option><option value="em_rota">Em rota</option><option value="concluido">Concluído</option><option value="cancelado">Cancelado</option></select></div>
     </div>
     <div style="padding:12px 20px;border-bottom:1px solid var(--bdr)" id="reptotais">—</div>
     <div style="flex:1;overflow:auto" id="replist"></div>
@@ -1010,7 +1010,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v84 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v85 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2813,7 +2813,11 @@ function renderCatFilter(){
 
 // ===== PRIORIDADE (cliente aguardando no local) =====
 // Chamado com cliente aguardando no local tem prioridade na fila/roteirização.
-function chamadoPrioritario(c){ return !!(c && c.clienteAguardando === true && c.status !== 'concluido' && c.status !== 'cancelado'); }
+// EXCEÇÃO: movimentação comercial / transferência entre bases NÃO tem cliente esperando no
+// local → nunca prioriza (nem spot verde, nem furar fila, nem cobrança de SLA), mesmo que
+// alguém tenha marcado "cliente aguardando" na abertura.
+function chamadoLogistica(c){ return !!(c && (categoriaDoMotivo(c.motivo) === 'logistica' || c.baseSaida || c.baseEntrega || c.tipoMovimentacao)); }
+function chamadoPrioritario(c){ return !!(c && c.clienteAguardando === true && !chamadoLogistica(c) && c.status !== 'concluido' && c.status !== 'cancelado'); }
 // REGRA MÁXIMA — cliente aguardando SEM motorista precisa de atribuição URGENTE: mede e COBRA a velocidade.
 function aguardSemMotorista(c){ return chamadoPrioritario(c) && !c.motoristaId && !c.terceiroId && c.status === 'novo'; }
 function esperaAtribMs(c){ return Date.now() - (c.ts || Date.now()); }
@@ -3401,7 +3405,7 @@ function renderDetail(){
       <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : (c.status||'novo').toUpperCase()}</span>
       <span style="margin-left:8px;color:var(--txt2);font-size:11px">⏱ ${fmtElapsed(c.ts)}</span>
       ${c.travada?'<span class="b b-trav" style="margin-left:6px">⚠ TRAV</span>':''}
-      ${c.clienteAguardando === true ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : (c.clienteAguardando === false ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}
+      ${(!chamadoLogistica(c) && c.clienteAguardando === true) ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : ((!chamadoLogistica(c) && c.clienteAguardando === false) ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}
     </div>
     ${(c.inicioDistM != null && c.inicioDistM > 120) ? `<div style="margin-top:10px;padding:9px 12px;background:rgba(245,158,11,0.12);border:1px solid #f59e0b;border-radius:9px;display:flex;align-items:center;gap:10px">
       <span style="font-size:18px">📍</span>
@@ -5776,12 +5780,35 @@ function applyRepPeriodoPreset(p){
   $$('#repperiodo .rkp').forEach(b => b.classList.toggle('active', b.dataset.p === p));
 }
 
+// Casa o status da linha com o filtro. '__abertos' = qualquer chamado ainda aberto (novo/em_rota/…).
+function repStatusMatch(st){
+  const f = repState.status;
+  if(!f) return true;
+  if(f === '__abertos') return st !== 'concluido' && st !== 'cancelado';
+  return st === f;
+}
+function repStatusLabel(st){ return ({ novo:'Novo', em_rota:'Em rota', concluido:'Concluído', cancelado:'Cancelado' })[st] || (st || '—'); }
 function calcRep(){
   const deTs = repState.de || 0;
   const ateTs = repState.ate || Date.now();
-  return Object.values(corridas)
+  // 1) CORRIDAS = histórico durável dos encerrados (concluído/cancelado) — período pela data de encerramento.
+  const rides = Object.values(corridas)
     .filter(r => r.completedTs >= deTs && r.completedTs <= ateTs)
-    .filter(r => !repState.status || r.endStatus === repState.status)
+    .map(r => ({ ...r, _refTs: r.completedTs }));
+  // 2) CHAMADOS AINDA ABERTOS (novo/em_rota) que não viraram corrida — entram no relatório também,
+  //    pela data de ABERTURA. Linha "sintética": células/helpers caem no fallback do chamado.
+  const abertos = chamados
+    .filter(ch => ch.status !== 'concluido' && ch.status !== 'cancelado' && !corridas[ch.id])
+    .filter(ch => { const t = ch.ts || 0; return t >= deTs && t <= ateTs; })
+    .map(ch => ({
+      chamadoId: ch.id, endStatus: ch.status || 'novo', _refTs: ch.ts || 0, _aberta: true,
+      motoristaId: ch.motoristaId || null,
+      motoristaNome: (colaboradores[ch.motoristaId] && colaboradores[ch.motoristaId].nome) || (ch.motoristaId ? '—' : ''),
+      motoristaPlaca: ch.motoristaPlaca || null, cliente: ch.cliente || '',
+      completedTs: null, totalKm: 0, nota: null, rotinaSteps: null
+    }));
+  return [...rides, ...abertos]
+    .filter(r => repStatusMatch(r.endStatus))
     .filter(r => !repState.colab || r.motoristaId === repState.colab)
     .filter(r => !repState.veh || r.motoristaPlaca === repState.veh)
     .filter(r => { if(!repState.placaBusca) return true; const ch = chamados.find(x => x.id === r.chamadoId); return ((ch && ch.placa) || '').toUpperCase().includes(repState.placaBusca.toUpperCase()); })
@@ -5790,7 +5817,7 @@ function calcRep(){
       const c = colaboradores[r.motoristaId];
       return c && (c.base || '').trim() === repState.base;
     })
-    .sort((a,b) => b.completedTs - a.completedTs);
+    .sort((a,b) => (b._refTs || 0) - (a._refTs || 0));
 }
 
 // Formata segundos → "45s" / "12min 30s" / "1h 05min"
@@ -5922,13 +5949,16 @@ function renderRep(){
   const avgNota = cntNota > 0 ? sumNota / cntNota : 0;
   const concl = rows.filter(r => r.endStatus === 'concluido').length;
   const canc = rows.filter(r => r.endStatus === 'cancelado').length;
+  const abertosN = rows.filter(r => r._aberta).length;   // novo/em_rota (ainda sem corrida)
+  const atendN = rows.length - abertosN;                 // atendimentos = já viraram corrida
 
-  $('#repmeta').textContent = `${rows.length} corrida(s) · ${new Date(repState.de).toLocaleDateString('pt-BR')} → ${new Date(repState.ate).toLocaleDateString('pt-BR')}`;
+  $('#repmeta').textContent = `${rows.length} chamado(s)${abertosN?` · ${abertosN} em aberto`:''} · ${new Date(repState.de).toLocaleDateString('pt-BR')} → ${new Date(repState.ate).toLocaleDateString('pt-BR')}`;
   $('#reptotais').innerHTML = `
     <div class="rk-totais">
-      <div class="rk-tot"><div class="v">${rows.length}</div><div class="l">Atendimentos</div></div>
+      <div class="rk-tot"><div class="v">${atendN}</div><div class="l">Atendimentos</div></div>
       <div class="rk-tot"><div class="v" style="color:#16a34a">${concl}</div><div class="l">Concluídos</div></div>
       <div class="rk-tot"><div class="v" style="color:#dc2626">${canc}</div><div class="l">Cancelados</div></div>
+      ${abertosN ? `<div class="rk-tot"><div class="v" style="color:#00B4E5">${abertosN}</div><div class="l">Em aberto</div></div>` : ''}
       <div class="rk-tot"><div class="v">${totalKm.toFixed(1)}</div><div class="l">Km total</div></div>
       <div class="rk-tot"><div class="v" style="color:${avgNota >= 8 ? '#16a34a' : avgNota >= 6 ? '#fbbf24' : '#dc2626'}">${avgNota.toFixed(1)}</div><div class="l">Nota média</div></div>
     </div>
@@ -5960,7 +5990,7 @@ function renderRep(){
   `;
 
   if(rows.length === 0){
-    $('#replist').innerHTML = `<div class="rk-empty"><div class="ic">📭</div><div style="font-weight:700">Nenhuma corrida no filtro</div><div style="font-size:12px;margin-top:6px">Ajuste período ou filtros acima.</div></div>`;
+    $('#replist').innerHTML = `<div class="rk-empty"><div class="ic">📭</div><div style="font-weight:700">Nenhum chamado no filtro</div><div style="font-size:12px;margin-top:6px">Ajuste período ou filtros acima.</div></div>`;
     return;
   }
 
@@ -5998,11 +6028,11 @@ function renderRep(){
         ${rows.map((r,i) => {
           const c = colaboradores[r.motoristaId];
           const baseN = c?.base || '—';
-          const d = new Date(r.completedTs);
+          const d = new Date(r.completedTs || r._refTs);
           const dStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
           const nota = r.nota?.final;
           const corNota = nota >= 8 ? '#16a34a' : nota >= 6 ? '#fbbf24' : '#dc2626';
-          const stCor = r.endStatus === 'concluido' ? '#16a34a' : r.endStatus === 'cancelado' ? '#dc2626' : 'var(--txt3)';
+          const stCor = r.endStatus === 'concluido' ? '#16a34a' : r.endStatus === 'cancelado' ? '#dc2626' : r.endStatus === 'em_rota' ? '#f59e0b' : r.endStatus === 'novo' ? '#00B4E5' : 'var(--txt3)';
           const dest = destinoDaCorrida(r);
           const ch = chamados.find(x => x.id === r.chamadoId);
           const numId = (ch && ch.seq != null) ? ch.seq : numMap[r.chamadoId];
@@ -6042,7 +6072,7 @@ function renderRep(){
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#a78bfa">${fmtDurTMA(tempoAtribSec(r))}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#fbbf24">${fmtDurTMA(r.travelDurationSec)}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:#16a34a">${fmtDurTMA(r.serviceDurationSec)}</td>
-            <td style="padding:8px 12px;text-align:center;color:${stCor};font-weight:700">${esc(r.endStatus||'—')}</td>
+            <td style="padding:8px 12px;text-align:center;color:${stCor};font-weight:700">${esc(repStatusLabel(r.endStatus))}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:${corNota};font-weight:700">${nota != null ? nota.toFixed(1) : '—'}</td>
             <td style="padding:8px 12px;text-align:center">${evid}</td>
           </tr>`;
@@ -6062,7 +6092,7 @@ function exportRepCSV(){
   for(const r of rows){
     const c = colaboradores[r.motoristaId];
     const ch = chamados.find(x => x.id === r.chamadoId);
-    const d = new Date(r.completedTs);
+    const d = new Date(r.completedTs || r._refTs);
     const exec = execInfoDaCorrida(r);
     const numId = (ch && ch.seq != null) ? ch.seq : numMap[r.chamadoId];
     const csvCell = (v) => {
