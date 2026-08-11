@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v65 · 2026-08-09';
+const APP_VERSION = 'v66 · 2026-08-11';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1240,6 +1240,29 @@ function syncFilaFromSnapshot(data){
         assignedAt: ch.assignedAt || Date.now()
       });
     }
+    // ⚠ PROTEÇÃO DO CHAMADO EM ANDAMENTO — bug "abre o Waze e o chamado some": ao voltar do
+    // background um re-sync pode não trazer o chamado como "meu" (motoristaId limpo/transitório
+    // na reconexão) e o loop acima o descartaria. Se o colab está EM ROTA/CHEGOU nele e o chamado
+    // NÃO foi fechado nem re-atribuído a OUTRO colab, mantém na fila (preserva o progresso local) e
+    // re-reivindica se ficou sem dono — assim a torre não precisa "colocar de novo".
+    const protegidosIds = new Set();
+    for(const c of removidos){
+      const emAndamento = c.status === 'em_rota' || c.iniciadoEm || c.arrived ||
+        (currentRide && (currentRide.enRouteTs || currentRide.arrivedTs) && currentRide.chamadoId === c.id);
+      if(!emAndamento || _concluidosIds.has(c.id)) continue;
+      const snap = data[c.id];
+      if(snap && (snap.status === 'concluido' || snap.status === 'cancelado')) continue; // fechado de verdade
+      if(snap && snap.motoristaId && snap.motoristaId !== me.id) continue;                 // torre re-atribuiu a OUTRO colab
+      novaFila.push(c);
+      protegidosIds.add(c.id);
+      console.warn('[colab] chamado em andamento protegido de sumiço (Waze/background); motoristaId snap=', snap && snap.motoristaId, '·', c.id);
+      if(snap && !snap.motoristaId){   // existe mas ficou sem dono → re-reivindica pra torre não re-colocar
+        // restaura status em_rota também: a desatribuição da torre reseta pra 'novo', mas o colab
+        // está de fato a caminho — senão a torre mostra o chamado como novo sem dono.
+        try { firebase.database().ref('vammo/chamados/' + c.id).update({ motoristaId: me.id, motoristaNome: me.nome, motoristaPlaca: me.placa || '', status: 'em_rota' }); } catch(_){}
+      }
+    }
+    const removidosReais = removidos.filter(c => !protegidosIds.has(c.id));
     const wasEmpty = fila.length === 0;
     fila = orderFila(novaFila);   // respeita a sequência da torre, não a ordem de chave do Firebase
 
@@ -1253,8 +1276,8 @@ function syncFilaFromSnapshot(data){
       } else {
         showToast(`🔔 ${novos.length} novos chamados atribuídos`);
       }
-    } else if(removidos.length > 0){
-      showToast(`Chamado(s) removido${removidos.length>1?'s':''} pela torre`);
+    } else if(removidosReais.length > 0){
+      showToast(`Chamado(s) removido${removidosReais.length>1?'s':''} pela torre`);
       if(fila.length === 0) setStatus('online');
     }
 
