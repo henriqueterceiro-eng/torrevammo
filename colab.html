@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v66 · 2026-08-11';
+const APP_VERSION = 'v67 · 2026-08-11';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1788,18 +1788,23 @@ function distInicioAoLocal(chamado){
   if(!myPos || chamado.lat == null || chamado.lng == null) return null;
   return haversine(myPos, { lat: chamado.lat, lng: chamado.lng });
 }
+// Distância de onde o colab está até a MOTO (posição IoT), se conhecida.
+function distInicioAMoto(chamado){
+  if(!myPos || chamado._motoLat == null || chamado._motoLng == null) return null;
+  return haversine(myPos, { lat: chamado._motoLat, lng: chamado._motoLng });
+}
 function onIniciarConfirmado(chamado){
-  const d = distanciaAteChamado(chamado);
-  if(d <= RANGE_INICIO_M){
-    // Dentro do range operacional — mas se estiver LONGE do local do chamado, avisa e deixa registrado.
-    const dAddr = distInicioAoLocal(chamado);
-    if(dAddr != null && dAddr > AVISO_INICIO_LONGE_M){
-      if(!confirm(`⚠ Você está a ${fmtDist(dAddr)} do local do chamado.\n\nIniciar o atendimento aqui mesmo assim?\n\nℹ Vai ficar REGISTRADO que o atendimento começou a ${fmtDist(dAddr)} do endereço original.`)) return;
-    }
-    iniciarAtendimento(chamado);
-  } else {
-    pedirAutorizacaoTorre(chamado, d);
+  // SEM gatekeeping da torre: o colaborador SEMPRE pode iniciar. Se estiver longe do alvo
+  // (endereço OU moto), só AVISA e deixa REGISTRADO — a torre é notificada, não autoriza.
+  const dAddr = distInicioAoLocal(chamado);
+  const dMoto = distInicioAMoto(chamado);
+  const cands = [dAddr, dMoto].filter(x => x != null);
+  const dEf = cands.length ? Math.min(...cands) : null;   // mais perto dos dois alvos
+  if(dEf != null && dEf > AVISO_INICIO_LONGE_M){
+    const ref = (dMoto != null && (dAddr == null || dMoto <= dAddr)) ? 'da moto' : 'do local do chamado';
+    if(!confirm(`⚠ Você está a ${fmtDist(dEf)} ${ref}.\n\nIniciar o atendimento aqui mesmo assim?\n\nℹ Vai ficar REGISTRADO no desfecho (e a torre é avisada) que começou a ${fmtDist(dEf)} ${ref}.`)) return;
   }
+  iniciarAtendimento(chamado);
 }
 
 function iniciarAtendimento(chamado){
@@ -1808,20 +1813,24 @@ function iniciarAtendimento(chamado){
   chamado.rotinaSteps = chamado.rotinaSteps || {};
   // GOVERNANÇA: registra A QUE DISTÂNCIA do local original o atendimento foi iniciado (durável no nó).
   const dAddr = distInicioAoLocal(chamado);
+  const dMoto = distInicioAMoto(chamado);
   chamado.inicioDistM = (dAddr != null) ? Math.round(dAddr) : null;
+  chamado.inicioDistMotoM = (dMoto != null) ? Math.round(dMoto) : null;
   chamado.inicioLat = myPos?.lat ?? null; chamado.inicioLng = myPos?.lng ?? null;
-  if(currentRide) currentRide.inicioDistM = chamado.inicioDistM;
+  if(currentRide){ currentRide.inicioDistM = chamado.inicioDistM; currentRide.inicioDistMotoM = chamado.inicioDistMotoM; }
   rideMarkArrived();
   sync.send('chamado:atendimento-iniciado', {
     chamadoId: chamado.id,
     motoristaId: me.id,
     inicioDistM: chamado.inicioDistM,
+    inicioDistMotoM: chamado.inicioDistMotoM,
     pos: { lat: myPos?.lat, lng: myPos?.lng }
   });
   try {
     if(typeof firebase !== 'undefined' && firebase.apps?.length){
       firebase.database().ref('vammo/chamados/' + chamado.id).update({
         iniciadoEm: chamado.iniciadoEm, inicioDistM: chamado.inicioDistM,
+        inicioDistMotoM: chamado.inicioDistMotoM,
         inicioLat: chamado.inicioLat, inicioLng: chamado.inicioLng
       }).catch(()=>{});
     }
@@ -1829,8 +1838,10 @@ function iniciarAtendimento(chamado){
   persistRotina(chamado);
   fecharModalIniciar();
   vibrate([50, 30, 50]);
-  showToast((chamado.inicioDistM != null && chamado.inicioDistM > AVISO_INICIO_LONGE_M)
-    ? `▶ Iniciado a ${fmtDist(chamado.inicioDistM)} do local (registrado)`
+  const _de = [chamado.inicioDistM, chamado.inicioDistMotoM].filter(x => x != null);
+  const _dmin = _de.length ? Math.min(..._de) : null;
+  showToast((_dmin != null && _dmin > AVISO_INICIO_LONGE_M)
+    ? `▶ Iniciado a ${fmtDist(_dmin)} do alvo (registrado)`
     : `▶ Atendimento iniciado: ${chamado.cliente}`);
   renderChamadoCard();
 }
