@@ -1010,7 +1010,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v86 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v87 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3435,6 +3435,15 @@ function renderDetail(){
       </div>` : ''}
       ${c.abertoPor ? `<div style="margin-top:7px;font-size:10px;color:var(--txt3)">✍ Aberto por <b style="color:var(--txt2)">${esc(c.abertoPor)}</b>${c.abertoEm?' · '+fmtTime(c.abertoEm):''}${c.origemFleet?' · <span style="color:#00B4E5;font-weight:700">Fleet</span>':''}</div>` : ''}
     </div>` : ''}
+    ${(c.status === 'concluido' || c.desfecho) ? (() => {
+      // SUBSTATUS "O que aconteceu": o desfecho real + fatos (chave/pago/recolhida/presença/assinatura)
+      const rd = resumoDesfecho(c); if(!rd) return '';
+      return `<div style="margin-top:10px;padding:11px 13px;background:rgba(0,180,229,0.06);border:1px solid var(--bdr2);border-radius:10px">
+        <div style="font-size:9px;color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px">🔎 O que aconteceu</div>
+        <div style="font-size:15px;font-weight:800;color:${rd.principal.cor};line-height:1.25">${rd.principal.icon} ${esc(rd.principal.txt)}</div>
+        ${rd.chips.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px">${rd.chips.map(ch => `<span title="${esc(ch.title||'')}" style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;background:rgba(255,255,255,0.05);border:1px solid var(--bdr);color:${ch.cor}">${ch.icon} ${esc(ch.txt)}</span>`).join('')}</div>` : ''}
+      </div>`;
+    })() : ''}
     ${(() => {
       // DESTAQUE: controlador responsável pelo chamado (quem atribuiu > quem abriu > analista CX)
       const resp = c.atribuidoPor || c.abertoPor || c.analista || null;
@@ -5880,6 +5889,50 @@ function destinoDaCorrida(r){
   }
   return { txt: desf || '—', cor:'var(--txt2)' };
 }
+// ===== SUBSTATUS "O QUE ACONTECEU" =====
+// Conta a história real do atendimento: o desfecho principal + os fatos gravados pelo colab
+// (moto tinha chave? pagou no local? recolhida/descarregada onde? cliente presente? assinou?).
+// Aceita uma CORRIDA (r) OU um CHAMADO (c) — junta os dois lados (corrida ↔ chamado).
+function resumoDesfecho(src){
+  if(!src) return null;
+  const ride = (src.completedTs != null || src.chamadoId) ? src : corridas[src.id];
+  const ch   = (src.status != null) ? src : chamados.find(x => x.id === src.chamadoId);
+  const rs   = (ride && ride.rotinaSteps) || (ch && ch.rotinaSteps) || {};
+  const endStatus = (ride && ride.endStatus) || (ch && ch.status) || null;
+  if(endStatus === 'cancelado') return { principal: { icon:'✕', txt:'Cancelado', cor:'#dc2626' }, chips: [] };
+  const desf = (ride && ride.desfecho) || (ch && ch.desfecho) || null;
+  const descargaBase = (ch && ch.descargaBaseNome) || (ride && ride.descargaBaseNome) || null;
+  const pago = !!((ride && ride.pagamentoNoLocal) || (ch && ch.pagamentoNoLocal) || desf === 'pago_no_local');
+  const ausente = !!((ride && ride.clienteAusente) || (ch && ch.clienteAusente) || rs.cliente_local === false);
+  const assinado = !!((ride && ride.assinatura) || (ch && ch.assinatura));
+  const temFoto = (k) => typeof rs[k] === 'string' && rs[k].startsWith('data:');
+  let principal;
+  if(desf === 'nao_encontrada' || rs.moto_encontrada === false) principal = { icon:'🔍', txt:'Moto não encontrada', cor:'#dc2626' };
+  else if(desf === 'recolhido' || rs.moto_recolhida === true) principal = { icon:'📦', txt: descargaBase ? ('Recolhida → descarregada na ' + descargaBase) : 'Moto recolhida', cor:'#00B4E5' };
+  else if(desf === 'reparado' || rs.resolveu === true) principal = { icon:'🔧', txt:'Resolvida no local', cor:'#16a34a' };
+  else if(desf === 'pago_no_local') principal = { icon:'💵', txt:'Pago no local', cor:'#16a34a' };
+  else if(desf === 'movimentado') principal = { icon:'🚚', txt:'Movimentação interna', cor:'#8b5cf6' };
+  else if(endStatus === 'concluido') principal = { icon:'✅', txt:'Concluído', cor:'#16a34a' };
+  else principal = { icon:'•', txt:'—', cor:'var(--txt3)' };
+  const chips = [];
+  if(rs.q_chave === true)  chips.push({ icon:'🔑', txt:'Com chave', cor:'#4ade80', title:'A moto possuía chave' });
+  else if(rs.q_chave === false) chips.push({ icon:'🔓', txt:'Sem chave', cor:'#fbbf24', title:'A moto NÃO possuía chave' });
+  if(temFoto('foto_bateria')) chips.push({ icon:'🔋', txt:'Foto bateria', cor:'#cbd5e1', title:'Foto da bateria registrada' });
+  if(pago && desf !== 'pago_no_local') chips.push({ icon:'💵', txt:'Pago no local', cor:'#4ade80', title:'Cliente pagou no local' });
+  if(ausente) chips.push({ icon:'🚷', txt:'Cliente ausente', cor:'#fca5a5', title:'Cliente não estava no local' });
+  else if(assinado || rs.cliente_local === true || rs.quitou === true) chips.push({ icon:'🙋', txt:'Cliente presente', cor:'#4ade80', title:'Cliente estava no local' });
+  if(assinado) chips.push({ icon:'✍', txt:'Assinou', cor:'#4ade80', title:'Cliente assinou o atendimento' });
+  return { principal, chips };
+}
+// Renderiza o substatus como uma linha de chips inline (relatório) — compacto.
+function resumoDesfechoChips(rd, mini){
+  if(!rd) return '—';
+  const fs = mini ? 9 : 10.5, pad = mini ? '0 5px' : '2px 8px';
+  const head = `<span style="color:${rd.principal.cor};font-weight:700">${rd.principal.icon} ${esc(rd.principal.txt)}</span>`;
+  if(!rd.chips.length) return head;
+  const chips = rd.chips.map(ch => `<span title="${esc(ch.title||'')}" style="font-size:${fs}px;font-weight:700;padding:${pad};border-radius:5px;background:rgba(255,255,255,0.05);border:1px solid var(--bdr);color:${ch.cor};white-space:nowrap">${ch.icon} ${esc(ch.txt)}</span>`).join('');
+  return `<div>${head}</div><div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">${chips}</div>`;
+}
 // Base onde a moto foi descarregada (só recolhimento que já foi descarregado); senão '—'
 function baseDescargaDaCorrida(r){
   const ch = chamados.find(x => x.id === r.chamadoId);
@@ -6074,7 +6127,7 @@ function renderRep(){
             <td style="padding:8px 12px">${esc(motivoDaCorrida(r))}</td>
             <td style="padding:8px 12px">${esc(controladorDaCorrida(r))}</td>
             <td style="padding:8px 12px">${esc((ch && (ch.abertoPor || ch.analista)) || '—')}</td>
-            <td style="padding:8px 12px;color:${dest.cor};font-weight:600">${esc(dest.txt)}</td>
+            <td style="padding:8px 12px;font-weight:600;min-width:150px">${resumoDesfechoChips(resumoDesfecho(r), true)}</td>
             <td style="padding:8px 12px;font-family:var(--mono);font-size:10px">${esc(baseDescargaDaCorrida(r))}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${(r.totalKm||0).toFixed(1)}</td>
             <td style="padding:8px 12px;text-align:right;font-family:var(--mono)">${fmtDurTMA(tmaTotalSec(r))}</td>
@@ -6096,7 +6149,7 @@ function renderRep(){
 function exportRepCSV(){
   const rows = calcRep();
   const numMap = buildNumeroMap();
-  const headers = ['Nº chamado','Chamado ID','Data','Colaborador','Vinculo','Base','Placa','Cliente','Cliente aguardando','Endereco chamado','Endereco execucao (link)','Assinado','Pago no local','Motivo','Controlador','Aberto por','Desfecho','Base descarga','Km','TMA total (s)','Atribuicao (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)'];
+  const headers = ['Nº chamado','Chamado ID','Data','Colaborador','Vinculo','Base','Placa','Cliente','Cliente aguardando','Endereco chamado','Endereco execucao (link)','Assinado','Pago no local','Motivo','Controlador','Aberto por','Desfecho','Tinha chave','O que aconteceu','Base descarga','Km','TMA total (s)','Atribuicao (s)','Deslocamento (s)','Atendimento (s)','Status','Nota final','Nota rota','Nota velocidade','Nota tempo','Desvios','Vel. máx (km/h)'];
   const lines = [headers.join(';')];
   for(const r of rows){
     const c = colaboradores[r.motoristaId];
@@ -6128,6 +6181,8 @@ function exportRepCSV(){
       controladorDaCorrida(r),
       (ch && (ch.abertoPor || ch.analista)) || '',
       destinoDaCorrida(r).txt.replace(/^[^\wÀ-ÿ]+/, '').trim(),
+      (() => { const rs = r.rotinaSteps || (chamados.find(x=>x.id===r.chamadoId)||{}).rotinaSteps || {}; return rs.q_chave === true ? 'Sim' : rs.q_chave === false ? 'Nao' : ''; })(),
+      (() => { const rd = resumoDesfecho(r); return rd ? [rd.principal.txt].concat(rd.chips.map(c => c.txt)).join(' · ') : ''; })(),
       baseDescargaDaCorrida(r) === '—' ? '' : baseDescargaDaCorrida(r),
       (r.totalKm || 0).toFixed(2),
       tmaTotalSec(r) != null ? Math.round(tmaTotalSec(r)) : '',
