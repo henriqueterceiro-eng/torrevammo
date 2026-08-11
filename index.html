@@ -2,11 +2,83 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=/torre.html">
-<title>Vammo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vammo · Apps</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305101d'/%3E%3Ctext x='50' y='68' font-size='58' font-family='Arial' font-weight='900' text-anchor='middle' fill='%2300B4E5'%3EV%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#05101d; --panel:#0b1a2e; --panel2:#0e2138; --bdr:rgba(255,255,255,.09);
+    --acc:#00B4E5; --txt:#eaf6fb; --txt2:#9db3c4; --txt3:#5f7488;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    min-height:100vh; background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:32px 20px;
+    background-image:
+      radial-gradient(60vw 40vw at 50% -8%, rgba(0,180,229,.16), transparent 60%),
+      radial-gradient(40vw 30vw at 85% 110%, rgba(0,180,229,.08), transparent 60%);
+  }
+  .wrap{width:100%; max-width:940px}
+  .head{text-align:center; margin-bottom:34px}
+  .logo{color:var(--acc); line-height:0; margin-bottom:16px; filter:drop-shadow(0 0 22px rgba(0,180,229,.4))}
+  .logo svg{width:130px; height:auto; display:inline-block}
+  .tag{font-size:12px; font-weight:800; letter-spacing:3px; text-transform:uppercase; color:var(--txt3)}
+  .grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:16px}
+  .card{
+    display:flex; flex-direction:column; gap:8px; text-decoration:none; color:inherit;
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--bdr); border-radius:18px; padding:22px 20px;
+    transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    position:relative; overflow:hidden; outline:none;
+  }
+  .card::before{content:""; position:absolute; inset:0 0 auto 0; height:3px; background:var(--ca,var(--acc)); opacity:.9}
+  .card:hover,.card:focus-visible{transform:translateY(-4px); border-color:var(--ca,var(--acc)); box-shadow:0 14px 34px rgba(0,0,0,.45)}
+  .card:focus-visible{outline:2px solid var(--ca,var(--acc)); outline-offset:2px}
+  .ic{font-size:32px; line-height:1}
+  .nm{font-size:18px; font-weight:800; letter-spacing:-.2px}
+  .ds{font-size:12px; color:var(--txt2); line-height:1.5; flex:1}
+  .go{margin-top:4px; font-size:10.5px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:var(--ca,var(--acc))}
+  .foot{margin-top:24px; text-align:center; font-size:12px; color:var(--txt3); line-height:1.7}
+  @media (prefers-reduced-motion:reduce){ .card{transition:none} }
+</style>
 </head>
 <body>
-<script>location.replace('/torre.html');</script>
-<a href="/torre.html">Abrir torre Vammo</a>
+  <main class="wrap">
+    <div class="head">
+      <div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo"><path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/><path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/><path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/><path d="M475.6293 139.81909V140.23909H475.9093Z"/><path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/></svg></div>
+      <div class="tag">Escolha seu app</div>
+    </div>
+
+    <div class="grid">
+      <a class="card" style="--ca:#00B4E5" href="/torre">
+        <div class="ic">🗼</div>
+        <div class="nm">Torre de Controle</div>
+        <div class="ds">Despacho ao vivo, mapa dos motoristas e atribuição de socorro.</div>
+        <div class="go">Abrir →</div>
+      </a>
+      <a class="card" style="--ca:#2dd4bf" href="/cx">
+        <div class="ic">🎧</div>
+        <div class="nm">CX Assist</div>
+        <div class="ds">Abrir e acompanhar chamados de socorro do atendimento.</div>
+        <div class="go">Abrir →</div>
+      </a>
+      <a class="card" style="--ca:#f59e0b" href="/fleet">
+        <div class="ic">🚚</div>
+        <div class="nm">Fleet</div>
+        <div class="ds">Movimentação e transferência de motos entre as bases.</div>
+        <div class="go">Abrir →</div>
+      </a>
+      <a class="card" style="--ca:#22c55e" href="/colab">
+        <div class="ic">🛵</div>
+        <div class="nm">Colaborador</div>
+        <div class="ds">App do motorista: turno, fila de chamados e check-in.</div>
+        <div class="go">Abrir →</div>
+      </a>
+    </div>
+
+    <div class="foot">Cada app pede o login/acesso próprio · Vammo</div>
+  </main>
 </body>
 </html>
