@@ -145,6 +145,8 @@ body.sidehide #sidebar:hover::after{opacity:0}
 .card.aguard{border-left:4px solid #22c55e;background:linear-gradient(90deg,rgba(34,197,94,0.14),transparent 60%)}
 .card.aguard.sel{border-left:4px solid #22c55e}
 .b-aguard{background:#16a34a;color:#fff;font-weight:800;box-shadow:0 0 0 1px rgba(255,255,255,0.25)}
+.b-espera{background:rgba(34,197,94,0.92);color:#03210f;font-weight:800;font-family:var(--mono)}
+.b-espera.over{background:var(--novo);color:#fff;animation:pulse 0.9s infinite}
 .card .transf{color:#c4b5fd;font-size:10.5px;margin-top:3px;line-height:1.35;font-weight:600}
 /* Seleção em massa (botão "Selecionar" + caixinhas) */
 .card .mcheck{position:absolute;top:11px;left:10px;width:20px;height:20px;border-radius:6px;border:2px solid var(--txt3);background:var(--surf);display:none;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;z-index:3}
@@ -228,6 +230,11 @@ body.selmode .card .mcheck{display:flex}
 .cm-icon.sel .pin .head{box-shadow:0 0 0 3px var(--acc),0 0 0 5px #fff}
 .cm-icon.warn .pin .head::before{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid #f59e0b;opacity:0.75;animation:pulse 1.6s infinite}
 .cm-icon.crit .pin .head::before{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--novo);animation:pulse 0.8s infinite}
+/* Cliente AGUARDANDO no local = SPOT DISTINTO no mapa (regra máxima): anel verde + 🙋; urgente pulsa */
+.cm-icon.aguard .pin .head{box-shadow:0 0 0 3px #22c55e,inset -2px -3px 5px rgba(0,0,0,0.28)}
+.cm-icon.aguard .pin .agu{position:absolute;top:-17px;left:50%;transform:translateX(-50%);font-size:15px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.8))}
+.cm-icon.aguard-urg .pin .head::before{content:'';position:absolute;inset:-6px;border-radius:50%;border:3px solid #22c55e;animation:pulse 0.9s infinite}
+.cm-icon.aguard-urg .pin .agu{animation:pulse 0.9s infinite}
 /* Placa Mercosul estilizada (input de placa no chamado manual) */
 .mplate{max-width:230px;margin:0 auto;border:2.5px solid #111;border-radius:9px;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.35)}
 .mplate-top{display:flex;align-items:center;justify-content:space-between;background:#003da5;color:#fff;padding:2px 9px;font-size:9px;font-weight:800;letter-spacing:.5px;line-height:1.5}
@@ -933,6 +940,8 @@ body.selmode .card .mcheck{display:flex}
 
     <label>SLA (minutos até alerta)</label>
     <input type="number" id="cfgSla" min="10" max="240" step="5">
+    <label>🙋 SLA de atribuição · cliente aguardando (min)</label>
+    <input type="number" id="cfgSlaAtrib" min="1" max="30" step="1">
 
     <label>🚦 Chave TomTom <small style="color:var(--txt3)">(trânsito, rotas inteligentes, otimização)</small></label>
     <input type="text" id="cfgTtKey" placeholder="Cole sua chave TomTom aqui">
@@ -1001,7 +1010,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v83 · 2026-08-09';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v84 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1026,6 +1035,7 @@ function saveCfg2(c){ localStorage.setItem('vammo_cfg', JSON.stringify(c)); }
 
 // Defaults
 cfg.sla = cfg.sla || 30;
+cfg.slaAtribMin = cfg.slaAtribMin || 2; // REGRA MÁXIMA: SLA de ATRIBUIÇÃO de cliente aguardando (min) — cobra a velocidade do controlador
 cfg.mode = cfg.mode || 'demo';
 cfg.fbUrl = cfg.fbUrl || 'https://vammo-torre-default-rtdb.firebaseio.com';
 cfg.fbKey = cfg.fbKey || 'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I';
@@ -2339,13 +2349,16 @@ function renderChamadoMarkers(){
     seen.add(c.id);
     const al = alertCls(c);
     const isSel = c.id === selId;
-    const cls = `cm-icon ${al} ${isSel?'sel':''}`;
+    // Cliente aguardando = spot distinto (anel verde + 🙋); URGENTE (sem motorista + passou do SLA) pulsa.
+    const prio = chamadoPrioritario(c);
+    const aguCls = prio ? (aguardSemMotorista(c) && esperaAtribMs(c) > slaAtribMs() ? ' aguard aguard-urg' : ' aguard') : '';
+    const cls = `cm-icon ${al}${aguCls} ${isSel?'sel':''}`;
     const color = statusColor(c.status);   // cor por STATUS (iguais às pills do topo): novo=vermelho, em_rota=amarelo, concluído=verde
     // Nº da SEQUÊNCIA da fila do colab (1,2,3…) na cabeça do pin — só quando há 2+ paradas
     const ord = orderMap[c.id];
     const qn = (ord && ord.total >= 2) ? ord.order : null;
     // Pushpin pequeno e limpo: cabeça (cor = status) + agulha. Nº da fila quando em rota c/ várias paradas.
-    const html = `<div class="pin"><span class="needle"></span><span class="head${qn?' hasnum':''}" style="background:${color}">${qn?`<b class="qn">${qn}</b>`:''}</span></div>`;
+    const html = `<div class="pin"><span class="needle"></span><span class="head${qn?' hasnum':''}" style="background:${color}">${qn?`<b class="qn">${qn}</b>`:''}</span>${prio?'<span class="agu">🙋</span>':''}</div>`;
     const icon = L.divIcon({ className: cls, html, iconSize:[22,34], iconAnchor:[11,33] });
     if(chamadoMarkers[c.id]){
       chamadoMarkers[c.id].setIcon(icon);
@@ -2801,6 +2814,29 @@ function renderCatFilter(){
 // ===== PRIORIDADE (cliente aguardando no local) =====
 // Chamado com cliente aguardando no local tem prioridade na fila/roteirização.
 function chamadoPrioritario(c){ return !!(c && c.clienteAguardando === true && c.status !== 'concluido' && c.status !== 'cancelado'); }
+// REGRA MÁXIMA — cliente aguardando SEM motorista precisa de atribuição URGENTE: mede e COBRA a velocidade.
+function aguardSemMotorista(c){ return chamadoPrioritario(c) && !c.motoristaId && !c.terceiroId && c.status === 'novo'; }
+function esperaAtribMs(c){ return Date.now() - (c.ts || Date.now()); }
+function slaAtribMs(){ return (cfg.slaAtribMin || 2) * 60000; }
+function fmtEspera(ms){ const s = Math.max(0, Math.floor(ms/1000)); if(s < 60) return s + 's'; const m = Math.floor(s/60), r = s % 60; return m + 'm' + (r ? ' ' + r + 's' : ''); }
+let _atribAlerted = {};
+function checkAtribuicaoSLA(){
+  const pend = chamados.filter(aguardSemMotorista);
+  const pendIds = new Set(pend.map(c => c.id));
+  const over = pend.filter(c => esperaAtribMs(c) > slaAtribMs());
+  if(over.length){
+    const maisVelho = over.reduce((a, c) => Math.max(a, esperaAtribMs(c)), 0);
+    pushAlert({
+      id: 'atrib_sla', tipo: 'crit',
+      titulo: `🙋 ${over.length} cliente${over.length>1?'s':''} aguardando SEM motorista`,
+      msg: `Prioridade máxima — ATRIBUA JÁ (mais antigo há ${fmtEspera(maisVelho)}). A velocidade de atribuição está sendo registrada.`
+    });
+    over.forEach(c => { if(!_atribAlerted[c.id]){ _atribAlerted[c.id] = true; logTorre('atribuicao_lenta', { chamadoId: c.id, cliente: c.cliente || null, esperaS: Math.round(esperaAtribMs(c)/1000), slaMin: (cfg.slaAtribMin||2), operador: getOperadorTorre() }); } });
+  } else {
+    clearAlert('atrib_sla');
+  }
+  for(const id in _atribAlerted){ if(!pendIds.has(id)) delete _atribAlerted[id]; }
+}
 
 // ===== TRANSFERÊNCIA ENTRE BASES (saída → entrega) =====
 function _baseNome(idOuNome){ if(!idOuNome) return ''; const b = bases[idOuNome]; return (b && b.nome) || String(idOuNome); }
@@ -2966,6 +3002,7 @@ function renderList(){
     const tercBadge = ehTerceiro(c) ? `<span class="b" style="background:#f59e0b;color:#1a1200" title="Encaminhado ao prestador ${esc(c.terceiroNome||'')}">🤝 ${esc((c.terceiroNome||'Externo').split(' ')[0])}</span>` : '';
     const aguard = chamadoPrioritario(c);
     const aguardBadge = aguard ? `<span class="b b-aguard" title="Cliente aguardando no local — prioridade">🙋 AGUARDANDO</span>` : '';
+    const esperaBadge = aguardSemMotorista(c) ? (() => { const ms = esperaAtribMs(c); return `<span class="b b-espera${ms > slaAtribMs() ? ' over' : ''}" title="Cliente aguardando SEM motorista — atribua rápido (SLA ${cfg.slaAtribMin||2}min)">⏱ ${fmtEspera(ms)} p/ atribuir</span>`; })() : '';
     const aceitoBadge = (c.status === 'novo' && c.aceitoPor && !c.motoristaId && !c.terceiroId) ? `<span class="b" style="background:#f59e0b;color:#1a1200" title="Aceito por ${esc(c.aceitoPor)} — controlador já assumiu">✋ ${esc((c.aceitoPor||'').split(' ')[0])}</span>` : '';
     const transfLine = transfInfo(c);
     const _num = c.seq != null ? c.seq : numMap[c.id];
@@ -2978,7 +3015,7 @@ function renderList(){
         <div class="nome">${numTag}${esc(c.cliente||'?')}</div>
         <div class="ico">${ico(c.motivo)}</div>
       </div>
-      <div class="badges">${aguardBadge}${stBadge}${aceitoBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
+      <div class="badges">${aguardBadge}${esperaBadge}${stBadge}${aceitoBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
       <div class="motivo">${esc(c.motivo||'—')}</div>
       ${transfLine ? `<div class="transf">${transfLine}</div>` : ''}
       ${c.endereco ? `<div class="end">📍 ${esc(c.endereco)}</div>` : ''}
@@ -3940,6 +3977,12 @@ function atribuir(chamadoId, motoristaId, batch){
     c.atribuidoPor = currentUser ? (currentUser.nome || currentUser.email) : null;
     c.atribuidoPorEmail = currentUser ? currentUser.email : null;
     if(!c.atribuidoEm) c.atribuidoEm = Date.now(); // 1ª atribuição → base do "tempo de atribuição"
+    // REGRA MÁXIMA — cliente aguardando: registra a VELOCIDADE de atribuição (cobrança do controlador).
+    if(chamadoPrioritario(c) && c.ts && c.atribLatS == null){
+      c.atribLatS = Math.round((c.atribuidoEm - c.ts) / 1000);
+      logTorre('aguardando_atribuido', { chamadoId: c.id, cliente: c.cliente || null, latenciaS: c.atribLatS, dentroSla: c.atribLatS <= (cfg.slaAtribMin||2)*60, motoristaId, operador: getOperadorTorre() });
+      clearAlert('atrib_sla');
+    }
     if(c.status === 'novo'){
       c.status = 'em_rota';
       const sm = loadStatusMap();
@@ -3948,7 +3991,7 @@ function atribuir(chamadoId, motoristaId, batch){
     }
     saveAsgn(a);
     // Persiste tudo no Firebase
-    STORE.updateChamado(chamadoId, { motoristaId, status: c.status, atribuidoPor: c.atribuidoPor, atribuidoPorEmail: c.atribuidoPorEmail, atribuidoEm: c.atribuidoEm, motoristaNome: c.motoristaNome, motoristaPlaca: c.motoristaPlaca });
+    STORE.updateChamado(chamadoId, { motoristaId, status: c.status, atribuidoPor: c.atribuidoPor, atribuidoPorEmail: c.atribuidoPorEmail, atribuidoEm: c.atribuidoEm, atribLatS: c.atribLatS || null, motoristaNome: c.motoristaNome, motoristaPlaca: c.motoristaPlaca });
     STORE.setAllQueues(loadQueues());
     // Envia chamado pro motorista (vai pro final da fila no app dele)
     sync.send('chamado:atribuir', {
@@ -5933,6 +5976,7 @@ function renderRep(){
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Placa</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Cliente</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Cliente estava aguardando no local?">Aguardando</th>
+          <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Tempo que o controlador levou pra atribuir um motorista (só cliente aguardando) — vermelho = passou do SLA">🙋 Tempo p/ atribuir</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Endereço do chamado</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)" title="Local onde o atendimento foi executado, se diferente do endereço do chamado">Execução</th>
           <th style="padding:8px 12px;border-bottom:1px solid var(--bdr)">Motivo</th>
@@ -5985,6 +6029,7 @@ function renderRep(){
             <td style="padding:8px 12px;font-family:var(--mono)" title="Placa da moto do cliente">${esc((ch && ch.placa)||'—')}</td>
             <td style="padding:8px 12px">${esc(r.cliente||'—')}</td>
             <td style="padding:8px 12px;text-align:center">${(ch && ch.clienteAguardando != null) ? (ch.clienteAguardando ? '✅ Sim' : '❌ Não') : '—'}</td>
+            <td style="padding:8px 12px;text-align:center;font-family:var(--mono)">${(() => { const l = (ch && ch.atribLatS != null) ? ch.atribLatS : ((ch && ch.clienteAguardando === true && ch.atribuidoEm && ch.ts) ? Math.round((ch.atribuidoEm - ch.ts)/1000) : null); if(l == null) return '<span style="color:var(--txt3)">—</span>'; const over = l > (cfg.slaAtribMin||2)*60; const t = l < 60 ? l+'s' : Math.floor(l/60)+'m'+(l%60?' '+(l%60)+'s':''); return `<span style="color:${over?'#fca5a5':'#4ade80'};font-weight:700">${t}${over?' ⚠':''}</span>`; })()}</td>
             <td style="padding:8px 12px;font-size:10px;max-width:200px">${esc((ch && ch.endereco) || r.endereco || '—')}</td>
             <td style="padding:8px 12px;font-size:10px">${exec.diff ? `<a href="${exec.url}" target="_blank" style="color:#fbbf24">📍 outro local</a>` : (exec.txt==='—' ? '<span style="color:var(--txt3)">—</span>' : '<span style="color:var(--txt3)">mesmo local</span>')}</td>
             <td style="padding:8px 12px">${esc(motivoDaCorrida(r))}</td>
@@ -6770,6 +6815,7 @@ function clearAlert(id){
 // ============== CONFIG MODAL ==============
 function openConfig(){
   $('#cfgSla').value = cfg.sla;
+  $('#cfgSlaAtrib').value = cfg.slaAtribMin;
   $('#cfgTtKey').value = cfg.tomtomKey;
   $('#cfgUploadUrl').value = cfg.uploadUrl || '';
   $('#cfgRangeInicio').value = globalSettings.rangeInicioM || 200;
@@ -6787,6 +6833,7 @@ function openConfig(){
 function closeConfig(){ $('#config').classList.remove('show'); }
 function saveConfig(){
   cfg.sla = +$('#cfgSla').value || 30;
+  cfg.slaAtribMin = Math.max(1, +$('#cfgSlaAtrib').value || 2);
   cfg.tomtomKey = $('#cfgTtKey').value.trim();
   cfg.uploadUrl = sanitizeUploadUrl($('#cfgUploadUrl').value);
   const rangeIni = Math.max(20, Math.min(2000, +$('#cfgRangeInicio').value || 200));
@@ -8212,6 +8259,9 @@ function init(){
   // Alerta de ociosidade (colab com chamado atribuído parado > 20min)
   setTimeout(checkOciosidade, 8000);
   setInterval(checkOciosidade, 30000);
+  // REGRA MÁXIMA — cobra atribuição rápida de cliente aguardando (alerta + registro)
+  setTimeout(checkAtribuicaoSLA, 5000);
+  setInterval(checkAtribuicaoSLA, 12000);
   // Popup de novidades da versão (1x por operador)
   setTimeout(() => { if(!mostrarDiaDosPaisTorre()) mostrarNovidadesTorre(); }, 1400);   // hoje: Dia dos Pais; senão: novidades da versão
 
@@ -8361,12 +8411,12 @@ function init(){
 }
 
 // ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
-const NOV_VER_TORRE = 'v81-rotas';
+const NOV_VER_TORRE = 'v84-aguardando';
 const NOV_ITENS_TORRE = [
-  { ic:'⚡', t:'Despacho por quem chega ANTES', d:'Ao atribuir um chamado, a lista de colaboradores já vem ordenada por <b>tempo real de chegada</b> — com trânsito ao vivo do Google — e mostra <b>⚡ min · km</b> de cada um. Acabou o "no olho": você manda quem chega primeiro de verdade.' },
-  { ic:'🧭', t:'Rota multi-parada otimizada em 1 clique', d:'Colaborador com vários chamados na fila? O botão <b>✨ Otimizar ordem</b> reorganiza a rota pelo <b>melhor caminho</b> (menos km, menos tempo, já contando o trânsito) — e mantém quem está <b>aguardando no local</b> na frente.' },
-  { ic:'🎯', t:'Mais perto no topo, na hora', d:'A lista abre instantaneamente com o colaborador <b>mais próximo em primeiro</b>, antes mesmo do cálculo de trânsito carregar. Zero espera pra ter uma boa decisão.' },
-  { ic:'🛡️', t:'Rápido, econômico e reversível', d:'Cálculos com <b>cache</b> pra não pesar nem estourar cota, tudo na infra que a gente já tem, e uma <b>trava-mestra</b> pra ligar/desligar a inteligência a qualquer momento. Feito com carinho. 💙' }
+  { ic:'🙋', t:'Spot distinto no mapa', d:'Chamado com <b>cliente aguardando no local</b> ganha um pino com <b>anel verde + 🙋</b> — você acha na hora, no meio de todos os outros.' },
+  { ic:'🧭', t:'Sempre prioritário na rota', d:'Cliente aguardando entra <b>na frente</b> na fila e na roteirização do colaborador, sempre — nunca fica atrás de chamado comum.' },
+  { ic:'⏱️', t:'Velocidade de atribuição COBRADA', d:'Enquanto estiver <b>sem motorista</b>, aparece um cronômetro <b>"⏱ p/ atribuir"</b> no card e no mapa; passando do SLA (2 min por padrão, ajustável em ⚙), dispara um <b>alerta de prioridade máxima</b> pra você atribuir na hora.' },
+  { ic:'📊', t:'Fica registrado quem atribui rápido', d:'O tempo que o controlador levou pra atribuir cada cliente aguardando é <b>gravado</b> e aparece no relatório de Chamados (verde = no prazo, vermelho ⚠ = estourou).' }
 ];
 // Mensagem de DIA DOS PAIS pro time da torre — SÓ aparece hoje (09/08/2026), 1x por operador.
 // Retorna true se exibiu (aí o init não mostra a novidades da versão em cima).
@@ -8414,10 +8464,10 @@ function mostrarNovidadesTorre(force){
   const itens = NOV_ITENS_TORRE.map(i => `<li style="display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,0.04);border:1px solid rgba(125,165,215,0.16);border-radius:10px;padding:11px 13px;margin-bottom:9px;list-style:none">
       <span style="font-size:18px">${i.ic}</span><div><b style="display:block;font-size:13.5px">${i.t}</b><span style="color:#9aa8bd;font-size:12px;line-height:1.45">${i.d}</span></div></li>`).join('');
   ov.innerHTML = `<div style="background:linear-gradient(180deg,#0e1a30,#0b1526);border:1px solid rgba(0,180,229,0.34);border-radius:18px;max-width:460px;width:100%;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,0.6);max-height:90vh;overflow:auto">
-      <div style="text-align:center;margin-bottom:14px"><div style="font-size:42px">🧭</div>
-        <h3 style="font-size:21px;margin-top:6px;background:linear-gradient(90deg,#7cf0ff,#00B4E5);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-weight:900">Rotas mais inteligentes</h3>
-        <div style="color:var(--acc);font-family:var(--mono);font-size:11px;font-weight:800;margin-top:5px;letter-spacing:.5px">TORRE ${TORRE_VERSION.split(' ')[0]} · DESPACHO &amp; ROTEIRIZAÇÃO</div>
-        <div style="color:#9aa8bd;font-size:12px;margin-top:9px;line-height:1.45;max-width:360px;margin-left:auto;margin-right:auto">A torre agora escolhe sozinha <b style="color:#cfe9f5">quem chega mais rápido</b> e traça o <b style="color:#cfe9f5">melhor caminho</b> — com trânsito ao vivo.</div></div>
+      <div style="text-align:center;margin-bottom:14px"><div style="font-size:42px">🙋</div>
+        <h3 style="font-size:21px;margin-top:6px;background:linear-gradient(90deg,#86efac,#22c55e);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-weight:900">Cliente aguardando = prioridade máxima</h3>
+        <div style="color:#4ade80;font-family:var(--mono);font-size:11px;font-weight:800;margin-top:5px;letter-spacing:.5px">TORRE ${TORRE_VERSION.split(' ')[0]} · REGRA MÁXIMA</div>
+        <div style="color:#9aa8bd;font-size:12px;margin-top:9px;line-height:1.45;max-width:360px;margin-left:auto;margin-right:auto">Cliente esperando no local <b style="color:#cfe9f5">não pode ficar na fila</b>: a torre <b style="color:#cfe9f5">destaca, prioriza</b> e <b style="color:#cfe9f5">cobra a atribuição rápida</b>.</div></div>
       <ul style="margin:12px 0;padding:0">${itens}</ul>
       <button id="novOkTorre" style="width:100%;padding:13px;background:var(--acc);color:#001823;font-weight:800;border:none;border-radius:10px;font-size:14px;cursor:pointer">Entendi 👍</button>
     </div>`;
