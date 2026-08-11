@@ -1010,7 +1010,7 @@ const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v48 · 2026-07-28'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v85 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v86 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2028,7 +2028,11 @@ function renderParceiros(){
   $$('#cadtabs .cdtab').forEach(b => b.classList.toggle('active', b.dataset.t === 'parceiro'));
   const list = Object.values(parceiros).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
   $('#cadcount').textContent = `${list.length} parceiro${list.length===1?'':'s'}`;
-  const opts = ['Osasco','São Bernardo','Santa Justina','Mooca'].map(b => `<option>${b}</option>`).join('');
+  // Opções de "Base de descarga" vêm do CADASTRO DE BASES (aba 🏠) — reflete base nova na hora.
+  const opts = Object.values(bases)
+    .filter(b => b && b.nome && b.ativo !== false)
+    .sort((a,b) => (a.nome||'').localeCompare(b.nome||''))
+    .map(b => `<option>${esc(b.nome)}</option>`).join('');
   const rows = list.map(p => `<div class="cdrow" style="grid-template-columns:1.1fr 1.7fr 0.9fr 0.9fr 0.9fr 62px">
       <div><div class="cd-nm">${esc(p.nome||'?')}</div>${p.lat==null?'<div class="cd-sub" style="color:#fbbf24">⚠ sem coordenada</div>':''}${(p.slots&&p.slots.length)?`<div class="cd-sub" style="color:#ffcf7a;margin-top:2px">🏍 ${p.slots.length} moto(s) na base</div><div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">${p.slots.map(s=>`<span style="font-size:9.5px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:#ffcf7a;padding:1px 5px;border-radius:6px;font-family:var(--mono)">${esc(s.placa||'—')} <a onclick="baixaParceiroSlot('${p.id}','${s.id}');event.stopPropagation()" style="cursor:pointer;color:#fca5a5" title="Dar baixa (moto saiu da base do parceiro)">✕</a></span>`).join('')}</div>`:''}</div>
       <div style="font-size:11px;color:var(--txt2)">${esc(p.endereco||'—')}</div>
@@ -2070,7 +2074,12 @@ window.editParceiro = function(id){
   document.getElementById('pc_end').value = p.endereco||'';
   document.getElementById('pc_contato').value = p.contato||'';
   document.getElementById('pc_cel').value = p.cel||'';
-  document.getElementById('pc_desc').value = p.baseDescarga||'';
+  // Preserva base de descarga legada (nome curto antigo) que não está mais no cadastro de bases.
+  const _desc = document.getElementById('pc_desc');
+  if(p.baseDescarga && !Array.from(_desc.options).some(o => o.value === p.baseDescarga)){
+    _desc.insertAdjacentHTML('beforeend', `<option>${esc(p.baseDescarga)}</option>`);
+  }
+  _desc.value = p.baseDescarga||'';
   const msg = document.getElementById('pc_msg'); msg.style.color = 'var(--acc)'; msg.textContent = 'Editando: ' + (p.nome||'');
   document.getElementById('pc_nome').scrollIntoView({block:'center'});
 };
