@@ -563,7 +563,7 @@ body.selmode .card .mcheck{display:flex}
     <button class="iconbtn" id="logcolabbtn" data-tip="Histórico de cada colaborador: check-in/out, tempos, km rodado, online/ocioso">👣 Log de colabs</button>
     <button class="iconbtn" id="rkmbtn" data-tip="Ranking mensal consolidado dos colaboradores">🏆 Mensal</button>
     <button class="iconbtn" id="frotabtn" data-tip="Revisão de frota — veículos com pendências de manutenção">🔧 Frota <span id="frotabadge" style="display:none;background:var(--novo);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:800;margin-left:2px"></span></button>
-    <button class="iconbtn" id="demobtn" data-tip="Modo demonstração: cria chamados manualmente pra treinar, sem depender do Slack">🧪 Demo</button>
+    <button class="iconbtn" id="demobtn" data-tip="Modo demonstração: cria chamados manualmente pra treinar, sem chamados reais do Fleet/CX">🧪 Demo</button>
     <button class="iconbtn" id="configbtn" data-tip="Configurações da torre — SLA, raios de atendimento, chaves de API e operadores">⚙</button>
     <button class="iconbtn" id="colaburlbtn" data-tip="Copia o link do app do colaborador (motorista) pra compartilhar">📱 Colab</button>
   </div>
@@ -625,7 +625,7 @@ body.selmode .card .mcheck{display:flex}
       </div>
       <div id="demopanel">
         <h4>🧪 Modo Demo</h4>
-        <div class="hint">Crie chamados clicando no mapa, sem precisar do Slack.</div>
+        <div class="hint">Crie chamados clicando no mapa, sem precisar de chamados reais.</div>
         <button class="addmode" id="addmode">📍 Adicionar clicando no mapa</button>
         <button id="addbyaddr">✍ Adicionar por endereço</button>
         <button id="addsample">+ Adicionar 5 chamados aleatórios</button>
@@ -936,7 +936,7 @@ body.selmode .card .mcheck{display:flex}
 <div id="config">
   <div class="panel">
     <h2>⚙ Configurações</h2>
-    <div class="sub">Sincronização e integração com Slack</div>
+    <div class="sub">Fonte de chamados: Fleet + CX · integrações e rotas</div>
 
     <label>SLA (minutos até alerta)</label>
     <input type="number" id="cfgSla" min="10" max="240" step="5">
@@ -987,8 +987,8 @@ body.selmode .card .mcheck{display:flex}
 
     <label>Modo do app</label>
     <select id="cfgMode">
-      <option value="demo">Demo (sem Slack — adicione chamados manualmente)</option>
-      <option value="slack">Slack via cowork (precisa rodar dentro do Cowork/Claude.ai)</option>
+      <option value="demo">Demo — adicione chamados manualmente pra treinar</option>
+      <option value="slack">Produção — chamados vêm do app de Fleet e do CX</option>
     </select>
 
     <div class="actions">
@@ -1007,10 +1007,9 @@ body.selmode .card .mcheck{display:flex}
 // ============== CONFIG ==============
 const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
-const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v68 · 2026-08-12'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v91 · 2026-08-12';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v92 · 2026-08-12';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1189,7 +1188,7 @@ const TT = (() => {
 })();
 
 // ============== STATE ==============
-let chamados = [];         // de Slack OU demo
+let chamados = [];         // produção (Fleet/CX escrevem em vammo/chamados) OU demo
 let fechados = {};         // livro-razão {chamadoId: {status,ts,por}} — finalizações que a sync do Slack não pode reverter
 let motoristas = {};       // {id: {nome, placa, color, lat, lng, status, lastSeen}}
 let filtro = null;
