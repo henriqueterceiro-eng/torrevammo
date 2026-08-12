@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v67 · 2026-08-11';
+const APP_VERSION = 'v68 · 2026-08-12';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3233,6 +3233,10 @@ function continuarConclusao(ativo){
   try {
     if(typeof firebase !== 'undefined' && firebase.apps?.length){
       firebase.database().ref('vammo/chamados/' + ativo.id).update({ status: 'concluido', concluidoEm: Date.now(), desfecho, pagamentoNoLocal: desfecho === 'pago_no_local' }).catch(()=>{});
+      // Livro-razão durável: a sync do Slack re-empurra o chamado como 'novo' (full-set) e apaga a
+      // conclusão; este nó separado (vammo/chamados_fechados) a torre respeita pra o chamado
+      // finalizado não reaparecer ativo na tela — mesmo se re-criado.
+      firebase.database().ref('vammo/chamados_fechados/' + ativo.id).set({ status: 'concluido', ts: Date.now(), por: (me && me.nome) || null }).catch(()=>{});
     }
   } catch(_){}
   vibrate([50, 30, 50]);

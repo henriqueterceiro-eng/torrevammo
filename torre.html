@@ -1009,8 +1009,8 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const SLACK_CHANNEL = 'C07MDM8KUV7';
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
-const LATEST_COLAB_VERSION = 'v67 · 2026-08-11'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v90 · 2026-08-11';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const LATEST_COLAB_VERSION = 'v68 · 2026-08-12'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v91 · 2026-08-12';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1190,6 +1190,7 @@ const TT = (() => {
 
 // ============== STATE ==============
 let chamados = [];         // de Slack OU demo
+let fechados = {};         // livro-razão {chamadoId: {status,ts,por}} — finalizações que a sync do Slack não pode reverter
 let motoristas = {};       // {id: {nome, placa, color, lat, lng, status, lastSeen}}
 let filtro = null;
 let catFiltro = new Set(); // filtro por CATEGORIA de chamado (escurece no mapa/lista; vazio = todos acesos)
@@ -1364,6 +1365,11 @@ const STORE = (() => {
         console.log('[STORE] chamados sync', Object.keys(data).length, 'no banco');
         if(handlers.onChamadosSnapshot) handlers.onChamadosSnapshot(data);
       });
+      // Livro-razão de fechados (sync do Slack não toca) — vence o status re-empurrado.
+      fb.child('chamados_fechados').on('value', s => {
+        const data = s.val() || {};
+        if(handlers.onFechadosSnapshot) handlers.onFechadosSnapshot(data);
+      });
       fb.child('queues').on('value', s => {
         const data = s.val() || {};
         console.log('[STORE] queues sync', Object.keys(data).length, 'motoristas');
@@ -1434,6 +1440,14 @@ const STORE = (() => {
       const clean = cleanForFb(patch);
       try { fb.child('chamados').child(id).update(clean).catch(e => console.warn('fb updateChamado:', e)); }
       catch(e){ console.warn('fb updateChamado throw:', e); }
+    },
+    // LIVRO-RAZÃO de chamados FECHADOS (nó separado que a sync do Slack NÃO reescreve). Ao finalizar,
+    // grava aqui; a torre força o status fechado por ele, então uma re-criação (full-set) da sync como
+    // 'novo' não faz o chamado reaparecer ativo. Ver aplicarFechados / onFechadosSnapshot.
+    marcarFechado(id, status, por){
+      if(!fb || !id) return;
+      try { fb.child('chamados_fechados').child(id).set(cleanForFb({ status: status || 'concluido', ts: Date.now(), por: por || null })).catch(e => console.warn('fb marcarFechado:', e)); }
+      catch(e){ console.warn('fb marcarFechado throw:', e); }
     },
     deleteChamado(id){ if(fb) fb.child('chamados').child(id).remove().catch(e => console.warn('fb deleteChamado:', e)); },
     clearAll(){
@@ -2266,6 +2280,7 @@ function concluirTerceiro(chamadoId, desfecho, extra){
   const operador = getOperadorTorre();
   c.desfecho = desfecho; c.concluidoEm = ts; c.rotinaSteps = rot; c.fechadoPelaTorre = true; c.fechadoPor = operador;
   STORE.updateChamado(chamadoId, { concluidoEm: ts, desfecho, rotinaSteps: rot, fechadoPelaTorre: true, fechadoPor: operador });
+  STORE.marcarFechado(chamadoId, 'concluido', operador);   // durável: sync do Slack não reverte
   if(desfecho === 'recolhido' && c.terceiroId && parceiros[c.terceiroId]){
     const p = Object.assign({}, parceiros[c.terceiroId]);
     p.slots = Array.isArray(p.slots) ? p.slots.slice() : [];
@@ -3743,6 +3758,11 @@ function renderDetail(){
 function closeDetail(){ selId = null; _chamadoAbertoMoto = null; renderAll(); }
 window.closeDetail = closeDetail;
 
+// Força o status FECHADO do livro-razão sobre a lista atual — vence a re-criação da sync do Slack.
+function aplicarFechados(arr){
+  if(!arr) return;
+  for(const c of arr){ const f = fechados[c.id]; if(f && f.status && c.status !== 'concluido' && c.status !== 'cancelado'){ c.status = f.status; } }
+}
 function updateStatus(chamadoId, newStatus){
   const c = chamados.find(x => x.id === chamadoId);
   if(!c) return;
@@ -3759,6 +3779,7 @@ function updateStatus(chamadoId, newStatus){
   STORE.updateChamado(chamadoId, { status: newStatus });
   sync.send('chamado:status_torre', { chamadoId, status: newStatus });
   if(newStatus === 'concluido' || newStatus === 'cancelado'){
+    STORE.marcarFechado(chamadoId, newStatus, getOperadorTorre());   // durável: sync do Slack não reverte
     const oldMot = c.motoristaId;
     queueRemove(chamadoId);
     STORE.setAllQueues(loadQueues());
@@ -7408,6 +7429,9 @@ function setupStoreListeners(){
       window._initialSyncDone = true;
       // Blindagem: chamado sem status quebrava .status.toUpperCase() no render (travava lista/filtros/cliques).
       for(const _c of byTs){ if(_c && !_c.status) _c.status = 'novo'; }
+      // LIVRO-RAZÃO: a sync do Slack re-empurra (full-set) chamados já finalizados como 'novo', apagando a
+      // conclusão. vammo/chamados_fechados (que a sync NÃO toca) vence → chamado finalizado não reaparece ativo.
+      aplicarFechados(byTs);
       chamados = byTs;
       try { syncIncoming(_incNew); } catch(_){}   // toque + slide-to-accept dos chamados entrando
       // Sync caches locais
@@ -7444,6 +7468,12 @@ function setupStoreListeners(){
       veiculos = data || {};
       if($('#cadmodal').style.display === 'flex') renderCad();
       atualizarFrotaBadge();
+    },
+    onFechadosSnapshot: (data) => {
+      fechados = data || {};
+      // reaplica sobre a lista atual (caso o snapshot de chamados tenha chegado antes) e re-renderiza
+      aplicarFechados(chamados);
+      try { renderAll(); } catch(_){}
     },
     onBasesSnapshot: (data) => {
       bases = data || {};
