@@ -433,7 +433,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const CX_VERSION = 'v5 · 2026-08-12';
+const CX_VERSION = 'v6 · 2026-08-12';
 
 // Motivos oficiais (mesmos do CX/torre)
 // Motivos oficiais do CX (mesmos da torre, SEM os de Fleet/logística — Deslocamento entre bases,
@@ -543,7 +543,12 @@ function ehTransf(c){ return !!(c.baseSaida||c.baseEntrega||/deslocamento|movime
 // 1 aberto · 2 aceito · 3 atribuído · 4 em rota · 6 concluído  (5 = roster de motoristas na base)
 function etapa(c){
   if(c._fakeEtapa) return c._fakeEtapa;   // chamado de demonstração: etapa forçada
-  if(c.status==='concluido'||c.status==='cancelado') return 6;
+  if(c.status==='concluido'||c.status==='cancelado'){
+    // RECOLHIDAS: moto no caminhão (colab deu "moto recolhida") mas AINDA não descarregou na base.
+    // Fica numa coluna própria até o checkout/descarga na base; aí sim vira Concluída.
+    if(c.status==='concluido' && c.desfecho==='recolhido' && !(c.descargaEm||c.descargaBaseNome)) return 7;
+    return 6;
+  }
   const hasDriver=!!c.motoristaId, hasTerc=!!c.terceiroId;
   if(hasDriver || hasTerc){
     if(c.arrived) return 5;                                          // chegou + iniciou o atendimento
@@ -563,7 +568,8 @@ const COLS = [
   {n:3, ic:'🧑‍🔧', t:'Atribuído',    s:'colaborador designado', c:'var(--atrib)'},
   {n:4, ic:'🚚', t:'Em rota',       s:'colaborador a caminho', c:'var(--rota)'},
   {n:5, ic:'🔧', t:'Em atendimento', s:'colaborador iniciou no local', c:'var(--atend)'},
-  {n:6, ic:'✅', t:'Concluídos',    s:'finalizados hoje', c:'var(--conc)'}
+  {n:7, ic:'📦', t:'Recolhidas',    s:'moto no caminhão · aguardando descarga na base', c:'#f59e0b'},
+  {n:6, ic:'✅', t:'Concluídos',    s:'finalizados / descarregados', c:'var(--conc)'}
 ];
 
 // ================= RENDER =================
@@ -576,7 +582,11 @@ function ehMeuChamado(c){
 function chamadosVisiveis(){
   const reais = Object.values(chamados).filter(c=>{
     if(!c||!c.id || !ehMeuChamado(c)) return false;
-    if(c.status==='concluido'||c.status==='cancelado') return ehHoje(c.concluidoEm||c.ts);
+    if(c.status==='concluido'||c.status==='cancelado'){
+      // moto recolhida ainda NÃO descarregada = trabalho em aberto (moto no caminhão) → sempre visível
+      if(c.status==='concluido' && c.desfecho==='recolhido' && !(c.descargaEm||c.descargaBaseNome)) return true;
+      return ehHoje(c.concluidoEm||c.ts);
+    }
     return true;
   });
   return demoOn ? reais.concat(demoChamados) : reais;
@@ -587,7 +597,7 @@ function scheduleRender(){ if(_renderTimer) return; _renderTimer=setTimeout(()=>
 function render(){
   const board=$('#board');
   const list=chamadosVisiveis();
-  const porEtapa={1:[],3:[],4:[],5:[],6:[]};
+  const porEtapa={1:[],3:[],4:[],5:[],6:[],7:[]};
   list.forEach(c=>{ let e=etapa(c); if(e===2) e=1; (porEtapa[e]=porEtapa[e]||[]).push(c); });  // CX não tem etapa "aceito" — dobra em Aberto
   // ordena por prioridade (aguardando) depois por ts
   for(const k in porEtapa) porEtapa[k].sort((a,b)=> (prioridade(b)-prioridade(a)) || ((a.ts||0)-(b.ts||0)) );
@@ -599,7 +609,7 @@ function render(){
   board.innerHTML = COLS.map(col=>{
     const arr=porEtapa[col.n]||[];
     const inner = arr.length ? arr.map(c=>card(c,col.n)).join('')
-      : emptyCol(col.ic, col.n===6?'Nada concluído hoje':'Nenhum chamado aqui');
+      : emptyCol(col.ic, col.n===6?'Nada concluído hoje':col.n===7?'Nenhuma moto recolhida agora':'Nenhum chamado aqui');
     return `<div class="col" style="--c:${col.c}">
       <div class="ch"><span class="ci">${col.ic}</span>
         <div><div class="ct">${col.t}</div><div class="cs">${col.s}</div></div>
@@ -679,10 +689,11 @@ function plotarDemo(){
     mk(26, {_fakeEtapa:3, seq:903, cliente:'Ana Prado', placa:'BRQ9I17', motivo:'Moto não liga - VAMMO', endereco:'Av. Ibirapuera, 3000 - Moema', lat:-23.6018, lng:-46.6664, clienteAguardando:true, atribuidoEm:now-20*M, motoristaNome:'Carlos Souza', motoristaId:'demo_m1'}),
     mk(48, {_fakeEtapa:4, seq:904, status:'em_rota', cliente:'Pedro Alves', placa:'FCB6E24', motivo:'Acidente', endereco:'R. Tuim, 500 - Moema', lat:-23.6035, lng:-46.6600, clienteAguardando:true, atribuidoEm:now-44*M, emRotaEm:now-40*M, motoristaNome:'Diego Lima', motoristaId:'demo_m2', _simFrom:baseCoord, _simTo:{lat:-23.6035,lng:-46.6600}}),
     mk(120,{_fakeEtapa:6, seq:905, status:'concluido', cliente:'Bruno Reis', placa:'AFXT6H75', motivo:'Freio', endereco:'R. Augusta, 1200 - Consolação', lat:-23.5540, lng:-46.6620, atribuidoEm:now-116*M, emRotaEm:now-112*M, chegouEm:now-70*M, concluidoEm:now-40*M, motoristaNome:'Eduardo Reis', motoModelo:'VMOTO CPX', nota:{final:9.3}, desfecho:'reparado', rotinaSteps:{ moto_encontrada:true, resolveu:true, foto_reparada:_demoFoto('🔧','Moto reparada','#123f2a'), foto_placa:_demoFoto('🔢','Placa','#12324f') }}),
-    mk(35, {_fakeEtapa:6, seq:906, status:'concluido', cliente:'Marcos Tavares', placa:'RIO2A88', motivo:'Recolhimento por inadimplência', endereco:'R. Vergueiro, 1400 - Paraíso', lat:-23.5745, lng:-46.6360, atribuidoEm:now-92*M, emRotaEm:now-88*M, chegouEm:now-52*M, concluidoEm:now-34*M, motoristaNome:'Rafael Nunes', motoModelo:'VMOTO VS1', nota:{final:9.6}, desfecho:'pago_no_local', pagamentoNoLocal:true, assinatura:_demoAssinatura(), assinaturaNome:'Marcos Tavares', rotinaSteps:{ moto_encontrada:true, cliente_local:true, quitou:true, foto_placa:_demoFoto('🔢','Placa','#12324f'), foto_comprovante:_demoFoto('💵','Comprovante de pagamento','#123f2a') }})
+    mk(35, {_fakeEtapa:6, seq:906, status:'concluido', cliente:'Marcos Tavares', placa:'RIO2A88', motivo:'Recolhimento por inadimplência', endereco:'R. Vergueiro, 1400 - Paraíso', lat:-23.5745, lng:-46.6360, atribuidoEm:now-92*M, emRotaEm:now-88*M, chegouEm:now-52*M, concluidoEm:now-34*M, motoristaNome:'Rafael Nunes', motoModelo:'VMOTO VS1', nota:{final:9.6}, desfecho:'pago_no_local', pagamentoNoLocal:true, assinatura:_demoAssinatura(), assinaturaNome:'Marcos Tavares', rotinaSteps:{ moto_encontrada:true, cliente_local:true, quitou:true, foto_placa:_demoFoto('🔢','Placa','#12324f'), foto_comprovante:_demoFoto('💵','Comprovante de pagamento','#123f2a') }}),
+    mk(18, {_fakeEtapa:7, seq:907, status:'concluido', cliente:'Juliana Prado', placa:'RCB4G21', motivo:'Recolhimento por quebra de contrato', endereco:'R. Domingos de Morais, 2100 - Vila Mariana', lat:-23.5980, lng:-46.6390, atribuidoEm:now-40*M, emRotaEm:now-36*M, chegouEm:now-22*M, concluidoEm:now-14*M, motoristaNome:'Rafael Nunes', motoModelo:'VMOTO CPX', nota:{final:9.4}, desfecho:'recolhido', rotinaSteps:{ moto_encontrada:true, q_chave:true, moto_recolhida:true, foto_chave:_demoFoto('🔑','Chave','#12324f'), foto_embarcada:_demoFoto('📦','Moto embarcada','#3a2a12') }})
   ];
   demoOn = true; updateDemoBtn(); render();
-  toast('🧪 6 chamados de demonstração plotados (só na sua tela)');
+  toast('🧪 7 chamados de demonstração plotados (só na sua tela)');
 }
 function limparDemo(){ demoChamados=[]; demoOn=false; updateDemoBtn(); render(); toast('🧹 Demonstração removida'); }
 function toggleDemo(){ demoOn ? limparDemo() : plotarDemo(); }
@@ -909,7 +920,7 @@ const STAGE_DEFS = [
   {ic:'✅', label:'Concluído',              get:(c,r)=>c.concluidoEm||(r&&r.completedTs)}
 ];
 function detStatusChip(c){
-  const map={1:['Aberto','var(--novo)'],2:['Aceito','var(--aceito)'],3:['Atribuído','var(--atrib)'],4:['Em rota','var(--rota)'],5:['Em atendimento','var(--atend)'],6:['Concluído','var(--conc)']};
+  const map={1:['Aberto','var(--novo)'],2:['Aceito','var(--aceito)'],3:['Atribuído','var(--atrib)'],4:['Em rota','var(--rota)'],5:['Em atendimento','var(--atend)'],6:['Concluído','var(--conc)'],7:['📦 Recolhida','#f59e0b']};
   const [t,cor]=map[etapa(c)]||['—','var(--txt3)'];
   return `<span class="det-chip" style="background:${cor};color:#04121e">${t}</span>`;
 }
