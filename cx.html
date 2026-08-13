@@ -433,7 +433,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const CX_VERSION = 'v4 · 2026-08-11';
+const CX_VERSION = 'v5 · 2026-08-12';
 
 // Motivos oficiais (mesmos do CX/torre)
 // Motivos oficiais do CX (mesmos da torre, SEM os de Fleet/logística — Deslocamento entre bases,
@@ -656,6 +656,15 @@ function whoLine(ic,role,nome,cor){
     <div class="wi"><div class="wr">${ic} ${role}</div><div class="wn">${esc(nome)}</div></div></div>`;
 }
 // ================= DEMO (chamados de socorro fictícios pra apresentação) =================
+// Fotos/assinatura de DEMONSTRAÇÃO (SVG gerado — placeholder marcado "EXEMPLO", só pro demo)
+function _demoFoto(emoji, label, cor){
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${cor||'#0e2138'}"/><stop offset="1" stop-color="#05101d"/></linearGradient></defs><rect width="300" height="300" fill="url(#g)"/><rect x="8" y="8" width="284" height="284" rx="16" fill="none" stroke="rgba(255,255,255,.14)"/><text x="150" y="150" font-size="96" text-anchor="middle">${emoji}</text><text x="150" y="205" font-size="19" font-weight="700" text-anchor="middle" fill="#eaf6fb" font-family="Arial,Helvetica,sans-serif">${label}</text><text x="150" y="235" font-size="11" letter-spacing="2" text-anchor="middle" fill="#5f7488" font-family="Arial,Helvetica,sans-serif">EXEMPLO · DEMO</text></svg>`;
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+function _demoAssinatura(){
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="120" viewBox="0 0 320 120"><rect width="320" height="120" fill="#fff"/><path d="M18 82 C 46 24, 66 104, 96 62 S 148 22, 176 74 C 198 106, 216 42, 246 66 S 296 84, 304 56" fill="none" stroke="#0a1a2e" stroke-width="3.5" stroke-linecap="round"/><path d="M40 96 L 210 96" stroke="rgba(10,26,46,.25)" stroke-width="1"/></svg>`;
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
 function plotarDemo(){
   const now = Date.now(), M = 60000;
   const baseCoord = { lat:-23.5557, lng:-46.6099 };   // "base" só p/ o simulador de rota (etapa 4)
@@ -669,10 +678,11 @@ function plotarDemo(){
     mk(11, {_fakeEtapa:1, seq:902, cliente:'Marina Costa', placa:'BPY9E44', motivo:'Socorro de Bateria', endereco:'R. dos Pinheiros, 200 - Pinheiros', lat:-23.5635, lng:-46.6863, clienteAguardando:false, motoModelo:'VMOTO VS1'}),
     mk(26, {_fakeEtapa:3, seq:903, cliente:'Ana Prado', placa:'BRQ9I17', motivo:'Moto não liga - VAMMO', endereco:'Av. Ibirapuera, 3000 - Moema', lat:-23.6018, lng:-46.6664, clienteAguardando:true, atribuidoEm:now-20*M, motoristaNome:'Carlos Souza', motoristaId:'demo_m1'}),
     mk(48, {_fakeEtapa:4, seq:904, status:'em_rota', cliente:'Pedro Alves', placa:'FCB6E24', motivo:'Acidente', endereco:'R. Tuim, 500 - Moema', lat:-23.6035, lng:-46.6600, clienteAguardando:true, atribuidoEm:now-44*M, emRotaEm:now-40*M, motoristaNome:'Diego Lima', motoristaId:'demo_m2', _simFrom:baseCoord, _simTo:{lat:-23.6035,lng:-46.6600}}),
-    mk(120,{_fakeEtapa:6, seq:905, status:'concluido', cliente:'Bruno Reis', placa:'AFXT6H75', motivo:'Freio', endereco:'R. Augusta, 1200 - Consolação', lat:-23.5540, lng:-46.6620, atribuidoEm:now-116*M, emRotaEm:now-112*M, chegouEm:now-70*M, concluidoEm:now-40*M, motoristaNome:'Eduardo Reis', nota:{final:9.3}})
+    mk(120,{_fakeEtapa:6, seq:905, status:'concluido', cliente:'Bruno Reis', placa:'AFXT6H75', motivo:'Freio', endereco:'R. Augusta, 1200 - Consolação', lat:-23.5540, lng:-46.6620, atribuidoEm:now-116*M, emRotaEm:now-112*M, chegouEm:now-70*M, concluidoEm:now-40*M, motoristaNome:'Eduardo Reis', motoModelo:'VMOTO CPX', nota:{final:9.3}, desfecho:'reparado', rotinaSteps:{ moto_encontrada:true, resolveu:true, foto_reparada:_demoFoto('🔧','Moto reparada','#123f2a'), foto_placa:_demoFoto('🔢','Placa','#12324f') }}),
+    mk(35, {_fakeEtapa:6, seq:906, status:'concluido', cliente:'Marcos Tavares', placa:'RIO2A88', motivo:'Recolhimento por inadimplência', endereco:'R. Vergueiro, 1400 - Paraíso', lat:-23.5745, lng:-46.6360, atribuidoEm:now-92*M, emRotaEm:now-88*M, chegouEm:now-52*M, concluidoEm:now-34*M, motoristaNome:'Rafael Nunes', motoModelo:'VMOTO VS1', nota:{final:9.6}, desfecho:'pago_no_local', pagamentoNoLocal:true, assinatura:_demoAssinatura(), assinaturaNome:'Marcos Tavares', rotinaSteps:{ moto_encontrada:true, cliente_local:true, quitou:true, foto_placa:_demoFoto('🔢','Placa','#12324f'), foto_comprovante:_demoFoto('💵','Comprovante de pagamento','#123f2a') }})
   ];
   demoOn = true; updateDemoBtn(); render();
-  toast('🧪 5 chamados de demonstração plotados (só na sua tela)');
+  toast('🧪 6 chamados de demonstração plotados (só na sua tela)');
 }
 function limparDemo(){ demoChamados=[]; demoOn=false; updateDemoBtn(); render(); toast('🧹 Demonstração removida'); }
 function toggleDemo(){ demoOn ? limparDemo() : plotarDemo(); }
@@ -903,6 +913,41 @@ function detStatusChip(c){
   const [t,cor]=map[etapa(c)]||['—','var(--txt3)'];
   return `<span class="det-chip" style="background:${cor};color:#04121e">${t}</span>`;
 }
+// ===== RELATÓRIO DE CONCLUSÃO (fotos da moto + desfecho + comprovante/assinatura do motorista) =====
+const FOTO_LABELS_CX = { foto_reparada:'🔧 Moto reparada', foto_placa:'🔢 Placa', foto_embarcada:'📦 Moto embarcada', foto_chave:'🔑 Chave', foto_bateria:'🔋 Bateria', foto_local_vazio:'📍 Local (sem moto)', foto_danos:'💥 Danos', foto_comprovante:'💵 Comprovante de pagamento' };
+function desfechoLabelCX(desf, base){
+  if(desf==='reparado')      return {t:'🔧 Resolvida no local', c:'#34d399'};
+  if(desf==='recolhido')     return {t: base?('📦 Recolhida → '+base):'📦 Moto recolhida', c:'#12C4F5'};
+  if(desf==='pago_no_local') return {t:'💵 Pago no local', c:'#34d399'};
+  if(desf==='movimentado')   return {t:'🚚 Movimentação interna', c:'#c4b5fd'};
+  if(desf==='nao_encontrada')return {t:'🔍 Moto não encontrada', c:'#ff5c79'};
+  return {t:'✅ Concluído', c:'#34d399'};
+}
+function relatorioConclusaoCX(c, r){
+  const rs = (c.rotinaSteps && Object.keys(c.rotinaSteps).length) ? c.rotinaSteps : ((r && r.rotinaSteps) || {});
+  const desf = c.desfecho || (r && r.desfecho) || null;
+  const base = c.descargaBaseNome || (r && r.descargaBaseNome) || '';
+  const assinatura = c.assinatura || (r && r.assinatura) || null;
+  const assinaturaNome = c.assinaturaNome || (r && r.assinaturaNome) || '';
+  const pago = !!(c.pagamentoNoLocal || (r && r.pagamentoNoLocal) || desf==='pago_no_local');
+  const fotos = Object.keys(rs).filter(k => typeof rs[k]==='string' && rs[k].startsWith('data:')).map(k => ({ label: FOTO_LABELS_CX[k] || k, src: rs[k] }));
+  const obs = rs.obs_nao_encontrada || rs.obs_terceiro || '';
+  if(!fotos.length && !assinatura && !desf) return '';   // motorista ainda não registrou nada
+  const dl = desfechoLabelCX(desf, base);
+  return `<div class="det-sec">
+    <div class="st">📝 Relatório de conclusão do motorista</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <span style="font-size:12px;font-weight:800;color:${dl.c};background:rgba(255,255,255,.05);border:1px solid ${dl.c}55;border-radius:20px;padding:5px 12px">${dl.t}</span>
+      ${pago?'<span style="font-size:11px;font-weight:800;color:#34d399;background:rgba(52,211,153,.14);border:1px solid rgba(52,211,153,.4);border-radius:20px;padding:5px 10px">💵 cliente pagou no local</span>':''}
+      ${assinatura?'<span style="font-size:11px;font-weight:800;color:#5FE0B0;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);border-radius:20px;padding:5px 10px">✍ assinado</span>':''}
+    </div>
+    ${obs?`<div style="font-size:12px;color:var(--txt2);margin-top:8px;line-height:1.45">🗒 ${esc(obs)}</div>`:''}
+    ${fotos.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:12px">
+      ${fotos.map(f=>`<div><div style="font-size:9.5px;color:var(--txt3);font-weight:700;margin-bottom:4px">${esc(f.label)}</div><a href="${f.src}" target="_blank" rel="noopener"><img src="${f.src}" style="width:100%;border-radius:8px;border:1px solid var(--bdr);display:block;aspect-ratio:1;object-fit:cover"></a></div>`).join('')}
+    </div>`:'<div style="font-size:12px;color:var(--txt3);margin-top:10px">Sem fotos registradas pelo motorista.</div>'}
+    ${assinatura?`<div style="margin-top:12px"><div style="font-size:10px;color:#5FE0B0;font-weight:700;margin-bottom:4px">✍ Assinatura do cliente${assinaturaNome?' · '+esc(assinaturaNome):''}</div><img src="${assinatura}" style="max-width:220px;width:100%;border-radius:8px;border:1px solid var(--bdr);background:#fff;display:block"></div>`:''}
+  </div>`;
+}
 function openDetalhe(id){
   const c=findChamado(id); if(!c) return;
   if(_iotMoved.delete(id)) scheduleRender();   // abriu o card → reconhece o movimento (para de piscar)
@@ -936,6 +981,7 @@ function openDetalhe(id){
     ${(c.placa && !motos.length)?`<div class="det-sec"><div class="st">📡 IoT da moto</div><div id="detIot" class="det-iot"><span style="color:var(--txt3);font-size:11px">🔎 carregando…</span></div></div>`:''}
     <div class="det-total"><span class="tl">${(c.status==='concluido')?'⏱ Tempo total de execução':'⏱ Tempo decorrido'}</span><span class="tv">${totVal}</span></div>
     ${notaV!=null?`<div style="margin-top:10px"><span class="det-nota">⭐ Nota ${notaV}</span></div>`:''}
+    ${(c.status==='concluido') ? relatorioConclusaoCX(c, r) : ''}
     <div class="det-sec"><div class="st">📋 Histórico · tempo de cada etapa</div>${rows||'<div style="color:var(--txt3);font-size:12px">Sem etapas registradas ainda.</div>'}</div>
     ${motos.length?`<div class="det-sec"><div class="st">🏍 ${motos.length} moto${motos.length>1?'s':''}</div><div class="det-motos">${motos.map(m=>`<div class="det-moto"><span class="pl">${esc(m.placa)}</span><span class="mo">${esc(m.modelo||'')}</span>${m.iotForaDaBase?'<span style="margin-left:auto;font-size:9px;font-weight:800;color:#1a1200;background:#f59e0b;padding:1px 6px;border-radius:5px">⚠ fora da base</span>':''}</div>`).join('')}</div></div>`:''}
     <div class="det-sec"><div class="st">👥 Responsáveis</div><div class="det-motos">
