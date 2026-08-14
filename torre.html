@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v68 · 2026-08-12'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v93 · 2026-08-14';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v94 · 2026-08-14';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -7504,6 +7504,7 @@ function setupStoreListeners(){
     },
     onOperadoresSnapshot: (data) => {
       operadores = data || {};
+      _operadoresLoaded = true;
       // resolve um login que estava esperando as permissões carregarem
       if(_pendingLogin){ aplicarLoginQuandoPronto(_pendingLogin); }
       // se o admin mudou/removeu o papel do usuário logado (e não é dev/aberto), re-aplica
@@ -7897,6 +7898,7 @@ const AUTH_DOMAIN = 'vammo.com';
 let operadores = {};      // {id: {id, nome, email, role}}  (vammo/operadores)
 let currentUser = null;   // {email, nome, picture, role}  role: 'dev'|'admin'|'controlador'
 let _pendingLogin = null; // login aguardando operadores carregarem pra resolver o papel
+let _operadoresLoaded = false; // vira true no 1º snapshot de vammo/operadores (STORE.ready() sozinho NÃO garante que a lista chegou)
 
 // controlador NÃO pode: relatórios, pontuações (ranking/mensal), config, cadastros, frota, finalização forçada
 const CONTROLADOR_BLOQUEADO = new Set(['relatorios','ranking','mensal','config','cadastros','frota','finalizar_forcado']);
@@ -7938,7 +7940,10 @@ function loginGoogleCallback(resp){
 function aplicarLoginQuandoPronto(pend){
   const role = roleForEmail(pend.email);
   if(role){ setUsuario({ ...pend, role }); return; }
-  if(!STORE.ready()){ _pendingLogin = pend; _authMsg('Carregando permissões…'); return; }
+  // Espera a lista de OPERADORES carregar de verdade (STORE.ready() = só conexão pronta; a lista
+  // chega depois). Sem isso, quem loga nessa janela era barrado por engano e o _pendingLogin era
+  // zerado → nunca re-resolvia (bug do "André tem acesso no banco mas a tela diz que não").
+  if(!STORE.ready() || !_operadoresLoaded){ _pendingLogin = pend; _authMsg('Carregando permissões…'); return; }
   _pendingLogin = null;
   try { localStorage.removeItem('torre_user'); } catch(_){}
   _authMsg((pend.nome||'Você') + ', você ainda não tem acesso à torre. Peça pro admin te cadastrar em "Operadores da torre".', true);
