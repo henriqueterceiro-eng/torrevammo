@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v68 · 2026-08-12'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v92 · 2026-08-12';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v93 · 2026-08-14';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1237,7 +1237,7 @@ let lastSync = null;
 
 const TRAIL_MAX = 40;            // últimas N posições
 const TRAIL_TTL_MS = 30 * 60000; // pontos > 30min são descartados
-const ROUTE_REFRESH_M = 150;     // refaz OSRM se motorista andou >150m
+const ROUTE_REFRESH_M = 400;     // refaz a rota só se o motorista andou >400m (economia — antes 150m estourava chamadas)
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
 
 // localStorage maps
@@ -2579,34 +2579,45 @@ function haversine(a, b){
 }
 
 async function fetchMultiRoute(from, stops){
-  // 1) Google Directions COM TRÂNSITO via /route (a empresa banca). Cai no OSRM se falhar/estourar.
+  // 💸 CUSTO: o desenho da linha de rota agora usa OSRM (GRÁTIS) por padrão. O Google Directions
+  // (pago, com trânsito) redesenhava a rota de CADA motorista a CADA ping de GPS → estourou a
+  // fatura (R$8k+ em dias). Só liga o Google se cfg.rotasGoogle===true — e SÓ com teto de
+  // orçamento na conta do Google Cloud. Sem OSRM, cai em linha reta (grátis), nunca no Google sem querer.
+  if(cfg && cfg.rotasGoogle === true){
+    try {
+      const stopsStr = stops.map(s => `${s.lat},${s.lng}`).join('|');
+      const gr = await fetch(`/route?from=${from.lat},${from.lng}&stops=${encodeURIComponent(stopsStr)}`);
+      if(gr.ok){
+        const gd = await gr.json();
+        if(gd && !gd.error && gd.coords && gd.coords.length){
+          return { coords: gd.coords, distance: gd.distance, duration: gd.duration, trafficDelay: gd.trafficDelay || 0, legs: gd.legs || [], provider: 'google' };
+        }
+      }
+    } catch(e){ console.warn('route google falhou, fallback OSRM:', e.message); }
+  }
+  // OSRM (GRÁTIS) — primário do desenho
   try {
-    const stopsStr = stops.map(s => `${s.lat},${s.lng}`).join('|');
-    const gr = await fetch(`/route?from=${from.lat},${from.lng}&stops=${encodeURIComponent(stopsStr)}`);
-    if(gr.ok){
-      const gd = await gr.json();
-      if(gd && !gd.error && gd.coords && gd.coords.length){
-        return { coords: gd.coords, distance: gd.distance, duration: gd.duration, trafficDelay: gd.trafficDelay || 0, legs: gd.legs || [], provider: 'google' };
+    const all = [from, ...stops];
+    const coordStr = all.map(p => `${p.lng},${p.lat}`).join(';');
+    const url = `${OSRM_URL}/${coordStr}?overview=full&geometries=geojson&steps=false`;
+    const r = await fetch(url);
+    if(r.ok){
+      const data = await r.json();
+      if(data.routes && data.routes.length){
+        const route = data.routes[0];
+        return {
+          coords: route.geometry.coordinates.map(c => [c[1], c[0]]),
+          distance: route.distance, duration: route.duration, trafficDelay: 0,
+          legs: (route.legs || []).map(l => ({ distance: l.distance, duration: l.duration, trafficDelay: 0 })),
+          provider: 'osrm'
+        };
       }
     }
-  } catch(e){ console.warn('route google falhou, fallback OSRM:', e.message); }
-  // 2) OSRM (fallback gratuito)
+  } catch(e){ console.warn('OSRM falhou, cai em reta:', e.message); }
+  // Último recurso: LINHA RETA (grátis) — nunca reintroduz custo do Google por acidente.
   const all = [from, ...stops];
-  const coordStr = all.map(p => `${p.lng},${p.lat}`).join(';');
-  const url = `${OSRM_URL}/${coordStr}?overview=full&geometries=geojson&steps=false`;
-  const r = await fetch(url);
-  if(!r.ok) throw new Error('OSRM HTTP ' + r.status);
-  const data = await r.json();
-  if(!data.routes || !data.routes.length) throw new Error('Sem rota encontrada');
-  const route = data.routes[0];
-  return {
-    coords: route.geometry.coordinates.map(c => [c[1], c[0]]),
-    distance: route.distance,
-    duration: route.duration,
-    trafficDelay: 0,
-    legs: (route.legs || []).map(l => ({ distance: l.distance, duration: l.duration, trafficDelay: 0 })),
-    provider: 'osrm'
-  };
+  let dist = 0; for(let i=1;i<all.length;i++) dist += haversine(all[i-1], all[i]);
+  return { coords: all.map(p => [p.lat, p.lng]), distance: dist, duration: dist/8.3, trafficDelay: 0, legs: [], provider: 'reta' };
 }
 
 async function updateRouteFor(motoristaId){
