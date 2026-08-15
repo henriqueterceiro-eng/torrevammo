@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v70 · 2026-08-14';
+const APP_VERSION = 'v71 · 2026-08-14';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2104,7 +2104,10 @@ function checkArrived(){
       pos: { lat: myPos.lat, lng: myPos.lng }
     });
   }
-  if(d < ARRIVED_THRESHOLD_M){
+  // Raio ADAPTATIVO: soma a imprecisão do GPS (cap 120m). Com GPS ruim o colab está no local mas
+  // a distância medida não fecha os 50m fixos → "chegou" nunca disparava. Assim dispara mesmo impreciso.
+  const arrThresh = ARRIVED_THRESHOLD_M + Math.min(myPos.accuracy || 0, 120);
+  if(d < arrThresh){
     if(!nearDestSince[ativo.id]) nearDestSince[ativo.id] = Date.now();
     else if(Date.now() - nearDestSince[ativo.id] > ARRIVED_TIME_MS){
       // CHEGOU!
@@ -2863,7 +2866,7 @@ function renderChamadoCard(){
   // caso é o FALLBACK MANUAL: se o GPS estiver fraco/parado e a chegada automática não disparar,
   // o colab ainda consegue iniciar (antes ficava travado sem nenhum botão). O onIniciarConfirmado
   // segue protegendo: só inicia dentro de RANGE_INICIO_M (200m) OU com autorização da torre.
-  const _podeIniciar = (c.arrived || c.status === 'em_rota') && !c.iniciadoEm;
+  const _podeIniciar = (c.arrived || c.status === 'em_rota' || c.status === 'novo') && !c.iniciadoEm;
   const inicioSlide = _podeIniciar ? `
     <div style="margin:14px 0;padding:14px;background:linear-gradient(135deg,rgba(0,180,229,0.15),rgba(0,180,229,0.05));border:2px solid var(--acc);border-radius:14px">
       <div style="font-size:12px;font-weight:800;color:var(--acc);text-align:center;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">🎯 ${c.arrived ? 'Confirme o início do atendimento' : 'Chegou no local? Deslize pra iniciar'}</div>
