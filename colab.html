@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v68 · 2026-08-12';
+const APP_VERSION = 'v69 · 2026-08-14';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -5957,6 +5957,18 @@ async function abrirTelaIntencao(){
   const slide = document.getElementById('intSlide');
   resetSlide(slide);
   setupSlideConfirm(slide, () => confirmarIntencaoOnline());
+  // ⚠ LIGA O "SAIR" ANTES de qualquer await — sem rede, o ensureFb() abaixo TRAVA e a execução
+  //   nunca chegava aqui, deixando o botão de logout morto (colab preso logado). Bug do "Fabio".
+  const sairIntencao = () => {
+    if(_intTimer){ clearInterval(_intTimer); _intTimer = null; }
+    if(_foraBaseRef){ try{ _foraBaseRef.off(); }catch(_){} _foraBaseRef = null; }
+    const el = document.getElementById('intencaoOnline'); if(el) el.style.display = 'none';
+    if(watchId){ try{ navigator.geolocation.clearWatch(watchId); }catch(_){} }
+    try{ clearMe(); }catch(_){}
+    location.reload();
+  };
+  document.getElementById('intSair').onclick = sairIntencao;
+  document.getElementById('intSairTop').onclick = sairIntencao;
   // Carrega bases do Firebase se ainda não tem
   if(Object.keys(bases).length === 0){
     try {
@@ -5980,15 +5992,6 @@ async function abrirTelaIntencao(){
   if(_intTimer) clearInterval(_intTimer);
   _intTimer = setInterval(atualizarBaseInfo, 3000);
   if(!myPos && !watchId) startGPS();
-  const sairIntencao = () => {
-    if(_intTimer){ clearInterval(_intTimer); _intTimer = null; }
-    if(_foraBaseRef){ _foraBaseRef.off(); _foraBaseRef = null; }
-    document.getElementById('intencaoOnline').style.display = 'none';
-    if(watchId) navigator.geolocation.clearWatch(watchId);
-    clearMe(); location.reload();
-  };
-  document.getElementById('intSair').onclick = sairIntencao;
-  document.getElementById('intSairTop').onclick = sairIntencao;
 }
 let _intTimer = null;
 let _foraBaseLiberado = false;   // torre liberou esse colab a iniciar fora da base?
