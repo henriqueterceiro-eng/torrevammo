@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v69 · 2026-08-14';
+const APP_VERSION = 'v70 · 2026-08-14';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1099,6 +1099,15 @@ function setupChamadosListener(){
         try { firebase.database().ref('vammo/cmds/' + me.id + '/reload').remove(); } catch(_){}
         location.reload();
       }, 1500);
+    });
+    // LOGOUT REMOTO POR-COLAB (a torre mandou deslogar SÓ este aparelho) — ao vivo
+    firebase.database().ref('vammo/cmds/' + me.id + '/logout').on('value', snap => {
+      const cmd = snap.val();
+      if(!cmd || !cmd.ts || Date.now() - cmd.ts > 120000) return;
+      try { firebase.database().ref('vammo/cmds/' + me.id + '/logout').remove(); } catch(_){}
+      showToast('🚪 Deslogado pela torre');
+      try { clearMe(); } catch(_){}
+      setTimeout(() => location.reload(), 800);
     });
   }
   // Configurações globais (range pra iniciar, etc.) — gestor altera na torre, propaga em real-time
@@ -6122,6 +6131,21 @@ document.getElementById('logEsqueci').addEventListener('click', (e) => {
 });
 
 // Auto-login se já tem sessão — revalida no Firebase
+// Logout remoto POR-COLAB: a torre grava vammo/cmds/<id>/logout. Na carga, se recente (<10min),
+// desloga SÓ este aparelho (usado quando o celular ficou preso logado). Não afeta os outros.
+async function checkLogoutRemoto(id){
+  if(!id) return false;
+  try {
+    const snap = await firebase.database().ref('vammo/cmds/' + id + '/logout').once('value');
+    const cmd = snap.val();
+    if(cmd && cmd.ts && (Date.now() - cmd.ts) < 10*60*1000){
+      try { await firebase.database().ref('vammo/cmds/' + id + '/logout').remove(); } catch(_){}
+      clearMe(); showLogin();
+      return true;
+    }
+  } catch(_){}
+  return false;
+}
 window.addEventListener('DOMContentLoaded', async () => {
   const lv = document.getElementById('loginver');
   if(lv){
@@ -6145,6 +6169,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         me = meFromColab(colab);
         me.status = 'online';
         saveMe(me);
+        if(await checkLogoutRemoto(me.id)){ return; }   // torre mandou deslogar SÓ este aparelho
         await goToTurnoOuApp();
         return;
       }
