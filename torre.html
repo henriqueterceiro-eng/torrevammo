@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v71 · 2026-08-14'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v99 · 2026-08-14';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v100 · 2026-08-16';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -6074,11 +6074,24 @@ function execInfoDaCorrida(r){
   return { diff, lat: eLat, lng: eLng, url: `https://www.google.com/maps?q=${eLat},${eLng}` };
 }
 const FOTO_LABELS = { foto_reparada:'🔧 Moto reparada', foto_placa:'🔢 Placa', foto_embarcada:'📦 Moto embarcada', foto_chave:'🔑 Chave', foto_local_vazio:'📍 Local (sem moto)', foto_danos:'💥 Danos', foto_comprovante:'💵 Comprovante de pagamento' };
-function openFotosCorrida(r){
-  const rs = r.rotinaSteps || {};
+async function openFotosCorrida(r){
+  let rs = Object.assign({}, r.rotinaSteps || {});
+  const ch0 = chamados.find(x => x.id === r.chamadoId) || {};
+  let ass = r.assinatura || ch0.assinatura || null;
+  let assNome = r.assinaturaNome || ch0.assinaturaNome || '';
+  // As fotos foram movidas pros nós de ARQUIVO pra aliviar o load — busca sob demanda se não tiver inline.
+  const temFoto0 = Object.keys(rs).some(k => typeof rs[k] === 'string' && rs[k].startsWith('data:'));
+  if((!temFoto0 || !ass) && typeof firebase !== 'undefined' && firebase.apps?.length){
+    showToast('📷 carregando evidências…');
+    try {
+      const tasks = [];
+      if(r.id) tasks.push(firebase.database().ref('vammo/corridas_arquivo/' + r.id).once('value').then(s => s.val()).catch(() => null));
+      if(r.chamadoId) tasks.push(firebase.database().ref('vammo/chamados_arquivo/' + r.chamadoId).once('value').then(s => s.val()).catch(() => null));
+      const arqs = await Promise.all(tasks);
+      for(const a of arqs){ if(a){ if(a.rotinaSteps) rs = Object.assign({}, a.rotinaSteps, rs); if(a.assinatura && !ass) ass = a.assinatura; if(a.assinaturaNome && !assNome) assNome = a.assinaturaNome; } }
+    } catch(_){}
+  }
   const fotos = Object.keys(rs).filter(k => typeof rs[k] === 'string' && rs[k].startsWith('data:')).map(k => ({ label: FOTO_LABELS[k] || k, src: rs[k] }));
-  const ass = r.assinatura || (chamados.find(x => x.id === r.chamadoId)||{}).assinatura || null;
-  const assNome = r.assinaturaNome || (chamados.find(x => x.id === r.chamadoId)||{}).assinaturaNome || '';
   if(!fotos.length && !ass){ showToast('Sem fotos/assinatura neste atendimento'); return; }
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(4,10,20,0.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10030;padding:20px';

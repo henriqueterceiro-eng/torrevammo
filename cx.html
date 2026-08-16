@@ -433,7 +433,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const CX_VERSION = 'v6 · 2026-08-12';
+const CX_VERSION = 'v7 · 2026-08-16';
 
 // Motivos oficiais (mesmos do CX/torre)
 // Motivos oficiais do CX (mesmos da torre, SEM os de Fleet/logística — Deslocamento entre bases,
@@ -938,26 +938,48 @@ function relatorioConclusaoCX(c, r){
   const rs = (c.rotinaSteps && Object.keys(c.rotinaSteps).length) ? c.rotinaSteps : ((r && r.rotinaSteps) || {});
   const desf = c.desfecho || (r && r.desfecho) || null;
   const base = c.descargaBaseNome || (r && r.descargaBaseNome) || '';
-  const assinatura = c.assinatura || (r && r.assinatura) || null;
-  const assinaturaNome = c.assinaturaNome || (r && r.assinaturaNome) || '';
   const pago = !!(c.pagamentoNoLocal || (r && r.pagamentoNoLocal) || desf==='pago_no_local');
-  const fotos = Object.keys(rs).filter(k => typeof rs[k]==='string' && rs[k].startsWith('data:')).map(k => ({ label: FOTO_LABELS_CX[k] || k, src: rs[k] }));
   const obs = rs.obs_nao_encontrada || rs.obs_terceiro || '';
-  if(!fotos.length && !assinatura && !desf) return '';   // motorista ainda não registrou nada
+  if(!desf && !pago && !obs) return '';   // motorista ainda não registrou nada
   const dl = desfechoLabelCX(desf, base);
+  // As fotos/assinatura viajam nos nós de ARQUIVO (pra aliviar o load); carregarEvidenciasCX() preenche #cxEvid sob demanda ao abrir o card.
   return `<div class="det-sec">
     <div class="st">📝 Relatório de conclusão do motorista</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
       <span style="font-size:12px;font-weight:800;color:${dl.c};background:rgba(255,255,255,.05);border:1px solid ${dl.c}55;border-radius:20px;padding:5px 12px">${dl.t}</span>
       ${pago?'<span style="font-size:11px;font-weight:800;color:#34d399;background:rgba(52,211,153,.14);border:1px solid rgba(52,211,153,.4);border-radius:20px;padding:5px 10px">💵 cliente pagou no local</span>':''}
-      ${assinatura?'<span style="font-size:11px;font-weight:800;color:#5FE0B0;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);border-radius:20px;padding:5px 10px">✍ assinado</span>':''}
     </div>
     ${obs?`<div style="font-size:12px;color:var(--txt2);margin-top:8px;line-height:1.45">🗒 ${esc(obs)}</div>`:''}
-    ${fotos.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:12px">
-      ${fotos.map(f=>`<div><div style="font-size:9.5px;color:var(--txt3);font-weight:700;margin-bottom:4px">${esc(f.label)}</div><a href="${f.src}" target="_blank" rel="noopener"><img src="${f.src}" style="width:100%;border-radius:8px;border:1px solid var(--bdr);display:block;aspect-ratio:1;object-fit:cover"></a></div>`).join('')}
-    </div>`:'<div style="font-size:12px;color:var(--txt3);margin-top:10px">Sem fotos registradas pelo motorista.</div>'}
-    ${assinatura?`<div style="margin-top:12px"><div style="font-size:10px;color:#5FE0B0;font-weight:700;margin-bottom:4px">✍ Assinatura do cliente${assinaturaNome?' · '+esc(assinaturaNome):''}</div><img src="${assinatura}" style="max-width:220px;width:100%;border-radius:8px;border:1px solid var(--bdr);background:#fff;display:block"></div>`:''}
+    <div id="cxEvid" style="margin-top:12px"><div style="font-size:12px;color:var(--txt3)">📷 carregando evidências…</div></div>
   </div>`;
+}
+// Puxa fotos+assinatura do atendimento sob demanda (nó vivo OU arquivo) e injeta no #cxEvid do card aberto.
+async function carregarEvidenciasCX(c, r){
+  const box = document.getElementById('cxEvid'); if(!box) return;
+  let rs = Object.assign({}, (c.rotinaSteps && Object.keys(c.rotinaSteps).length) ? c.rotinaSteps : ((r && r.rotinaSteps) || {}));
+  let ass = c.assinatura || (r && r.assinatura) || null;
+  let assNome = c.assinaturaNome || (r && r.assinaturaNome) || '';
+  const temFoto0 = Object.keys(rs).some(k => typeof rs[k]==='string' && rs[k].startsWith('data:'));
+  if((!temFoto0 || !ass) && typeof firebase !== 'undefined' && firebase.apps?.length){
+    try {
+      const tasks = [ fb.child('chamados_arquivo/' + c.id).once('value').then(s=>s.val()).catch(()=>null) ];
+      if(r && r.id) tasks.push(fb.child('corridas_arquivo/' + r.id).once('value').then(s=>s.val()).catch(()=>null));
+      const arqs = await Promise.all(tasks);
+      for(const a of arqs){ if(a){ if(a.rotinaSteps) rs = Object.assign({}, a.rotinaSteps, rs); if(a.assinatura && !ass) ass = a.assinatura; if(a.assinaturaNome && !assNome) assNome = a.assinaturaNome; } }
+    } catch(_){}
+  }
+  if(!document.getElementById('cxEvid')) return;   // usuário fechou/trocou de card enquanto carregava
+  const fotos = Object.keys(rs).filter(k => typeof rs[k]==='string' && rs[k].startsWith('data:')).map(k => ({ label: FOTO_LABELS_CX[k] || k, src: rs[k] }));
+  let html = '';
+  if(fotos.length){
+    html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px">`
+      + fotos.map(f=>`<div><div style="font-size:9.5px;color:var(--txt3);font-weight:700;margin-bottom:4px">${esc(f.label)}</div><a href="${f.src}" target="_blank" rel="noopener"><img src="${f.src}" style="width:100%;border-radius:8px;border:1px solid var(--bdr);display:block;aspect-ratio:1;object-fit:cover"></a></div>`).join('')
+      + `</div>`;
+  }
+  if(ass){
+    html += `<div style="margin-top:12px"><div style="font-size:10px;color:#5FE0B0;font-weight:700;margin-bottom:4px">✍ Assinatura do cliente${assNome?' · '+esc(assNome):''}</div><img src="${ass}" style="max-width:220px;width:100%;border-radius:8px;border:1px solid var(--bdr);background:#fff;display:block"></div>`;
+  }
+  box.innerHTML = html || '<div style="font-size:12px;color:var(--txt3)">Sem fotos/assinatura neste atendimento.</div>';
 }
 function openDetalhe(id){
   const c=findChamado(id); if(!c) return;
@@ -1002,6 +1024,7 @@ function openDetalhe(id){
     </div></div>`;
   $('#det').classList.add('on');
   if(c.placa && !motos.length) preencherDetIot(c);
+  if(c.status==='concluido') carregarEvidenciasCX(c, r);
 }
 // Principais dados do IoT da moto no detalhe (status, último ping, distância do endereço, mapa)
 async function preencherDetIot(c){
