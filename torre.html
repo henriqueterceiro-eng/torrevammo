@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v71 · 2026-08-14'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v100 · 2026-08-16';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v101 · 2026-08-16';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1583,6 +1583,54 @@ async function pruneEvents(){
 // Primeira faxina ~20s após carregar (dá tempo do Firebase conectar) + a cada 2min
 setTimeout(pruneEvents, 20000);
 setInterval(pruneEvents, 120000);
+
+// ===== FAXINA DIÁRIA DE CHAMADOS (automática) =====
+// Zera a lista todo dia: arquiva finalizados (concluído/cancelado de ontem-pra-trás) e
+// abertos-zumbis (novo SEM motorista parado +24h) pra vammo/chamados_hist e tira do nó vivo.
+// Efeito duplo: (1) limpa a poluição da lista, (2) impede o nó de inchar de novo (raiz do travamento).
+// SEGURO: o Relatório NÃO usa chamados finalizados (lê de `corridas`), então nada some do relatório.
+// NUNCA toca em chamado ATIVO (em_rota, ou novo COM motorista, ou finalizado de HOJE).
+async function faxinaChamados(manual){
+  if(typeof firebase === 'undefined' || !firebase.apps?.length) throw new Error('Firebase desconectado');
+  const agora = Date.now();
+  const hojeIni = new Date(); hojeIni.setHours(0,0,0,0);
+  const cutFin = hojeIni.getTime();               // finalizados de ontem-pra-trás (modo automático diário)
+  const cutNovo = agora - 24*60*60*1000;          // 'novo' sem motorista parado +24h = zumbi
+  const alvos = chamados.filter(c => {
+    if(!c || !c.id) return false;
+    if(c.status === 'concluido' || c.status === 'cancelado'){
+      const t = c.concluidoEm || c.canceladoEm || c.ts || 0;
+      return manual ? true : (t < cutFin);
+    }
+    if(c.status === 'novo' && !c.motoristaId && (c.ts || 0) < cutNovo) return true;
+    return false;
+  });
+  if(!alvos.length) return 0;
+  const updates = {};
+  for(const c of alvos){
+    const limpo = {}; for(const k in c){ if(k[0] !== '_') limpo[k] = c[k]; }   // tira props de runtime
+    limpo.arquivadoEm = agora;
+    updates['chamados_hist/' + c.id] = limpo;
+    updates['chamados/' + c.id] = null;
+    // chamados_fechados (livro-razão) é mantido de propósito: rede de segurança se o id reaparecer.
+  }
+  await firebase.database().ref('vammo').update(updates);
+  try { logTorre('faxina_chamados', { qtd: alvos.length, manual: !!manual }); } catch(_){}
+  return alvos.length;
+}
+// Roda 1x por dia (trava via transaction em config/lastChamadoSweep → só uma torre executa).
+async function faxinaDiaria(){
+  try {
+    if(typeof firebase === 'undefined' || !firebase.apps?.length) return;
+    const hoje = _hojeStr();
+    const res = await firebase.database().ref('vammo/config/lastChamadoSweep').transaction(cur => (cur === hoje) ? undefined : hoje);
+    if(!res || !res.committed) return;   // outra torre já fez a faxina hoje (ou já era hoje)
+    const n = await faxinaChamados(false);
+    if(n) console.log('[torre] faxina diária: arquivados', n, 'chamado(s) finalizado(s)/zumbi(s)');
+  } catch(e){ console.warn('[torre] faxina diária falhou:', e); }
+}
+setTimeout(faxinaDiaria, 25000);
+setInterval(faxinaDiaria, 30*60*1000);   // pega a virada do dia se a torre ficar aberta
 
 // Remove undefined recursivamente — Firebase joga erro sync se algum campo for undefined
 function cleanForFb(obj){
