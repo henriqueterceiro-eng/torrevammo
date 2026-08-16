@@ -349,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v9 · 2026-08-04';
+const FLEET_VERSION = 'v10 · 2026-08-16';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -784,7 +784,7 @@ async function abrirMov(){
     abertoPor:currentUser.nome, abertoPorEmail:currentUser.email, abertoEm:Date.now()
   };
   try{
-    await new Promise(res=>{ try{ fb.child('counters/chamadoSeq').transaction(n=>(n||0)+1,(e,ok,s)=>{ if(ok&&s&&s.val()!=null) ch.seq=s.val(); res(); }); }catch(_){ res(); } });
+    await new Promise(res=>{ try{ fb.child('counters/seqDia').transaction(cur=>{ const d=new Date(), dia=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); return (cur&&cur.dia===dia)?{dia,n:(cur.n||0)+1}:{dia,n:1}; },(e,ok,s)=>{ if(ok&&s&&s.val()){ const v=s.val(); ch.seq=v.n; ch.ticket=v.dia.replace(/-/g,'')+'-'+String(v.n).padStart(3,'0'); } res(); }); }catch(_){ res(); } });
     await fb.child('chamados/'+ch.id).set(clean(ch));
     toast(`📢 Movimentação #${ch.seq||''} aberta na Torre!`);
     closeModal();
@@ -829,7 +829,7 @@ function openDetalhe(id){
     : '';
   $('#detBody').innerHTML = `
     <div class="deth">
-      <div><h2>${c.seq!=null?`<span style="font-family:var(--mono);color:var(--acc)">#${c.seq}</span> `:''}${esc(c.cliente||'Chamado')}</h2>${detStatusChip(c)}</div>
+      <div><h2>${c.seq!=null?`<span style="font-family:var(--mono);color:var(--acc)">#${c.seq}</span> `:''}${esc(c.cliente||'Chamado')}</h2>${c.ticket?`<div style="font-size:10px;color:var(--txt3);font-family:var(--mono);margin-top:2px">🎫 ${esc(c.ticket)}</div>`:''}${detStatusChip(c)}</div>
       <button class="mx" onclick="closeDetalhe()">✕</button>
     </div>
     <div style="font-size:12px;color:var(--txt2);margin-top:8px">${icoMotivo(c.motivo)} ${esc(c.motivo||'—')}</div>

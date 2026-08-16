@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v71 · 2026-08-14'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v101 · 2026-08-16';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v102 · 2026-08-16';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1425,11 +1425,15 @@ const STORE = (() => {
         catch(e){ console.warn('fb saveChamado throw:', e); }
       };
       if(ch.seq != null){ write(); return; }
-      // Número ÚNICO + SEQUENCIAL: contador global atômico no Firebase (transação → sem colisão entre
-      // operadores). Persiste em ch.seq → estável e igual em todas as torres. Ver chamadoNum/#.
+      // Número DIÁRIO (reinicia em 1 a cada dia) + TICKET único AAAAMMDD-NNN. Contador atômico
+      // counters/seqDia={dia,n} (transação → sem colisão entre operadores). ch.seq = número do dia;
+      // ch.ticket = referência única pra sempre (a data desambigua o número que reinicia). Ver chamadoNum/#.
       try {
-        fb.child('counters').child('chamadoSeq').transaction(n => (n || 0) + 1, (err, committed, snap) => {
-          if(committed && snap && snap.val() != null) ch.seq = snap.val();
+        fb.child('counters').child('seqDia').transaction(cur => {
+          const d = new Date(), dia = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+          return (cur && cur.dia === dia) ? { dia, n:(cur.n||0)+1 } : { dia, n:1 };
+        }, (err, committed, snap) => {
+          if(committed && snap && snap.val()){ const v = snap.val(); ch.seq = v.n; ch.ticket = v.dia.replace(/-/g,'') + '-' + String(v.n).padStart(3,'0'); }
           write();
         });
       } catch(e){ console.warn('fb seq throw:', e); write(); }
@@ -3483,6 +3487,7 @@ function renderDetail(){
     <button class="x" onclick="closeDetail()">×</button>
     <h3>${_numCh ? `<span style="font-family:var(--mono);font-size:13px;background:rgba(0,180,229,0.15);color:var(--acc);padding:1px 8px;border-radius:6px;margin-right:6px;font-weight:800">#${_numCh}</span>` : ''}${ico(c.motivo)} ${esc(c.cliente||'?')}</h3>
     <div class="mtv">${esc(c.motivo||'—')}</div>
+    ${c.ticket ? `<div style="font-size:10px;color:var(--txt3);font-family:var(--mono);margin-top:1px">🎫 ${esc(c.ticket)}</div>` : ''}
     <div>
       <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : (c.status||'novo').toUpperCase()}</span>
       <span style="margin-left:8px;color:var(--txt2);font-size:11px">⏱ ${fmtElapsed(c.ts)}</span>
