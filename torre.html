@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v71 · 2026-08-14'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v98 · 2026-08-14';      // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v99 · 2026-08-14';      // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -4639,7 +4639,7 @@ function renderCad(){
     $('#cadlist').innerHTML = `
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:6px 4px 12px">
         <span style="font-size:10px;color:var(--txt3)">Aparelho preso logado?</span>
-        <button id="btLogoffGeral" style="padding:7px 12px;font-size:11px;font-weight:800;background:rgba(220,38,38,0.14);border:1px solid #dc2626;color:#fca5a5;border-radius:8px;cursor:pointer" title="Desloga TODOS os celulares de colaborador de uma vez (cada um faz login de novo). Use quando um aparelho travou logado.">🔒 Forçar logoff geral</button>
+        <button id="btLogoffGeral" style="padding:7px 12px;font-size:11px;font-weight:800;background:rgba(220,38,38,0.14);border:1px solid #dc2626;color:#fca5a5;border-radius:8px;cursor:pointer" title="Forçar logoff geral: desloga TODOS os colabs + libera TODOS os veículos + encerra TODOS os turnos (colab e carro juntos, pra não deixar carro preso). Use quando o sistema travou.">🔒 Forçar logoff geral</button>
       </div>
       <div class="cdrow hdr" style="grid-template-columns:1fr 130px 100px 90px 70px 80px 70px 90px 80px">
         <div>Nome / CPF</div><div>Email</div><div>Base</div><div>Turno</div><div style="text-align:center">CNH</div><div style="text-align:center">Senha</div><div style="text-align:center">Reset</div><div style="text-align:center">Início</div><div></div>
@@ -4716,12 +4716,21 @@ function renderCad(){
     // LOGOFF GERAL: bumpa vammo/config/authEpoch = agora → toda sessão com iniciadoEm < epoch cai
     // (o colab compara na carga e desloga). Desloga TODOS os celulares; cada um faz login de novo.
     { const bl = $('#btLogoffGeral'); if(bl) bl.onclick = () => {
-      if(!confirm('🔒 FORÇAR LOGOFF GERAL\n\nIsso desloga TODOS os celulares de colaborador de uma vez — cada um vai precisar fazer login de novo.\n\nUse quando um aparelho ficou preso logado (ex.: botão Sair travado).\n\nContinuar?')) return;
+      if(!confirm('🔒 FORÇAR LOGOFF GERAL\n\nIsso vai:\n• DESLOGAR todos os celulares de colaborador (todos fazem login de novo)\n• LIBERAR todos os veículos (voltam a "livre")\n• ENCERRAR todos os turnos ativos\n\nDesloga colab E carro juntos — pra não deixar veículo preso.\n\nContinuar?')) return;
       try {
         if(typeof firebase === 'undefined' || !firebase.apps?.length) throw new Error('Firebase desconectado');
-        firebase.database().ref('vammo/config/authEpoch').set(Date.now());
-        try { logTorre('logoff_geral', { operador: getOperadorTorre() }); } catch(_){}
-        showToast('🔒 Logoff geral disparado — todos os celulares vão pedir login de novo');
+        const now = Date.now();
+        // 1) desloga todos — sessão com iniciadoEm < epoch cai na carga (colab compara e desloga)
+        firebase.database().ref('vammo/config/authEpoch').set(now);
+        // 2) libera TODOS os veículos atribuídos (senão fica carro preso = o bug do Fabio)
+        let libe = 0;
+        Object.values(veiculos).forEach(v => { if(v && v.atribuidoA){ const fixed = { ...v, atribuidoA: null, atribuidoEm: null }; veiculos[v.id] = fixed; STORE.saveVeiculo(fixed); libe++; } });
+        // 3) encerra TODOS os turnos ativos
+        let tturn = 0;
+        Object.entries(turnos || {}).forEach(([cid, t]) => { if(t && t.ativo){ try { firebase.database().ref('vammo/turnos/' + cid).update({ ativo: false, encerradoPor: getOperadorTorre(), encerradoEm: now }); tturn++; } catch(_){} } });
+        try { logTorre('logoff_geral', { veiculosLiberados: libe, turnosEncerrados: tturn, operador: getOperadorTorre() }); } catch(_){}
+        renderCad();
+        showToast(`🔒 Logoff geral: todos deslogados · ${libe} veículo(s) liberado(s) · ${tturn} turno(s) encerrado(s)`);
       } catch(err){ alert('Falhou: ' + err.message); }
     }; }
   } else if(cadTab === 'base'){
