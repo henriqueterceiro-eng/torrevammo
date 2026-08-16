@@ -288,7 +288,7 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
 <!-- HEADER -->
 <div id="top">
   <div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 798.668 146.81" fill="currentColor" aria-label="Vammo"><path d="M78.0094 140.2948H53.6534L2.9994 7H36.0824L67.1044 95.5797 99.0944 7H131.3284Z"/><path d="M154.0308 72.5559C154.0308 83.7869 157.7668 93.1779 165.2388 100.7309 172.7118 108.2849 181.8198 112.0609 192.5658 112.0609 202.3398 112.0609 210.9438 108.2639 218.3768 100.6699 225.8088 93.0769 229.5248 84.1899 229.5248 74.0099 229.5248 63.1849 225.7878 53.8769 218.3168 46.0799 210.8428 38.2839 202.0968 34.3859 192.0798 34.3859 181.5778 34.3859 172.6108 38.0809 165.1788 45.4729 157.7458 52.8649 154.0308 61.8929 154.0308 72.5559M233.0378 140.2948V123.9358C229.3228 130.5608 224.0898 135.4478 217.3458 138.5988 210.5998 141.7488 201.9758 143.3238 191.4748 143.3238 171.7628 143.3238 155.3028 136.5988 142.0938 123.1488 128.8858 109.6968 122.2818 92.9958 122.2818 73.0418 122.2818 63.6708 123.9368 54.7848 127.2498 46.3818 130.5618 37.9808 135.2878 30.5888 141.4288 24.2068 148.0508 17.1778 155.4038 11.9878 163.4828 8.6348 171.5608 5.2828 180.6488 3.6058 190.7478 3.6058 200.4418 3.6058 208.7828 5.2228 215.7708 8.4528 222.7578 11.6858 228.3928 16.5728 232.6748 23.1158V7.0000H262.9688V140.2948Z"/><path d="M643.6393 6.9290926V140.2390926H614.9293V57.6890926L559.8493 140.2390926 559.7593 140.1490926V140.2390926H531.0493V56.7590926L475.6293 139.8190926 475.3493 140.2390926H446.9193V56.7590926L391.2193 140.2390926 390.2893 139.2790926V140.2390926H361.5793V57.6890926L306.4993 140.2390926 306.4193 140.1590926V140.2390926H277.7193V6.9290926H306.4193V89.4190926L361.4593 6.9290926 361.5793 6.9990926V6.9290926H390.2893V90.6790926L446.1793 6.9290926 446.9193 7.3790926V6.9290926H475.6293V88.8690926L530.2993 6.9290926 531.0493 7.3790926V6.9290926H559.7593V89.4190926L614.7993 6.9290926 614.9293 7.0090926V6.9290926Z"/><path d="M475.6293 139.81909V140.23909H475.9093Z"/><path d="M687.9401 72.7995C687.9401 85.1595 691.3331 94.9565 698.1191 102.1855 704.9051 109.4165 714.1161 113.0305 725.7481 113.0305 737.2191 113.0305 746.3671 109.3345 753.1961 101.9425 760.0211 94.5505 763.4351 84.5955 763.4351 72.0725 763.4351 60.8445 759.8601 51.6135 752.7101 44.3835 745.5621 37.1545 736.5731 33.5375 725.7481 33.5375 714.6001 33.5375 705.5121 37.1935 698.4831 44.5035 691.4551 51.8165 687.9401 61.2475 687.9401 72.7995M655.9501 73.0415C655.9501 63.6715 657.6651 54.7645 661.1001 46.3215 664.5331 37.8805 669.5221 30.3875 676.0651 23.8435 682.7701 17.1385 690.3221 11.9885 698.7261 8.3935 707.1261 4.7995 715.8511 3.0005 724.9001 3.0005 734.5131 3.0005 743.3801 4.5965 751.4981 7.7865 759.6181 10.9795 767.0701 15.7665 773.8561 22.1465 780.8031 28.8535 786.1741 36.5875 789.9731 45.3525 793.7691 54.1185 795.6681 63.1045 795.6681 72.3145 795.6681 82.4935 794.0121 91.7845 790.7001 100.1855 787.3861 108.5885 782.4181 116.1815 775.7941 122.9675 769.1701 129.8345 761.6171 135.0245 753.1351 138.5385 744.6521 142.0525 735.4431 143.8105 725.5061 143.8105 715.4871 143.8105 706.3601 142.0325 698.1191 138.4775 689.8801 134.9235 682.3671 129.5925 675.5811 122.4825 669.1161 115.5355 664.2291 107.8805 660.9181 99.5195 657.6051 91.1585 655.9501 82.3325 655.9501 73.0415"/></svg></div>
-  <div class="sub">Central de <b>Fleet</b></div>
+  <div class="sub">Central de <b>Fleet</b> <span id="fleetVer" style="font-size:10px;color:var(--txt3);font-weight:600;font-family:var(--mono);margin-left:4px"></span></div>
   <button class="btn-open" onclick="openModal()">➕ Abrir chamado</button>
   <div class="spacer"></div>
   <div class="stat">
@@ -349,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v10 · 2026-08-16';
+const FLEET_VERSION = 'v11 · 2026-08-16';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -493,6 +493,26 @@ function render(){
 function emptyCol(e,txt){ return `<div class="empty"><span class="e">${e}</span>${esc(txt)}</div>`; }
 function prioridade(c){ return c.clienteAguardando===true ? 1 : 0; }
 
+// Slots de moto de uma transferência: mostra as placas preenchidas (com tag Comfort/CPX) e os
+// slots ainda vazios como "aguardando" — atualiza sozinho conforme o colab escaneia no local.
+function slotsFleet(c){
+  if(!ehTransf(c)) return '';
+  const motos = Array.isArray(c.motos) ? c.motos : [];
+  const n = c.qtdMotos!=null ? c.qtdMotos : motos.length;
+  if(!n) return '';
+  let chips='';
+  for(let i=0;i<n;i++){
+    const m = motos[i];
+    if(m && m.placa){
+      const cat = m.categoria || catComfortCpx(m.modelo);
+      const tag = cat ? ` <b style="font-size:8.5px;padding:0 4px;border-radius:4px;background:${cat==='CPX'?'#7c3aed':'#0891b2'};color:#fff">${cat}</b>` : '';
+      chips += `<span style="font-family:var(--mono);font-size:10px;font-weight:800;background:rgba(0,180,229,.12);border:1px solid rgba(0,180,229,.35);color:var(--acc-br);padding:2px 6px;border-radius:6px">${esc(m.placa)}${tag}</span>`;
+    } else {
+      chips += `<span style="font-size:10px;color:var(--txt3);border:1px dashed var(--bdr2);padding:2px 6px;border-radius:6px">— aguardando —</span>`;
+    }
+  }
+  return `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${chips}</div>`;
+}
 function card(c, etapaN){
   const num = c.seq!=null ? `<span class="num">#${c.seq}</span>` : '';
   const ctrl = controladorDe(c);
@@ -501,7 +521,9 @@ function card(c, etapaN){
   const motos = Array.isArray(c.motos) ? c.motos : null;
   const badges=[];
   if(aguard) badges.push(`<span class="b b-aguard">🙋 AGUARDANDO</span>`);
-  if(motos && motos.length) badges.push(`<span class="b b-moto">🏍 ${motos.length} moto${motos.length>1?'s':''}</span>`);
+  const nSlots = c.qtdMotos!=null ? c.qtdMotos : (motos?motos.length:0);
+  const nCheias = motos ? motos.filter(m=>m&&m.placa).length : 0;
+  if(nSlots) badges.push(`<span class="b b-moto">🏍 ${nCheias}/${nSlots} placa${nSlots>1?'s':''}</span>`);
   if(ehTransf(c)) badges.push(`<span class="b b-transf">🚚 ${esc(baseNome(c.baseSaida)||'?')} → ${esc(baseNome(c.baseEntrega)||'?')}</span>`);
   if(motos && motos.some(m=>m.iotForaDaBase)) badges.push(`<span class="b b-warn" title="Uma ou mais motos com IoT fora da base de saída">⚠ moto fora da base</span>`);
   if(c.terceiroId) badges.push(`<span class="b b-ext">🤝 externo</span>`);
@@ -516,6 +538,7 @@ function card(c, etapaN){
     <div class="mv">${esc(c.motivo||'—')}</div>
     ${c.endereco?`<div class="end">📍<span>${esc(c.endereco)}</span></div>`:''}
     ${badges.length?`<div class="badges">${badges.join('')}</div>`:''}
+    ${slotsFleet(c)}
     ${whoLines.length?`<div class="who">${whoLines.join('')}</div>`:''}
     ${rotaHint}
     ${abertoFoot}
@@ -617,7 +640,7 @@ function baseOpts(sel){
       .map(([id,b])=>`<option value="${id}"${id===sel?' selected':''}>${esc(b.nome)}</option>`).join('');
 }
 function openModal(){
-  wiz = { tipo:null, baseSaida:'', baseEntrega:'', motos:[{placa:''}] };
+  wiz = { tipo:null, baseSaida:'', baseEntrega:'', qtd:1, motos:[{placa:''}] };
   $('#modal').classList.add('on');
   renderWizard();
 }
@@ -625,11 +648,17 @@ function closeModal(){ $('#modal').classList.remove('on'); }
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
 
 function motosValidas(){ return wiz.motos.filter(m => m.placa && ['ok','forabase','iotoff'].includes(m.status)); }
+function catComfortCpx(modelo){ const m=(modelo||'').toUpperCase(); if(m.includes('CPX')) return 'CPX'; if(m.includes('COMFORT')) return 'COMFORT'; return null; }
+function setQtd(n){
+  n = Math.max(1, Math.min(MAX_MOTOS, n|0));
+  wiz.qtd = n;
+  if(wiz.motos.length < n){ while(wiz.motos.length < n) wiz.motos.push({placa:''}); }
+  else if(wiz.motos.length > n){ wiz.motos = wiz.motos.slice(0, n); }
+}
 function podeAbrir(){
-  if(!wiz||!wiz.tipo||!wiz.baseSaida||!wiz.baseEntrega) return false;
-  const preenchidas = wiz.motos.filter(m=>m.placa);
-  if(!preenchidas.length) return false;
-  return preenchidas.every(m=>['ok','forabase','iotoff'].includes(m.status));  // toda placa digitada precisa estar válida
+  if(!wiz||!wiz.tipo||!wiz.baseSaida||!wiz.baseEntrega||!(wiz.qtd>=1)) return false;
+  // placas são OPCIONAIS (o colab escaneia a placa no local); mas as que o Fleet digitar precisam estar válidas
+  return wiz.motos.filter(m=>m.placa).every(m=>['ok','forabase','iotoff'].includes(m.status));
 }
 function updateGo(){ const g=$('#wGo'); if(g) g.disabled=!podeAbrir(); const c=$('#wMotoCount'); if(c) c.textContent=motosValidas().length; }
 
@@ -644,10 +673,12 @@ function renderWizard(){
   if(showSaida) h+=`<div class="wsec"><div class="wlabel"><span class="wn">2</span> Base de saída</div><select id="wSaida">${baseOpts(w.baseSaida)}</select></div>`;
   // 3 — base entrega
   if(showEntrega) h+=`<div class="wsec"><div class="wlabel"><span class="wn">3</span> Base de entrega</div><select id="wEntrega">${baseOpts(w.baseEntrega)}</select>${(w.baseEntrega&&w.baseEntrega===w.baseSaida)?'<div class="mstat warn">⚠ Saída e entrega são a mesma base.</div>':''}</div>`;
-  // 4 — placas (dinâmico: adicione quantas precisar; a quantidade é a soma das placas)
-  if(showMotos) h+=`<div class="wsec"><div class="wlabel"><span class="wn">4</span> Placas das motos <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">· <b id="wMotoCount" style="color:var(--acc-br)">0</b> moto(s)</span></div>
-    <div id="wizMotos"></div>
-    <button id="wAddMoto" class="wadd">＋ adicionar outra placa</button></div>`;
+  // 4 — QUANTIDADE (numeral) define os slots; 5 — placas OPCIONAIS (o colab escaneia no local)
+  if(showMotos) h+=`<div class="wsec"><div class="wlabel"><span class="wn">4</span> Quantas motos movimentar?</div>
+    <div class="wqty"><button id="wQtyMinus" type="button">−</button><span class="qn" id="wQtyN">${w.qtd}</span><button id="wQtyPlus" type="button">＋</button>
+      <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">moto(s)</span></div>
+    <div class="wlabel" style="margin-top:16px"><span class="wn">5</span> Placas <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">· opcional — o colaborador escaneia no local</span></div>
+    <div id="wizMotos"></div></div>`;
   // rodapé
   h+=`<div class="mrow"><button class="cancel" onclick="closeModal()">Cancelar</button><button class="go" id="wGo" onclick="abrirMov()" ${podeAbrir()?'':'disabled'}>📢 Abrir movimentação</button></div>`;
   $('#wizBody').innerHTML=h;
@@ -655,7 +686,8 @@ function renderWizard(){
   document.querySelectorAll('#wizBody [data-tipo]').forEach(b=> b.onclick=()=>{ wiz.tipo=b.dataset.tipo; renderWizard(); });
   { const s=$('#wSaida'); if(s) s.onchange=()=>{ wiz.baseSaida=s.value; recheckMotos(); renderWizard(); }; }
   { const e=$('#wEntrega'); if(e) e.onchange=()=>{ wiz.baseEntrega=e.value; renderWizard(); }; }
-  { const a=$('#wAddMoto'); if(a) a.onclick=()=>{ if(wiz.motos.length<MAX_MOTOS){ wiz.motos.push({placa:''}); renderMotoCards(); updateGo(); setTimeout(()=>{ const inp=$('#mp-'+(wiz.motos.length-1)); if(inp) inp.focus(); },30); } }; }
+  { const mn=$('#wQtyMinus'); if(mn) mn.onclick=()=>{ setQtd(wiz.qtd-1); const n=$('#wQtyN'); if(n) n.textContent=wiz.qtd; renderMotoCards(); updateGo(); }; }
+  { const pl=$('#wQtyPlus'); if(pl) pl.onclick=()=>{ setQtd(wiz.qtd+1); const n=$('#wQtyN'); if(n) n.textContent=wiz.qtd; renderMotoCards(); updateGo(); setTimeout(()=>{ const inp=$('#mp-'+(wiz.motos.length-1)); if(inp) inp.focus(); },30); }; }
   if(showMotos) renderMotoCards();
   updateGo();
 }
@@ -677,9 +709,9 @@ function renderMotoCards(){
   const wrap=$('#wizMotos'); if(!wrap) return;
   wrap.innerHTML = wiz.motos.map((mo,i)=>`
     <div class="moto-card">
-      <div class="mh"><span class="mnum">${i+1}</span> Moto ${i+1}${wiz.motos.length>1?`<button class="mrm" data-rm="${i}" title="Remover placa">✕</button>`:''}</div>
+      <div class="mh"><span class="mnum">${i+1}</span> Moto ${i+1} <span style="font-weight:600;color:var(--txt3);font-size:11px">(placa opcional)</span></div>
       <div class="acwrap">
-        <input id="mp-${i}" placeholder="Digite a placa…" maxlength="8" value="${esc(mo.placa||'')}" autocomplete="off" spellcheck="false">
+        <input id="mp-${i}" placeholder="O colab escaneia no local — ou digite aqui" maxlength="8" value="${esc(mo.placa||'')}" autocomplete="off" spellcheck="false">
         <div class="acdd" id="mdd-${i}"></div>
       </div>
       <div class="mstat ${statClass(mo)}" id="mstat-${i}">${statText(mo)}</div>
@@ -690,7 +722,7 @@ function renderMotoCards(){
     inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); hideDD(i); inp.blur(); } });
     inp.addEventListener('blur', ()=>{ setTimeout(()=>{ hideDD(i); const m=wiz.motos[i]; if(m && m.placa && !['ok','forabase','iotoff','checking'].includes(m.status)) checkMoto(i); }, 180); });
   });
-  wrap.querySelectorAll('[data-rm]').forEach(b=> b.onclick=()=>{ wiz.motos.splice(+b.dataset.rm,1); if(!wiz.motos.length) wiz.motos.push({placa:''}); renderMotoCards(); updateGo(); });
+  // remoção individual saiu — a QUANTIDADE (stepper) controla o nº de slots
 }
 function updateMotoStat(i){
   const el=$('#mstat-'+i); if(!el) return;
@@ -762,8 +794,8 @@ async function checkIoT(i){
 async function abrirMov(){
   if(!podeAbrir()) return;
   const w=wiz, nS=baseNome(w.baseSaida), nE=baseNome(w.baseEntrega);
-  const motos=motosValidas();
-  const qtd=motos.length;
+  const motos=motosValidas();     // placas que o Fleet OPTOU por preencher (pode ser nenhuma)
+  const qtd=w.qtd;                // quantidade = o NUMERAL escolhido (não o nº de placas)
   const fora=motos.filter(m=>m.status==='forabase');
   if(fora.length && !confirm(`⚠ ${fora.length} moto(s) com IoT FORA da base de saída (${nS}):\n`+
     fora.map(m=>`• ${m.placa} — ${m.iotLocal||'outro local'} (~${(m.iotDist/1000).toFixed(1)}km)`).join('\n')+
@@ -775,7 +807,7 @@ async function abrirMov(){
     tipoMovimentacao:w.tipo, motivo:tipoLabel(w.tipo),
     cliente:`${nS} → ${nE} · ${qtd} moto${qtd>1?'s':''}`,
     qtdMotos:qtd, baseSaida:w.baseSaida, baseEntrega:w.baseEntrega,
-    motos:motos.map(m=>clean({ placa:m.placa, modelo:m.modelo||null, motoStatus:m.motoStatus||null,
+    motos:motos.map(m=>clean({ placa:m.placa, modelo:m.modelo||null, categoria:catComfortCpx(m.modelo), motoStatus:m.motoStatus||null,
       iotForaDaBase:m.status==='forabase'?true:null, iotDistM:m.iotDist!=null?Math.round(m.iotDist):null,
       iotLocal:m.iotLocal||null, iotOffline:m.status==='iotoff'?true:null })),
     placa:motos.map(m=>m.placa).join(', ').slice(0,80),
@@ -968,6 +1000,7 @@ function runIntro(){
 runIntro();
 initAuth();
 console.log('Vammo Fleet', FLEET_VERSION);
+try{ const _fv=document.getElementById('fleetVer'); if(_fv) _fv.textContent=FLEET_VERSION; }catch(_){}
 </script>
 </body>
 </html>
