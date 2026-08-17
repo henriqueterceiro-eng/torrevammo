@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v71 · 2026-08-14';
+const APP_VERSION = 'v72 · 2026-08-17';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1043,11 +1043,16 @@ function setupChamadosListener(){
     firebase.database().ref('vammo/turnos/' + me.id).on('value', snap => {
       const remote = snap.val();
       if(!remote || !turnoAtivo) return;
+      // BLINDAGEM "descarreguei mas voltou cheio": remove do remoto as motos que o colab acabou de
+      // DESCARREGAR. Sem isso, um snapshot stale (write que não pegou por rede/GPS) repunha a moto e
+      // o pill voltava a 5/5 (chegava até a vibrar "Moto registrada pela torre").
+      const remoteSlots = (remote.slotsOcupados || []).filter(s => s && !_foiDescarregadoRecente(s.id));
+      const staleRefill = remoteSlots.length !== (remote.slotsOcupados || []).length;
       // Detecta mudança no slotsOcupados (gestor adicionou/removeu via torre)
       const localCount = (turnoAtivo.slotsOcupados || []).length;
-      const remoteCount = (remote.slotsOcupados || []).length;
+      const remoteCount = remoteSlots.length;
       const localIds = new Set((turnoAtivo.slotsOcupados || []).map(s => s.id));
-      const remoteIds = new Set((remote.slotsOcupados || []).map(s => s.id));
+      const remoteIds = new Set(remoteSlots.map(s => s.id));
       const diff = remoteCount !== localCount ||
                    ![...remoteIds].every(id => localIds.has(id)) ||
                    ![...localIds].every(id => remoteIds.has(id));
@@ -1060,7 +1065,7 @@ function setupChamadosListener(){
           console.log('[colab] ignora eco antigo de turno (protege slot local recém-criado)');
         } else {
           console.log('[colab] turno sincronizado: slotsOcupados', localCount, '→', remoteCount);
-          turnoAtivo.slotsOcupados = remote.slotsOcupados || [];
+          turnoAtivo.slotsOcupados = remoteSlots;
           renderTopBar();
           // Manda heartbeat imediato pra torre saber que o colab já tá ciente
           if(myPos) sendPos(myPos);
@@ -1070,6 +1075,8 @@ function setupChamadosListener(){
           }
         }
       }
+      // Remoto ainda trazia moto que o colab DESCARREGOU → o write dele se perdeu; re-afirma o estado limpo.
+      if(staleRefill){ console.log('[colab] remoto stale repondo moto descarregada — re-afirmando descarga'); saveTurno(); }
     });
   }
   // COMANDO REMOTO: gestor força reload do app via torre
@@ -3693,6 +3700,7 @@ function confirmarDescarga(){
   const slotsOriginal = turnoAtivo.slotsOcupados || [];
   const aSair = slotsOriginal.filter(s => _descSelecionadas[s.id]);
   const aSair_ids = new Set(aSair.map(s => s.id));
+  _marcarDescarregado([...aSair_ids]);   // blinda: se o write falhar, o remoto stale não repõe essas motos
   turnoAtivo.slotsOcupados = slotsOriginal.filter(s => !aSair_ids.has(s.id));
   turnoAtivo._slotsLocalTs = Date.now();
   saveTurno();
@@ -5184,12 +5192,20 @@ function slotsTotalCount(){ return turnoAtivo?.slotsTotal || 0; }
 function slotsDisponiveis(){ return Math.max(0, slotsTotalCount() - slotsCount()); }
 function isFull(){ return turnoAtivo && slotsCount() >= slotsTotalCount() && slotsTotalCount() > 0; }
 
-async function saveTurno(){
+// Blindagem contra "descarreguei mas voltou cheio": guarda os slots recém-DESCARREGADOS por 45s.
+// Se um snapshot remoto stale (write que não pegou) tentar repor essas motos, a sync ignora + re-afirma.
+const _descargaRecente = new Map();   // slotId -> ts da descarga
+function _marcarDescarregado(ids){ const t = Date.now(); (ids||[]).forEach(id => { if(id) _descargaRecente.set(id, t); }); }
+function _foiDescarregadoRecente(id){ const t = _descargaRecente.get(id); if(!t) return false; if(Date.now() - t > 45000){ _descargaRecente.delete(id); return false; } return true; }
+async function saveTurno(tent){
   if(!turnoAtivo) return;
   try {
     await ensureFb();
     await firebase.database().ref('vammo/turnos/' + me.id).set(cleanForFb(turnoAtivo));
-  } catch(e){ console.warn('saveTurno fail:', e); }
+  } catch(e){
+    console.warn('saveTurno fail:', e);
+    if((tent||0) < 3) setTimeout(() => saveTurno((tent||0)+1), 1500 * ((tent||0)+1));   // retry: o write do turno NÃO pode se perder
+  }
 }
 
 function checkInMoto(opts){
