@@ -388,6 +388,11 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
         <button type="button" class="v-opt" data-v="99" onclick="setVoucher('99')" style="flex:1;min-width:86px;padding:9px 8px;border:1.5px solid var(--bdr);background:transparent;color:var(--txt2);border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 40 22" style="height:16px;width:auto"><rect width="40" height="22" rx="5" fill="#FFC400"/><text x="20" y="16" font-size="14" font-weight="900" text-anchor="middle" fill="#141414" font-family="Arial,Helvetica,sans-serif">99</text></svg> 99</button>
         <button type="button" class="v-opt" data-v="uber" onclick="setVoucher('uber')" style="flex:1;min-width:86px;padding:9px 8px;border:1.5px solid var(--bdr);background:transparent;color:var(--txt2);border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 46 22" style="height:16px;width:auto"><rect width="46" height="22" rx="5" fill="#000"/><text x="23" y="16" font-size="12" font-weight="800" text-anchor="middle" fill="#fff" font-family="Arial,Helvetica,sans-serif">Uber</text></svg> Uber</button>
       </div>
+      <label>🔵 Blueangel?</label>
+      <div id="cxBlueOpts" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="ba-opt on" data-ba="0" onclick="setBlueangel(false)" style="flex:1;min-width:86px;padding:9px 8px;border:1.5px solid var(--acc);background:rgba(0,180,229,.15);color:var(--acc);border-radius:10px;font-weight:800;font-size:13px;cursor:pointer">Não</button>
+        <button type="button" class="ba-opt" data-ba="1" onclick="setBlueangel(true)" style="flex:1;min-width:86px;padding:9px 8px;border:1.5px solid var(--bdr);background:transparent;color:var(--txt2);border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">🔵 Sim, Blueangel</button>
+      </div>
       <div id="cxResult" class="cxresult"></div>
     </div>
 
@@ -433,7 +438,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const CX_VERSION = 'v9 · 2026-08-17';
+const CX_VERSION = 'v10 · 2026-08-17';
 
 // Motivos oficiais (mesmos do CX/torre)
 // Motivos oficiais do CX (mesmos da torre, SEM os de Fleet/logística — Deslocamento entre bases,
@@ -638,6 +643,7 @@ function card(c, etapaN){
   if(motos && motos.some(m=>m.iotForaDaBase)) badges.push(`<span class="b b-warn" title="Uma ou mais motos com IoT fora da base de saída">⚠ moto fora da base</span>`);
   if(c.terceiroId) badges.push(`<span class="b b-ext">🤝 externo</span>`);
   if(c.voucher) badges.push(voucherBadgeCX(c));
+  if(c.blueangel) badges.push(blueangelBadgeCX(c));
   const whoLines=[];
   if(etapaN>=2 && ctrl) whoLines.push(whoLine('👮','Controlador',ctrl,'#00B4E5'));
   if(etapaN>=3 && drv) whoLines.push(whoLine('🛵','Motorista',drv,corDriver(c)));
@@ -757,6 +763,18 @@ function voucherSvgCX(v){
   return '';
 }
 function voucherBadgeCX(c){ return (c && c.voucher) ? `<span class="b" style="background:rgba(255,196,0,.14);border:1px solid #FFC400;color:#ffd54a;display:inline-flex;align-items:center;gap:4px">🎟 ${voucherSvgCX(c.voucher)}</span>` : ''; }
+let _cxBlueangel = false;
+function setBlueangel(v){
+  _cxBlueangel = !!v;
+  document.querySelectorAll('#cxBlueOpts .ba-opt').forEach(b => {
+    const on = (b.dataset.ba === '1') === _cxBlueangel;
+    b.style.borderColor = on ? 'var(--acc)' : 'var(--bdr)';
+    b.style.background = on ? 'rgba(0,180,229,.15)' : 'transparent';
+    b.style.color = on ? 'var(--acc)' : 'var(--txt2)';
+    b.classList.toggle('on', on);
+  });
+}
+function blueangelBadgeCX(c){ return (c && c.blueangel) ? `<span class="b" style="background:rgba(37,99,235,.16);border:1px solid #3b82f6;color:#93c5fd;display:inline-flex;align-items:center;gap:4px">🔵 Blueangel</span>` : ''; }
 // Aplica no "Endereço do chamado" a opção escolhida (moto/ping ou cliente)
 function usarEndereco(src){
   const en=$('#cxEnd'); if(!en) return;
@@ -799,6 +817,7 @@ function openModal(){
   $('#cxMotivoCustom').style.display='none'; $('#cxMotivoCustom').value='';
   $('#cxAguard').value='sim';
   setVoucher('');
+  setBlueangel(false);
   const g=$('#cxGo'); g.disabled=false; g.textContent='📢 Abrir chamado';
   _wireCXPlaca();
   $('#modal').classList.add('on');
@@ -895,6 +914,7 @@ async function abrirCX(){
     };
     if(_cxUseIot) ch.enderecoDoIot = true;
     if(_cxVoucher) ch.voucher = _cxVoucher;   // 99 | uber — fica no chamado até o final
+    if(_cxBlueangel) ch.blueangel = true;     // flag Blueangel — acompanha o chamado por todo o percurso do Kanban
     if(iotForaLocal!=null && !_cxUseIot){ ch.iotForaLocalM = iotForaLocal; }
     if(_cxLookup && _cxLookup._searched===placa){
       if(_cxLookup.modelo) ch.motoModelo = _cxLookup.modelo;
@@ -1010,6 +1030,7 @@ function openDetalhe(id){
       <button class="mx" onclick="closeDetalhe()">✕</button>
     </div>
     <div style="font-size:12px;color:var(--txt2);margin-top:8px">${icoMotivo(c.motivo)} ${esc(c.motivo||'—')}</div>
+    ${c.blueangel?`<div style="margin-top:8px">${blueangelBadgeCX(c)}</div>`:''}
     ${(c.placa && !motos.length)?`<div class="cxplate" style="margin-top:10px"><div class="pl"><div class="pl-top"><span>◈ MERCOSUL</span><span>BR</span></div><div class="pl-num">${esc(c.placa)}</div></div>${c.motoModelo?`<div class="pl-mod">🏍 ${esc(c.motoModelo)}</div>`:''}</div>`:''}
     ${ehTransf(c)?`<div style="font-size:13px;font-weight:700;margin-top:6px;color:#d8b4fe">🚚 ${esc(baseNome(c.baseSaida))} → ${esc(baseNome(c.baseEntrega))}</div>`:''}
     ${rotaBtn}

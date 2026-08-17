@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v72 · 2026-08-17'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v102 · 2026-08-16';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v103 · 2026-08-17';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3105,7 +3105,7 @@ function renderList(){
         <div class="nome">${numTag}${esc(c.cliente||'?')}</div>
         <div class="ico">${ico(c.motivo)}</div>
       </div>
-      <div class="badges">${aguardBadge}${esperaBadge}${voucherBadge(c)}${stBadge}${aceitoBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
+      <div class="badges">${aguardBadge}${esperaBadge}${voucherBadge(c)}${blueangelBadge(c)}${stBadge}${aceitoBadge}${tercBadge}${notaBadge}${arrivedBadge}${queueBadge}${trBadge}${slaBadge}${motBadge}</div>
       <div class="motivo">${esc(c.motivo||'—')}</div>
       ${transfLine ? `<div class="transf">${transfLine}</div>` : ''}
       ${c.endereco ? `<div class="end">📍 ${esc(c.endereco)}</div>` : ''}
@@ -3492,7 +3492,7 @@ function renderDetail(){
       <span class="b b-${c.status==='novo'?'novo':c.status==='em_rota'?'rota':c.status==='concluido'?'conc':'canc'}">${c.status === 'em_rota' ? 'EM ROTA' : (c.status||'novo').toUpperCase()}</span>
       <span style="margin-left:8px;color:var(--txt2);font-size:11px">⏱ ${fmtElapsed(c.ts)}</span>
       ${c.travada?'<span class="b b-trav" style="margin-left:6px">⚠ TRAV</span>':''}
-      ${(!chamadoLogistica(c) && c.clienteAguardando === true) ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : ((!chamadoLogistica(c) && c.clienteAguardando === false) ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}${c.voucher ? '<span style="margin-left:6px">'+voucherBadge(c)+'</span>' : ''}
+      ${(!chamadoLogistica(c) && c.clienteAguardando === true) ? '<span class="b" style="margin-left:6px;background:rgba(22,163,74,0.2);color:#4ade80">🙋 cliente no local</span>' : ((!chamadoLogistica(c) && c.clienteAguardando === false) ? '<span class="b" style="margin-left:6px;background:rgba(220,38,38,0.2);color:#fca5a5">🚷 cliente ausente</span>' : '')}${c.voucher ? '<span style="margin-left:6px">'+voucherBadge(c)+'</span>' : ''}${c.blueangel ? '<span style="margin-left:6px">'+blueangelBadge(c)+'</span>' : ''}
     </div>
     ${(() => {
       const cands = [c.inicioDistM, c.inicioDistMotoM].filter(x => x != null);
@@ -6037,6 +6037,7 @@ function voucherSvg(v){
   return '';
 }
 function voucherNome(v){ return v === 'uber' ? 'Uber' : v === '99' ? '99' : ''; }
+function blueangelBadge(c){ return (c && c.blueangel) ? `<span class="b" style="background:rgba(37,99,235,.16);border:1px solid #3b82f6;color:#93c5fd">🔵 Blueangel</span>` : ''; }
 function voucherBadge(c){
   const v = c && c.voucher; if(!v) return '';
   return `<span class="b" title="Voucher de corrida por app (${voucherNome(v)}) — registrado no chamado" style="background:rgba(255,196,0,0.14);border:1px solid #FFC400;color:#ffd54a;display:inline-flex;align-items:center;gap:4px">🎟 ${voucherSvg(v)}</span>`;
