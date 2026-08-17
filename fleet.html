@@ -349,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v11 · 2026-08-16';
+const FLEET_VERSION = 'v12 · 2026-08-17';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -456,6 +456,8 @@ function ehMeuChamado(c){
 function chamadosVisiveis(){
   const reais = Object.values(chamados).filter(c=>{
     if(!c||!c.id || !ehMeuChamado(c)) return false;
+    // SEPARAÇÃO Fleet×CX: o board do Fleet mostra SÓ movimentação/Fleet (nunca socorro do CX)
+    if(!c._fake && !(c.origemFleet || (ehTransf(c) && !c.origemCX))) return false;
     if(c.status==='concluido'||c.status==='cancelado') return ehHoje(c.concluidoEm||c.ts);
     return true;
   });
@@ -699,7 +701,7 @@ function statText(m){
     case 'checking': return '🔎 verificando…';
     case 'notfound': return '✗ placa não encontrada na base Vammo';
     case 'short':    return 'digite a placa completa';
-    case 'ok':       return `${st}✓ ${esc(m.modelo||'moto')} · na base de saída`;
+    case 'ok':       return `${st}✓ ${esc(m.modelo||'moto')} · placa válida`;
     case 'iotoff':   return `${st}✓ ${esc(m.modelo||'moto')} · 📡 IoT offline (local não confirmado)`;
     case 'forabase': return `${st}⚠ <b>FORA da base de saída</b> — 📡 IoT ${m.iotLocal?('perto de '+esc(m.iotLocal)):'em outro local'} (~${(m.iotDist/1000).toFixed(1)}km)`;
     default:         return m.placa ? '' : 'digite ou busque a placa';
@@ -770,25 +772,12 @@ async function checkMoto(i){
     await checkIoT(i);
   }catch(e){ m.status='notfound'; updateMotoStat(i); updateGo(); }
 }
-// Confere o IoT vs base de saída → aviso/trava "fora da base". IoT offline é DESCONSIDERADO.
+// FLEET NÃO considera o ping/IoT da moto: movimentação nem sempre tem ping confiável e dava falso
+// "fora da base", atrapalhando a abertura. A placa existir na base Vammo (moto_lookup) já basta.
 async function checkIoT(i){
-  const m=wiz.motos[i]; const placa=(m.placa||'').replace(/[^A-Z0-9]/g,'');
-  m.status='checking'; updateMotoStat(i); updateGo();
-  let status='iotoff';
-  try{
-    const ij=await (await fetch('/iot_status?placas='+encodeURIComponent(placa))).json();
-    const ping=ij.pings && ij.pings[placa];
-    if(ping && ping.online && ping.lat!=null && ping.lon!=null){
-      const bs=bases[wiz.baseSaida];
-      if(bs && bs.lat!=null && bs.lng!=null){
-        const dist=haversine({lat:bs.lat,lng:bs.lng},{lat:ping.lat,lng:ping.lon});
-        const nb=nearestBase({lat:ping.lat,lng:ping.lon});
-        m.iotDist=dist; m.iotLocal=nb?nb.base.nome:null;
-        status = dist>FORA_BASE_M ? 'forabase' : 'ok';
-      }
-    }
-  }catch(_){ status='iotoff'; }
-  m.status=status; updateMotoStat(i); updateGo();
+  const m=wiz.motos[i];
+  m.status='ok'; m.iotDist=null; m.iotLocal=null;
+  updateMotoStat(i); updateGo();
 }
 
 async function abrirMov(){

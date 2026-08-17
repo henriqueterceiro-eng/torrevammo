@@ -433,7 +433,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const CX_VERSION = 'v8 · 2026-08-16';
+const CX_VERSION = 'v9 · 2026-08-17';
 
 // Motivos oficiais (mesmos do CX/torre)
 // Motivos oficiais do CX (mesmos da torre, SEM os de Fleet/logística — Deslocamento entre bases,
@@ -582,6 +582,8 @@ function ehMeuChamado(c){
 function chamadosVisiveis(){
   const reais = Object.values(chamados).filter(c=>{
     if(!c||!c.id || !ehMeuChamado(c)) return false;
+    // SEPARAÇÃO Fleet×CX: o board do CX mostra SÓ CX/socorro (nunca movimentação do Fleet)
+    if(!c._fake && !(c.origemCX || (!ehTransf(c) && !c.origemFleet))) return false;
     if(c.status==='concluido'||c.status==='cancelado'){
       // moto recolhida ainda NÃO descarregada = trabalho em aberto (moto no caminhão) → sempre visível
       if(c.status==='concluido' && c.desfecho==='recolhido' && !(c.descargaEm||c.descargaBaseNome)) return true;
