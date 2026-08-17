@@ -1008,8 +1008,8 @@ body.selmode .card .mcheck{display:flex}
 const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
-const LATEST_COLAB_VERSION = 'v72 · 2026-08-17'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v103 · 2026-08-17';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const LATEST_COLAB_VERSION = 'v73 · 2026-08-17'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v104 · 2026-08-17';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -3340,7 +3340,7 @@ async function enriquecerSelectEta(c, motIds, onlineMots){
   if(cfg.rotasSmart === false) return;
   if(!c || c.lat == null || c.lng == null) return;
   const sel = document.getElementById('dasel'); if(!sel) return;
-  const origins = onlineMots.map(id => motoristas[id]).filter(m => m && m.lat != null && m.lng != null && m.modo !== 'descarregando').map(m => ({ id: m.id, lat: m.lat, lng: m.lng }));
+  const origins = onlineMots.map(id => motoristas[id]).filter(m => m && m.lat != null && m.lng != null && !m.isFull).map(m => ({ id: m.id, lat: m.lat, lng: m.lng }));
   if(!origins.length) return;
   const key = c.id + '|' + origins.map(o => o.id + ':' + o.lat.toFixed(3) + ',' + o.lng.toFixed(3)).join(';');
   let data = _etaCache[key];
@@ -3751,8 +3751,8 @@ function renderDetail(){
     sug.disabled = true;
     const showErr = (msg) => { $('#dasugresult').innerHTML = `<div style="margin-top:6px;padding:8px;background:rgba(220,38,38,0.15);border:1px solid var(--novo);border-radius:6px;font-size:10px;color:#fca5a5">${esc(msg)}</div>`; sug.disabled = false; sug.textContent = '🎯 Sugerir colab mais próximo (c/ trânsito)'; };
     if(!c.lat || !c.lng){ showErr('⚠ Este chamado não tem coordenadas. Adicione um endereço/local antes.'); return; }
-    const origins = onlineMots.map(id => motoristas[id]).filter(m => m.lat && m.lng && m.modo !== 'descarregando').map(m => ({ id: m.id, lat: m.lat, lng: m.lng, nome: m.nome }));
-    if(origins.length === 0){ showErr('⚠ Sem colaboradores online com GPS (os em rota de descarga ficam de fora).'); return; }
+    const origins = onlineMots.map(id => motoristas[id]).filter(m => m.lat && m.lng && !m.isFull).map(m => ({ id: m.id, lat: m.lat, lng: m.lng, nome: m.nome }));
+    if(origins.length === 0){ showErr('⚠ Sem colaboradores online com GPS (os com slots cheios ficam de fora).'); return; }
     sug.textContent = '⏳ Calculando rotas para ' + origins.length + ' colab' + (origins.length>1?'s':'') + '…';
     try {
       let ranked = null, metodo = '(linha reta)';
@@ -4052,9 +4052,8 @@ function atribuir(chamadoId, motoristaId, batch){
     if(mot && mot.isFull){
       if(!confirm(`⚠ ${mot.nome} está com slots cheios (FULL). Atribuir mesmo assim?\n\nRecomendação: deixa o colab descarregar primeiro numa base.`)) return;
     }
-    if(mot && mot.modo === 'descarregando'){
-      if(!confirm(`🔴 ${mot.nome} está indo descarregar numa base. Atribuir mesmo assim vai interromper.\n\nContinuar?`)) return;
-    }
+    // Colab descarregando COM vaga livre continua elegível (a trava real é lotação/isFull acima).
+    // Só avisa se estiver indo descarregar E cheio (aí o isFull acima já cobre) — sem confirm redundante aqui.
     // Checa compatibilidade do chamado com o estoque de peças do colab
     if(mot){
       const motivo = (c.motivo || '').toLowerCase();
@@ -5386,7 +5385,7 @@ function renderMotDetail(){
         <div><strong>Velocidade:</strong> <span style="color:${m.kmh > 0 ? '#fbbf24' : 'var(--txt3)'};font-weight:700">${kmhTxt}</span></div>
         ${ruaTxt ? `<div><strong>Localização:</strong> <span style="color:var(--acc);font-size:11px">${ruaTxt}</span></div>` : ''}
         <div><strong>Último GPS:</strong> ${ageS < 60 ? ageS + 's' : Math.floor(ageS/60) + ' min'} atrás ${isStale ? '<span style="color:#fbbf24">⚠</span>' : ''}</div>
-        ${m.modo === 'descarregando' ? '<div style="color:#dc2626;font-weight:700;margin-top:4px">🔴 Indo descarregar numa base — não recebe novos chamados</div>' : ''}
+        ${m.modo === 'descarregando' ? `<div style="color:#dc2626;font-weight:700;margin-top:4px">🔴 Indo descarregar numa base${slotsLivre > 0 ? ` · <span style="color:#4ade80">ainda recebe chamados (${slotsLivre} vaga${slotsLivre>1?'s':''} livre${slotsLivre>1?'s':''})</span>` : ' — CHEIO, não recebe novos chamados'}</div>` : ''}
       </div>
     </div>
 
