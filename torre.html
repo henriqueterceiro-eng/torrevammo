@@ -1008,8 +1008,8 @@ body.selmode .card .mcheck{display:flex}
 const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
-const LATEST_COLAB_VERSION = 'v75 · 2026-08-17'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v105 · 2026-08-17';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const LATEST_COLAB_VERSION = 'v76 · 2026-08-17'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v106 · 2026-08-17';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2687,8 +2687,11 @@ async function updateRouteFor(motoristaId){
     .map(c => {
       // TRANSFERÊNCIA já INICIADA (motos carregadas): o destino do tracejado é a base de ENTREGA
       // (descarga), não o lat/lng do chamado — que é a base de SAÍDA/origem onde ele já carregou.
+      // Só depois que INICIOU a viagem de entrega (iniciadoEm, = placas escaneadas na base) o destino
+      // vira a base de ENTREGA. Antes disso (novo/em_rota indo carregar) o tracejado vai até o lat/lng
+      // do chamado = base de SAÍDA (igual vai pro cliente num chamado normal).
       const be = c.baseEntrega ? bases[c.baseEntrega] : null;
-      if(be && be.lat != null && be.lng != null && (c.iniciadoEm || c.status === 'em_rota') && !c.descargaEm){
+      if(be && be.lat != null && be.lng != null && c.iniciadoEm && !c.descargaEm){
         return { lat: be.lat, lng: be.lng, id: c.id, _transfEntrega: true };
       }
       return { lat: c.lat, lng: c.lng, id: c.id };

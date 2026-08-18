@@ -349,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v13 · 2026-08-17';
+const FLEET_VERSION = 'v14 · 2026-08-17';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -425,6 +425,7 @@ function ehTransf(c){ return !!(c.baseSaida||c.baseEntrega||/deslocamento|movime
 function etapa(c){
   if(c._fakeEtapa) return c._fakeEtapa;   // chamado de demonstração: etapa forçada
   if(c.status==='concluido'||c.status==='cancelado') return 6;
+  if(ehTransf(c) && (c.descargaEm||c.descargaBaseNome)) return 6;   // transferência ENTREGUE (descarregada na base) → coluna final
   const hasDriver=!!c.motoristaId, hasTerc=!!c.terceiroId;
   if(hasDriver || hasTerc){
     if(hasDriver && motoristaForaDaBase(c.motoristaId)) return 4;
@@ -515,6 +516,22 @@ function slotsFleet(c){
   }
   return `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${chips}</div>`;
 }
+// Storytelling da transferência: a linha do tempo do chamado (aberto → carregado → em rota → entregue → concluído).
+function storyFleet(c){
+  if(!ehTransf(c)) return '';
+  const mm = Array.isArray(c.motos) ? c.motos : (c.motos && typeof c.motos === 'object' ? Object.assign([], c.motos) : []);
+  const nCheias = mm.filter(m=>m&&m.placa).length;
+  const steps = [];
+  if(c.abertoEm||c.ts) steps.push(['📢','Aberto'+(c.abertoPor?' por '+c.abertoPor:''), c.abertoEm||c.ts]);
+  if(nCheias>0) steps.push(['🏍', nCheias+' placa(s) carregada(s)', null]);
+  if(c.emRotaEm) steps.push(['🚚','Saiu da base (em rota)', c.emRotaEm]);
+  if(c.descargaEm) steps.push(['🏁','Entregue em '+(baseNome(c.baseEntrega)||'—'), c.descargaEm]);
+  if(c.concluidoEm) steps.push(['✅','Concluído', c.concluidoEm]);
+  if(steps.length < 2) return '';
+  return `<div style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid var(--bdr);border-radius:8px;display:flex;flex-direction:column;gap:3px">`
+    + steps.map(s=>`<div style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--txt2)"><span>${s[0]}</span><span style="flex:1">${esc(s[1])}</span>${s[2]?`<span style="color:var(--txt3);font-family:var(--mono);font-size:10px">${fmtDataHora(s[2])}</span>`:''}</div>`).join('')
+    + `</div>`;
+}
 function card(c, etapaN){
   const num = c.seq!=null ? `<span class="num">#${c.seq}</span>` : '';
   const ctrl = controladorDe(c);
@@ -527,6 +544,7 @@ function card(c, etapaN){
   const nCheias = motos ? motos.filter(m=>m&&m.placa).length : 0;
   if(nSlots) badges.push(`<span class="b b-moto">🏍 ${nCheias}/${nSlots} placa${nSlots>1?'s':''}</span>`);
   if(ehTransf(c)) badges.push(`<span class="b b-transf">🚚 ${esc(baseNome(c.baseSaida)||'?')} → ${esc(baseNome(c.baseEntrega)||'?')}</span>`);
+  if(ehTransf(c) && (c.descargaEm||c.descargaBaseNome)) badges.push(`<span class="b" style="background:rgba(22,163,74,.2);border:1px solid #16a34a;color:#4ade80;font-weight:800">✅ ENTREGUE</span>`);
   if(motos && motos.some(m=>m.iotForaDaBase)) badges.push(`<span class="b b-warn" title="Uma ou mais motos com IoT fora da base de saída">⚠ moto fora da base</span>`);
   if(c.terceiroId) badges.push(`<span class="b b-ext">🤝 externo</span>`);
   const whoLines=[];
@@ -541,6 +559,7 @@ function card(c, etapaN){
     ${c.endereco?`<div class="end">📍<span>${esc(c.endereco)}</span></div>`:''}
     ${badges.length?`<div class="badges">${badges.join('')}</div>`:''}
     ${slotsFleet(c)}
+    ${(ehTransf(c) && (c.descargaEm||c.status==='concluido'))?storyFleet(c):''}
     ${whoLines.length?`<div class="who">${whoLines.join('')}</div>`:''}
     ${rotaHint}
     ${abertoFoot}
@@ -821,9 +840,13 @@ const STAGE_DEFS = [
   {ic:'🧑‍🔧', label:'Atribuído ao motorista', get:(c,r)=>c.atribuidoEm||(r&&r.assignedTs)},
   {ic:'🚚', label:'Em rota (saiu da base)', get:(c,r)=>c.emRotaEm||(r&&r.enRouteTs)},
   {ic:'📍', label:'Chegou no destino',      get:(c,r)=>c.chegouEm||(r&&r.arrivedTs)},
+  {ic:'🏁', label:'Entregue (descarregado na base)', get:(c,r)=>c.descargaEm},
   {ic:'✅', label:'Concluído',              get:(c,r)=>c.concluidoEm||(r&&r.completedTs)}
 ];
 function detStatusChip(c){
+  if(ehTransf(c) && (c.descargaEm||c.descargaBaseNome) && c.status!=='cancelado'){
+    return `<span class="det-chip" style="background:#16a34a;color:#04121e">✅ Entregue</span>`;
+  }
   const map={1:['Aberto','var(--novo)'],2:['Aceito','var(--aceito)'],3:['Atribuído','var(--atrib)'],4:['Em rota','var(--rota)'],6:['Concluído','var(--conc)']};
   const [t,cor]=map[etapa(c)]||['—','var(--txt3)'];
   return `<span class="det-chip" style="background:${cor};color:#04121e">${t}</span>`;

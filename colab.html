@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v75 · 2026-08-17';
+const APP_VERSION = 'v76 · 2026-08-17';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -3072,7 +3072,7 @@ function renderChamadoCard(){
   const transfBox = (ehTransferencia(c) && (!c.iniciadoEm || placasFaltando(c) > 0)) ? `
     <div style="margin:12px 0;padding:12px;background:${placasFaltando(c)?'rgba(245,158,11,.12)':'rgba(22,163,74,.12)'};border:1px solid ${placasFaltando(c)?'#f59e0b':'#16a34a'};border-radius:12px">
       <div style="font-weight:800;font-size:13px;margin-bottom:5px">🚚 Transferência · ${esc(baseNomeColab(c.baseSaida))} → ${esc(baseNomeColab(c.baseEntrega))}</div>
-      <div style="font-size:12px;color:var(--txt2);margin-bottom:9px">${motosCheias(c)} de ${qtdTransf(c)} placa(s) · ${placasFaltando(c)?`escaneie a(s) ${placasFaltando(c)} restante(s) pra liberar a rota`:'✓ todas escaneadas — pode iniciar'}</div>
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:9px">${motosCheias(c)} de ${qtdTransf(c)} placa(s) · ${placasFaltando(c)?`escaneie a(s) ${placasFaltando(c)} restante(s) na base pra liberar a ENTREGA`:'✓ todas escaneadas — pode iniciar a entrega'}</div>
       <button data-scanplacas="1" style="width:100%;background:${placasFaltando(c)?'rgba(0,180,229,.15)':'transparent'};border:1.5px solid var(--acc);color:var(--acc);border-radius:10px;padding:11px;font-weight:800;font-size:13px">📸 ${placasFaltando(c)?'Escanear placas':'Rever placas'}</button>
     </div>` : '';
 
@@ -3113,7 +3113,7 @@ function renderChamadoCard(){
     ${c.iniciadoEm ? renderRotinaHtml(c) : ''}
     ${c.iniciadoEm ? renderPecasUsoHtml(c) : ''}
     <div class="actions">
-      ${c.status === 'novo' && !c.iniciadoEm && todasPlacasPreenchidas(c) ? '<button class="go" data-act="em_rota">▶ Iniciar rota</button>' : ''}
+      ${c.status === 'novo' && !c.iniciadoEm ? '<button class="go" data-act="em_rota">▶ Iniciar rota</button>' : ''}
       ${c.iniciadoEm ? `<button class="done" data-act="concluido" ${rotinaCompleta(c)?'':'disabled style="opacity:0.45;cursor:not-allowed"'}>${rotinaCompleta(c)?`✓ Concluir${fila.length>1?' → Próximo':''}`:'⏳ Complete a rotina pra concluir'}</button>` : ''}
       <button class="canc" data-act="recusar">Recusar este</button>
     </div>
@@ -3338,7 +3338,7 @@ function handleAction(act){
   }
 
   if(act === 'em_rota'){
-    if(!gateTransferencia(ativo)) return;   // TRANSFERÊNCIA: exige placas antes de sair pra rota
+    // (transferência: "ir até a base de saída" NÃO é gated — o gate fica no INICIAR A ENTREGA, após escanear na base)
     ativo.status = 'em_rota';
     setStatus('busy');
     vibrate(50);
@@ -3616,7 +3616,6 @@ function fecharProxModal(){ document.getElementById('proxModal').style.display =
 function iniciarProximoAtendimento(){
   if(fila.length === 0){ fecharProxModal(); return; }
   const ativo = fila[0];
-  if(!gateTransferencia(ativo)){ fecharProxModal(); return; }   // TRANSFERÊNCIA: exige placas antes de sair pra rota
   ativo.status = 'em_rota';
   setStatus('busy');
   vibrate(50);
