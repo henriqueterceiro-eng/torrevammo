@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v77 · 2026-08-17';
+const APP_VERSION = 'v78 · 2026-08-17';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2020,6 +2020,10 @@ function iniciarAtendimento(chamado){
   showToast((_dmin != null && _dmin > AVISO_INICIO_LONGE_M)
     ? `▶ Iniciado a ${fmtDist(_dmin)} do alvo (registrado)`
     : `▶ Atendimento iniciado: ${chamado.cliente}`);
+  // TRANSFERÊNCIA: coleta concluída → direciona AUTOMATICAMENTE pra base de ENTREGA (rota + modo descarga).
+  if(ehTransferencia(chamado) && chamado.baseEntrega && bases[chamado.baseEntrega]){
+    setTimeout(() => { try { entrarModoDescarga(chamado.baseEntrega); } catch(_){} }, 300);
+  }
   renderChamadoCard();
 }
 
@@ -2971,11 +2975,15 @@ function renderChamadoCard(){
     : c.status === 'concluido' ? '<span class="badge conc">CONCLUÍDO</span>'
     : '<span class="badge">NOVO</span>';
 
-  const dest = c.lat && c.lng ? `${c.lat},${c.lng}` : encodeURIComponent((c.endereco || '') + ', São Paulo, SP');
+  // TRANSFERÊNCIA já iniciada (coletou → indo entregar): navega até a base de ENTREGA, não o local de origem.
+  const _entregaBase = (ehTransferencia(c) && c.iniciadoEm && c.baseEntrega) ? bases[c.baseEntrega] : null;
+  const _navLat = (_entregaBase && _entregaBase.lat != null) ? _entregaBase.lat : c.lat;
+  const _navLng = (_entregaBase && _entregaBase.lng != null) ? _entregaBase.lng : c.lng;
+  const dest = _navLat && _navLng ? `${_navLat},${_navLng}` : encodeURIComponent((c.endereco || '') + ', São Paulo, SP');
   const origin = myPos ? `${myPos.lat},${myPos.lng}` : '';
   // Apenas o destino atual — próximos só são revelados ao concluir
   const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${dest}${origin?'&origin='+origin:''}&travelmode=driving&dir_action=navigate`;
-  const waze = c.lat && c.lng ? `https://waze.com/ul?ll=${c.lat},${c.lng}&navigate=yes` : (c.endereco ? `https://waze.com/ul?q=${encodeURIComponent(c.endereco)}&navigate=yes` : '');
+  const waze = _navLat && _navLng ? `https://waze.com/ul?ll=${_navLat},${_navLng}&navigate=yes` : (c.endereco ? `https://waze.com/ul?q=${encodeURIComponent(c.endereco)}&navigate=yes` : '');
   const _digits = (c.telefone || '').replace(/\D/g,'');
   const _wanum = _digits ? (_digits.length <= 11 ? '55' + _digits : _digits) : '';
   const wa = _wanum ? `https://wa.me/${_wanum}` : '';
@@ -3103,7 +3111,7 @@ function renderChamadoCard(){
       </div>
     </div>` : ''}
     ${routeBlock}
-    <a class="nav-primary" href="${gmaps}" target="_blank" rel="noopener">🧭 Navegar até o cliente (GPS)</a>
+    <a class="nav-primary" href="${gmaps}" target="_blank" rel="noopener">🧭 ${(ehTransferencia(c) && c.iniciadoEm) ? 'Navegar até a base de ENTREGA' : 'Navegar até o cliente (GPS)'}</a>
     ${_motoLonge ? `<a class="nav-primary" href="${_gmapsMoto}" target="_blank" rel="noopener" style="background:#f59e0b;margin-top:8px"><span class="mic"></span> Navegar até a MOTO (${_distLblMoto})</a>` : ''}
     <div class="extras" style="margin-top:8px">
       ${waze ? `<a href="${waze}" target="_blank" rel="noopener">🚗 Waze</a>` : ''}
@@ -3114,7 +3122,7 @@ function renderChamadoCard(){
     ${c.iniciadoEm ? renderPecasUsoHtml(c) : ''}
     <div class="actions">
       ${c.status === 'novo' && !c.iniciadoEm ? '<button class="go" data-act="em_rota">▶ Iniciar rota</button>' : ''}
-      ${c.iniciadoEm ? `<button class="done" data-act="concluido" ${rotinaCompleta(c)?'':'disabled style="opacity:0.45;cursor:not-allowed"'}>${rotinaCompleta(c)?`✓ Concluir${fila.length>1?' → Próximo':''}`:'⏳ Complete a rotina pra concluir'}</button>` : ''}
+      ${c.iniciadoEm ? `<button class="done" data-act="concluido" ${rotinaCompleta(c)?'':'disabled style="opacity:0.45;cursor:not-allowed"'}>${rotinaCompleta(c)?`✓ Concluir${fila.length>1?' → Próximo':''}`:(ehTransferencia(c)?'⏳ Descarregue as motos na base pra concluir':'⏳ Complete a rotina pra concluir')}</button>` : ''}
       <button class="canc" data-act="recusar">Recusar este</button>
     </div>
     ${proxHtml}
@@ -3136,6 +3144,19 @@ function renderChamadoCard(){
 }
 
 function renderRotinaHtml(c){
+  // TRANSFERÊNCIA: sem rotina de recolhimento — painel de ENTREGA (leve as motos até a base e descarregue).
+  if(ehTransferencia(c)){
+    const be = baseNomeColab(c.baseEntrega);
+    const placas = motosArr(c).map(m => _placaDeSlot(m)).filter(Boolean);
+    const entregue = !!(c.descargaEm || c.descargaBaseNome);
+    return `<div class="rotina-box">
+      <div class="rot-tit">🚚 Entrega da transferência<span class="ct">${placas.length}/${qtdTransf(c)}</span></div>
+      <div style="font-size:12.5px;color:var(--txt2);margin:6px 0 10px;line-height:1.5">${entregue
+        ? `✅ <b style="color:#4ade80">Entregue em ${esc(be)}</b> — pode concluir.`
+        : `Leve as <b>${placas.length}</b> moto(s) até <b style="color:var(--acc)">${esc(be)}</b> e toque em <b>🏠 Base</b> pra descarregar.`}</div>
+      ${placas.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px">${placas.map(p => `<span style="font-family:monospace;font-weight:800;font-size:12px;background:rgba(0,180,229,.12);border:1px solid rgba(0,180,229,.35);color:var(--acc);padding:3px 8px;border-radius:6px">${esc(p)}</span>`).join('')}</div>` : ''}
+    </div>`;
+  }
   const steps = buildFlow(c);
   const S = c.rotinaSteps = c.rotinaSteps || {};
   const req = steps.filter(s => !s.opcional);
