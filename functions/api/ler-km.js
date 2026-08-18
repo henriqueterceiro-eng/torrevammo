@@ -1,15 +1,17 @@
 // Cloudflare Pages Function — POST /api/ler-km
-// Recebe a foto do PAINEL (odômetro) e usa o Gemini pra extrair o KM sozinho.
+// Recebe a foto do PAINEL (odômetro) e usa uma IA de visão pra extrair o KM sozinho.
 // Anti-fraude: o KM passa a vir da imagem, não da digitação do motorista.
 //
-// SECRET necessário no projeto Pages (Settings → Environment variables):
-//   GEMINI_API_KEY = <chave do Google AI Studio>
+// PROVEDOR (escolhido pelo secret que estiver setado no Cloudflare Pages):
+//   OPENAI_API_KEY = sk-...      → usa OpenAI (gpt-4o-mini)   [PREFERIDO]
+//   GEMINI_API_KEY = <chave>     → usa Gemini (legado)        [fallback se não tiver OpenAI]
+// Pra reverter pro Gemini: remova o OPENAI_API_KEY (ou deixe só o GEMINI_API_KEY).
 //
 // Request  (JSON): { "image": "data:image/jpeg;base64,...." }
-// Response (JSON): { ok, km, confianca, ehPainel, legivel, observacao }
+// Response (JSON): { ok, provider, km, confianca, ehPainel, legivel, observacao }
 
-const MODEL = 'gemini-2.5-flash';
-const GEMINI_URL = m => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
+const OPENAI_MODEL = 'gpt-4o-mini';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 const PROMPT = [
   'Você é um leitor de odômetro de veículos. A imagem é a foto do PAINEL de um carro/caminhão.',
@@ -22,101 +24,103 @@ const PROMPT = [
   '- confianca de 0 a 1 indicando o quanto você confia na leitura.'
 ].join('\n');
 
-const SCHEMA = {
-  type: 'object',
-  properties: {
-    km: { type: 'integer', description: 'Hodômetro total em km (inteiro). 0 se ilegível.' },
-    eh_painel: { type: 'boolean', description: 'true se a imagem é mesmo um painel de veículo' },
-    legivel: { type: 'boolean', description: 'true se deu pra ler o número com segurança' },
-    confianca: { type: 'number', description: 'confiança da leitura, 0 a 1' },
-    observacao: { type: 'string', description: 'curta nota do que viu (tipo de painel, problema, etc)' }
-  },
-  required: ['km', 'eh_painel', 'legivel', 'confianca']
+// Campos do resultado — reusados pelos dois provedores.
+const FIELDS = {
+  km: { type: 'integer', description: 'Hodômetro total em km (inteiro). 0 se ilegível.' },
+  eh_painel: { type: 'boolean', description: 'true se a imagem é mesmo um painel de veículo' },
+  legivel: { type: 'boolean', description: 'true se deu pra ler o número com segurança' },
+  confianca: { type: 'number', description: 'confiança da leitura, 0 a 1' },
+  observacao: { type: 'string', description: 'curta nota do que viu (tipo de painel, problema, etc)' }
 };
+const REQUIRED = ['km', 'eh_painel', 'legivel', 'confianca', 'observacao'];
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
 
+// ---------- OpenAI (gpt-4o-mini, visão + structured output) ----------
+async function lerViaOpenAI(key, dataUrl) {
+  const payload = {
+    model: OPENAI_MODEL,
+    temperature: 0,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: PROMPT },
+        { type: 'image_url', image_url: { url: dataUrl } }
+      ]
+    }],
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'leitura_odometro',
+        strict: true,
+        schema: { type: 'object', additionalProperties: false, properties: FIELDS, required: REQUIRED }
+      }
+    }
+  };
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key },
+    body: JSON.stringify(payload)
+  });
+  if (!resp.ok) { const t = await resp.text().catch(() => ''); throw new Error(`OpenAI retornou ${resp.status}: ${t.slice(0, 400)}`); }
+  const data = await resp.json();
+  const raw = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  if (!raw) throw new Error('OpenAI não devolveu conteúdo: ' + JSON.stringify(data).slice(0, 300));
+  return JSON.parse(raw);
+}
+
+// ---------- Gemini (legado) ----------
+async function lerViaGemini(key, dataUrl) {
+  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUrl);
+  if (!m) throw new Error('image precisa ser um data URL base64 (image/jpeg ou image/png)');
+  const payload = {
+    contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: m[1], data: m[2] } }] }],
+    generationConfig: {
+      temperature: 0, responseMimeType: 'application/json',
+      responseSchema: { type: 'object', properties: FIELDS, required: ['km', 'eh_painel', 'legivel', 'confianca'] },
+      thinkingConfig: { thinkingBudget: 0 }
+    }
+  };
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(payload)
+  });
+  if (!resp.ok) { const t = await resp.text().catch(() => ''); throw new Error(`Gemini retornou ${resp.status}: ${t.slice(0, 400)}`); }
+  const data = await resp.json();
+  const raw = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+  if (!raw) throw new Error('Gemini não devolveu conteúdo');
+  return JSON.parse(raw);
+}
+
 export async function onRequestPost({ request, env }) {
-  if (!env.GEMINI_API_KEY) {
-    return json({ ok: false, erro: 'GEMINI_API_KEY não configurada no Cloudflare Pages' }, 500);
+  const provider = env.OPENAI_API_KEY ? 'openai' : (env.GEMINI_API_KEY ? 'gemini' : null);
+  if (!provider) {
+    return json({ ok: false, erro: 'Nenhuma chave de IA configurada (OPENAI_API_KEY ou GEMINI_API_KEY) no Cloudflare Pages' }, 500);
   }
 
   let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ ok: false, erro: 'JSON inválido' }, 400);
-  }
+  try { body = await request.json(); } catch { return json({ ok: false, erro: 'JSON inválido' }, 400); }
 
   const dataUrl = body && body.image;
   if (!dataUrl || typeof dataUrl !== 'string') {
     return json({ ok: false, erro: 'campo "image" (data URL) obrigatório' }, 400);
   }
-
-  // Separa mime + base64 do data URL
-  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUrl);
-  if (!m) {
+  if (!/^data:image\/[a-zA-Z0-9.+-]+;base64,.+/.test(dataUrl)) {
     return json({ ok: false, erro: 'image precisa ser um data URL base64 (image/jpeg ou image/png)' }, 400);
-  }
-  const mimeType = m[1];
-  const base64 = m[2];
-
-  const payload = {
-    contents: [{
-      parts: [
-        { text: PROMPT },
-        { inline_data: { mime_type: mimeType, data: base64 } }
-      ]
-    }],
-    generationConfig: {
-      temperature: 0,
-      responseMimeType: 'application/json',
-      responseSchema: SCHEMA,
-      thinkingConfig: { thinkingBudget: 0 }
-    }
-  };
-
-  let resp;
-  try {
-    resp = await fetch(GEMINI_URL(MODEL), {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': env.GEMINI_API_KEY
-      },
-      body: JSON.stringify(payload)
-    });
-  } catch (e) {
-    return json({ ok: false, erro: 'falha de rede ao chamar Gemini: ' + (e.message || e) }, 502);
-  }
-
-  if (!resp.ok) {
-    const txt = await resp.text().catch(() => '');
-    return json({ ok: false, erro: `Gemini retornou ${resp.status}`, detalhe: txt.slice(0, 500) }, 502);
-  }
-
-  let data;
-  try {
-    data = await resp.json();
-  } catch {
-    return json({ ok: false, erro: 'resposta do Gemini não é JSON' }, 502);
-  }
-
-  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) {
-    return json({ ok: false, erro: 'Gemini não devolveu conteúdo', detalhe: JSON.stringify(data).slice(0, 500) }, 502);
   }
 
   let parsed;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return json({ ok: false, erro: 'JSON do Gemini inválido', detalhe: raw.slice(0, 300) }, 502);
+    parsed = provider === 'openai'
+      ? await lerViaOpenAI(env.OPENAI_API_KEY, dataUrl)
+      : await lerViaGemini(env.GEMINI_API_KEY, dataUrl);
+  } catch (e) {
+    return json({ ok: false, erro: 'IA falhou (' + provider + ')', detalhe: (e.message || String(e)).slice(0, 500) }, 502);
   }
 
   return json({
     ok: true,
+    provider,
     km: Number.isFinite(parsed.km) ? Math.round(parsed.km) : 0,
     ehPainel: parsed.eh_painel !== false,
     legivel: parsed.legivel !== false,
