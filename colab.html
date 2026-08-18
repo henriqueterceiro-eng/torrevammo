@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v78 · 2026-08-17';
+const APP_VERSION = 'v79 · 2026-08-17';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1697,7 +1697,7 @@ function renderPlacasModal(chamadoId){
         <div id="slotStat-${i}" style="font-size:12px;color:var(--txt2);margin-bottom:8px;min-height:16px"></div>
         <input type="file" accept="image/*" capture="environment" id="slotCam-${i}" style="display:none">
         <div style="display:flex;gap:8px">
-          <button data-scan="${i}" style="flex:1;background:rgba(0,180,229,.15);border:1.5px solid var(--acc);color:var(--acc);border-radius:10px;padding:11px;font-weight:800;font-size:13px">📸 Escanear placa</button>
+          <button data-scan="${i}" style="flex:1;background:rgba(0,180,229,.15);border:1.5px solid var(--acc);color:var(--acc);border-radius:10px;padding:11px;font-weight:800;font-size:13px">📷 Ler placa (ao vivo)</button>
           <button data-manual="${i}" style="background:transparent;border:1px solid var(--bdr);color:var(--txt2);border-radius:10px;padding:11px 14px;font-size:12px">⌨</button>
         </div>
       </div>`;
@@ -1715,9 +1715,67 @@ function renderPlacasModal(chamadoId){
   </div>`;
   ov.querySelector('#placasClose').onclick = () => { ov.remove(); renderChamadoCard(); };
   const done = ov.querySelector('#placasDone'); if(done && !faltam) done.onclick = () => { ov.remove(); showToast('✅ Placas ok — toque em Iniciar rota'); renderChamadoCard(); };
-  ov.querySelectorAll('[data-scan]').forEach(b => { const i = +b.dataset.scan; const cam = ov.querySelector('#slotCam-'+i); b.onclick = () => cam && cam.click(); if(cam) cam.onchange = () => { if(cam.files && cam.files[0]) onScanPlaca(c.id, i, cam.files[0]); }; });
+  ov.querySelectorAll('[data-scan]').forEach(b => { const i = +b.dataset.scan; b.onclick = () => abrirLeitorPlaca(c.id, i); const cam = ov.querySelector('#slotCam-'+i); if(cam) cam.onchange = () => { if(cam.files && cam.files[0]) onScanPlaca(c.id, i, cam.files[0]); }; });
   ov.querySelectorAll('[data-manual]').forEach(b => b.onclick = () => onManualPlaca(c.id, +b.dataset.manual));
   ov.querySelectorAll('[data-refazer]').forEach(b => b.onclick = () => limparSlotPlaca(c.id, +b.dataset.refazer));
+}
+// LEITOR AO VIVO: câmera em tempo real + mira; lê a placa sozinho (auto a cada ~1.6s) ou no toque.
+async function abrirLeitorPlaca(chamadoId, idx){
+  let ov = document.getElementById('leitorPlaca'); if(ov) ov.remove();
+  ov = document.createElement('div'); ov.id = 'leitorPlaca';
+  ov.style.cssText = 'position:fixed;inset:0;background:#000;z-index:10060;display:flex;flex-direction:column';
+  ov.innerHTML = `
+    <video id="lpVideo" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+      <div style="width:84%;max-width:440px;aspect-ratio:3/1;border:3px solid var(--acc);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)"></div>
+      <div id="lpMsg" style="margin-top:18px;color:#fff;font-weight:800;font-size:15px;text-align:center;text-shadow:0 1px 4px #000;background:rgba(0,0,0,.55);padding:8px 16px;border-radius:20px">Aponte pra placa da moto</div>
+    </div>
+    <div style="position:absolute;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:center;z-index:2">
+      <button id="lpClose" style="background:rgba(0,0,0,.55);border:1px solid #ffffff55;color:#fff;border-radius:10px;padding:8px 14px;font-size:15px;font-weight:700">✕ Fechar</button>
+      <span style="color:#fff;font-weight:800;background:rgba(0,0,0,.5);padding:6px 12px;border-radius:16px;font-size:13px">🏍 Moto ${idx+1}</span>
+    </div>
+    <button id="lpCap" style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);z-index:2;background:var(--acc);color:#001823;border:none;border-radius:50px;padding:16px 34px;font-weight:800;font-size:16px;box-shadow:0 4px 16px rgba(0,0,0,.5)">📸 Capturar agora</button>`;
+  document.body.appendChild(ov);
+  const video = ov.querySelector('#lpVideo'), msg = ov.querySelector('#lpMsg');
+  let stream = null, running = true, busy = false, autoTries = 0, loop = null;
+  const stop = () => { running = false; if(loop) clearInterval(loop); try { if(stream) stream.getTracks().forEach(t => t.stop()); } catch(_){} ov.remove(); };
+  ov.querySelector('#lpClose').onclick = stop;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    video.srcObject = stream;
+  } catch(e){
+    stop();
+    const cam = document.getElementById('slotCam-' + idx); if(cam) cam.click();   // sem câmera ao vivo → cai no input de foto
+    return;
+  }
+  const grab = () => {
+    const w = video.videoWidth, h = video.videoHeight; if(!w || !h) return null;
+    const cnv = document.createElement('canvas'); cnv.width = Math.min(w, 1280); cnv.height = Math.round(cnv.width * h / w);
+    cnv.getContext('2d').drawImage(video, 0, 0, cnv.width, cnv.height);
+    return cnv.toDataURL('image/jpeg', 0.7);
+  };
+  const tentar = async (manual) => {
+    if(busy || !running) return;
+    busy = true; msg.textContent = '🤖 lendo…';
+    const dataUrl = grab();
+    if(!dataUrl){ busy = false; return; }
+    const res = await lerPlacaDaFoto(dataUrl);
+    if(!running) return;
+    if(res.ok && res.legivel && res.placa && (res.confianca || 0) >= PLACA_OCR_MIN_CONF){
+      msg.textContent = '✅ ' + res.placa; vibrate(80);
+      stop();
+      await validarEGravarPlaca(chamadoId, idx, res.placa, document.getElementById('slotStat-' + idx));
+      return;
+    }
+    busy = false;
+    msg.textContent = manual ? (res.placa ? `⚠ leu "${esc(res.placa)}" — ajuste e capture` : '⚠ não deu — ajuste e capture') : 'Segure firme, enquadrando a placa…';
+  };
+  ov.querySelector('#lpCap').onclick = () => tentar(true);
+  loop = setInterval(() => {
+    if(!running){ clearInterval(loop); return; }
+    if(autoTries >= 8){ clearInterval(loop); if(!busy) msg.textContent = '📸 Toque em Capturar agora'; return; }   // para o auto após ~13s (custo) — segue no manual
+    if(!busy){ autoTries++; tentar(false); }
+  }, 1600);
 }
 async function onScanPlaca(chamadoId, idx, file){
   const stat = document.getElementById('slotStat-'+idx);
