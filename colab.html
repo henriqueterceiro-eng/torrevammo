@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v79 · 2026-08-17';
+const APP_VERSION = 'v80 · 2026-08-17';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1697,7 +1697,7 @@ function renderPlacasModal(chamadoId){
         <div id="slotStat-${i}" style="font-size:12px;color:var(--txt2);margin-bottom:8px;min-height:16px"></div>
         <input type="file" accept="image/*" capture="environment" id="slotCam-${i}" style="display:none">
         <div style="display:flex;gap:8px">
-          <button data-scan="${i}" style="flex:1;background:rgba(0,180,229,.15);border:1.5px solid var(--acc);color:var(--acc);border-radius:10px;padding:11px;font-weight:800;font-size:13px">📷 Ler placa (ao vivo)</button>
+          <button data-scan="${i}" style="flex:1;background:rgba(0,180,229,.15);border:1.5px solid var(--acc);color:var(--acc);border-radius:10px;padding:11px;font-weight:800;font-size:13px">📸 Escanear placa (foto)</button>
           <button data-manual="${i}" style="background:transparent;border:1px solid var(--bdr);color:var(--txt2);border-radius:10px;padding:11px 14px;font-size:12px">⌨</button>
         </div>
       </div>`;
@@ -1715,7 +1715,7 @@ function renderPlacasModal(chamadoId){
   </div>`;
   ov.querySelector('#placasClose').onclick = () => { ov.remove(); renderChamadoCard(); };
   const done = ov.querySelector('#placasDone'); if(done && !faltam) done.onclick = () => { ov.remove(); showToast('✅ Placas ok — toque em Iniciar rota'); renderChamadoCard(); };
-  ov.querySelectorAll('[data-scan]').forEach(b => { const i = +b.dataset.scan; b.onclick = () => abrirLeitorPlaca(c.id, i); const cam = ov.querySelector('#slotCam-'+i); if(cam) cam.onchange = () => { if(cam.files && cam.files[0]) onScanPlaca(c.id, i, cam.files[0]); }; });
+  ov.querySelectorAll('[data-scan]').forEach(b => { const i = +b.dataset.scan; const cam = ov.querySelector('#slotCam-'+i); b.onclick = () => cam && cam.click(); if(cam) cam.onchange = () => { if(cam.files && cam.files[0]) onScanPlaca(c.id, i, cam.files[0]); }; });
   ov.querySelectorAll('[data-manual]').forEach(b => b.onclick = () => onManualPlaca(c.id, +b.dataset.manual));
   ov.querySelectorAll('[data-refazer]').forEach(b => b.onclick = () => limparSlotPlaca(c.id, +b.dataset.refazer));
 }
@@ -5615,9 +5615,13 @@ async function updateRouteToBase(){
 
 function checkArrivedAtBase(){
   if(!turnoAtivo || turnoAtivo.modo !== 'descarregando' || !myPos) return;
-  // Chega em QUALQUER base (nem sempre dá pra ir na base alvo). Pega a mais próxima no raio.
+  // TRANSFERÊNCIA: o colab só "chega pra descarregar" na base de ENTREGA — nunca numa base intermediária
+  // (ex: a base de SAÍDA onde carregou). Fora transferência, chega em qualquer base no raio.
+  const _at = fila[0];
+  const _soEntrega = (_at && ehTransferencia(_at) && _at.iniciadoEm && _at.baseEntrega) ? _at.baseEntrega : null;
   let base = null, baseId = null, melhor = Infinity;
   for(const id in bases){
+    if(_soEntrega && id !== _soEntrega) continue;
     const b = bases[id];
     if(!b || b.lat == null || b.lng == null) continue;
     const d = haversine(myPos, { lat: b.lat, lng: b.lng });
@@ -5851,6 +5855,15 @@ document.getElementById('docsFechar').onclick = () => {
 let _baseAtual = null; // base onde o colab está agora (visitando)
 
 function abrirBaseOpcoes(base){
+  // TRANSFERÊNCIA: só pode descarregar na base ALVO (baseEntrega). Se estiver em OUTRA base (ex: a de
+  // saída), NÃO abre as opções aqui — redireciona pra base de entrega.
+  const _at = fila[0];
+  const _be = (_at && ehTransferencia(_at) && _at.iniciadoEm && _at.baseEntrega) ? bases[_at.baseEntrega] : null;
+  if(_be && base && (base.lat !== _be.lat || base.lng !== _be.lng)){
+    showToast(`🚚 Transferência: só descarrega em ${baseNomeColab(_at.baseEntrega)}. Seguindo pra lá.`);
+    entrarModoDescarga(_at.baseEntrega);
+    return;
+  }
   _baseAtual = base;
   document.getElementById('baseOpcoesTit').textContent = `Você chegou em ${base.nome}`;
   document.getElementById('baseOpcoesSub').textContent = base.endereco || 'O que vai fazer aqui?';
