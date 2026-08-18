@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v76 · 2026-08-17'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v106 · 2026-08-17';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v107 · 2026-08-17';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -4062,6 +4062,17 @@ function atribuir(chamadoId, motoristaId, batch){
     const mot = motoristas[motoristaId];
     if(mot && mot.isFull){
       if(!confirm(`⚠ ${mot.nome} está com slots cheios (FULL). Atribuir mesmo assim?\n\nRecomendação: deixa o colab descarregar primeiro numa base.`)) return;
+    }
+    // POKA-YOKE: uma transferência (qtdMotos) NÃO pode passar da capacidade de carga do colab.
+    // Sobe alerta na torre + exige override ao atribuir alguém que não comporta as motos.
+    const _need = (c.qtdMotos != null) ? c.qtdMotos : (Array.isArray(c.motos) ? c.motos.length : 0);
+    if(_need > 0 && mot){
+      const _tot = mot.slotsTotal || 0;
+      const _livre = Math.max(0, _tot - (mot.slotsCount || 0));
+      if(_tot > 0 && _need > _livre){
+        pushAlert({ id:'cap_'+chamadoId, tipo:'warn', titulo:'Colab SEM capacidade de carga', msg:`${mot.nome}: só ${_livre} vaga(s) livre(s) de ${_tot} — a movimentação precisa de ${_need} moto(s).`, motId: motoristaId });
+        if(!confirm(`⛔ CAPACIDADE INSUFICIENTE\n\n${mot.nome} tem ${_livre} vaga(s) livre(s) (de ${_tot}), mas essa movimentação precisa de ${_need} moto(s).\n\nO colaborador NÃO comporta essa carga. Atribuir mesmo assim?`)) return;
+      }
     }
     // Colab descarregando COM vaga livre continua elegível (a trava real é lotação/isFull acima).
     // Só avisa se estiver indo descarregar E cheio (aí o isFull acima já cobre) — sem confirm redundante aqui.
