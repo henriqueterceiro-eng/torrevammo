@@ -349,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v12 · 2026-08-17';
+const FLEET_VERSION = 'v13 · 2026-08-17';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -499,7 +499,7 @@ function prioridade(c){ return c.clienteAguardando===true ? 1 : 0; }
 // slots ainda vazios como "aguardando" — atualiza sozinho conforme o colab escaneia no local.
 function slotsFleet(c){
   if(!ehTransf(c)) return '';
-  const motos = Array.isArray(c.motos) ? c.motos : [];
+  const motos = Array.isArray(c.motos) ? c.motos : (c.motos && typeof c.motos === 'object' ? Object.assign([], c.motos) : []);
   const n = c.qtdMotos!=null ? c.qtdMotos : motos.length;
   if(!n) return '';
   let chips='';
@@ -520,7 +520,7 @@ function card(c, etapaN){
   const ctrl = controladorDe(c);
   const drv = driverDe(c);
   const aguard = c.clienteAguardando===true;
-  const motos = Array.isArray(c.motos) ? c.motos : null;
+  const motos = Array.isArray(c.motos) ? c.motos : (c.motos && typeof c.motos === 'object' ? Object.assign([], c.motos) : null);
   const badges=[];
   if(aguard) badges.push(`<span class="b b-aguard">🙋 AGUARDANDO</span>`);
   const nSlots = c.qtdMotos!=null ? c.qtdMotos : (motos?motos.length:0);

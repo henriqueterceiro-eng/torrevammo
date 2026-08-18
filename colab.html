@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v73 · 2026-08-17';
+const APP_VERSION = 'v74 · 2026-08-17';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -849,6 +849,8 @@ const MARKER_TTL_MS = 30 * 1000;    // 30s sem update = fora do ar (para a torre
 // confiança (ou painel ilegível) cai em conferência manual COM flag pra torre.
 const KM_OCR_ENDPOINT = '/api/ler-km';
 const KM_OCR_MIN_CONF = 0.6;
+const PLACA_OCR_ENDPOINT = '/api/ler-placa';
+const PLACA_OCR_MIN_CONF = 0.55;
 
 // ====================== STATE ======================
 let me = null;                      // {id, nome, placa, status}
@@ -1241,6 +1243,11 @@ function syncFilaFromSnapshot(data){
           arrivedAt: c.arrivedAt || fromFb.arrivedAt,
           _nearingNotified: c._nearingNotified || fromFb._nearingNotified,
           rotinaSteps: Object.assign({}, fromFb.rotinaSteps, c.rotinaSteps),
+          // TRANSFERÊNCIA: se o colab acabou de escanear (<20s), mantém as placas LOCAIS (o eco do FB pode estar atrasado); senão aceita o FB
+          motos: (ehTransferencia(c) && c._motosLocalTs && (Date.now() - c._motosLocalTs < 20000)) ? c.motos : (fromFb.motos !== undefined ? fromFb.motos : c.motos),
+          descargaEm: c.descargaEm || fromFb.descargaEm,
+          descargaBaseNome: c.descargaBaseNome || fromFb.descargaBaseNome,
+          descargaBaseId: c.descargaBaseId || fromFb.descargaBaseId,
           status: (c.status === 'em_rota' && fromFb.status === 'novo') ? 'em_rota' : (fromFb.status || c.status),
           icon: c.icon || iconFromMotivo(fromFb.motivo)
         });
@@ -1306,6 +1313,9 @@ function syncFilaFromSnapshot(data){
       if(!fb) continue;
       if(fb.status && fb.status !== c.status){ c.status = fb.status; anyChange = true; }
       if(fb.arrived && !c.arrived){ c.arrived = true; c.arrivedAt = fb.arrivedAt || Date.now(); anyChange = true; }
+      // TRANSFERÊNCIA: reflete a descarga (libera Concluir) + placas de outra sessão (fora da janela de scan local)
+      if(fb.descargaEm && !c.descargaEm){ c.descargaEm = fb.descargaEm; c.descargaBaseNome = fb.descargaBaseNome; c.descargaBaseId = fb.descargaBaseId; anyChange = true; }
+      if(fb.motos && ehTransferencia(c) && !(c._motosLocalTs && (Date.now() - c._motosLocalTs < 20000))){ c.motos = fb.motos; anyChange = true; }
     }
     if(anyChange) afterFilaChange();
   }
@@ -1618,11 +1628,158 @@ function fluxoDoMotivo(motivo){
 }
 function fluxoEhServico(fx){ return fx==='socorro'||fx==='pneu_tras'||fx==='pneu_diant'||fx==='acidente'; }
 
+// ============================================================
+// TRANSFERENCIA (Fleet) — chamado multi-moto: o colab escaneia as placas (OCR) ANTES de iniciar a rota.
+// Campos (baseSaida/baseEntrega/tipoMovimentacao/origemFleet/qtdMotos/motos[]) chegam do Fleet pelo
+// snapshot de vammo/chamados (spread {id,...ch}). Cada placa vira DOIS registros: um slot de carga
+// (slotsOcupados, pra a descarga na base funcionar) e um motos[idx] no chamado (Fleet le ao vivo).
+// ============================================================
+function ehTransferencia(c){ return !!(c && c.origemFleet && c.motos && typeof c.motos === 'object' && (c.tipoMovimentacao || c.baseEntrega)); }
+function _placaDeSlot(m){ return !m ? '' : (typeof m === 'string' ? m : (m.placa || '')); }
+function qtdTransf(c){ if(c && c.qtdMotos != null) return c.qtdMotos; const m = c && c.motos; if(Array.isArray(m)) return m.length; if(m && typeof m === 'object') return Object.keys(m).length; return 0; }
+// motos[] pode vir do Firebase como ARRAY ou como OBJETO {0:..,2:..} (RTDB vira objeto quando esparso) — normaliza pra array denso de tamanho qtdMotos
+function motosArr(c){ const src = (c && c.motos && typeof c.motos === 'object') ? c.motos : null; const n = qtdTransf(c); const a = []; for(let i=0;i<n;i++) a[i] = (src && src[i] != null) ? src[i] : null; return a; }
+function motosCheias(c){ return motosArr(c).filter(m => _placaDeSlot(m).trim()).length; }
+function placasFaltando(c){ if(!ehTransferencia(c)) return 0; return Math.max(0, qtdTransf(c) - motosCheias(c)); }
+function todasPlacasPreenchidas(c){ return !ehTransferencia(c) || placasFaltando(c) === 0; }
+function catComfortCpxColab(modelo){ const m = (modelo||'').toUpperCase(); if(m.includes('CPX')) return 'CPX'; if(m.includes('COMFORT')) return 'COMFORT'; return null; }
+function baseNomeColab(id){ return (typeof bases !== 'undefined' && bases && bases[id] && bases[id].nome) ? bases[id].nome : (id || '—'); }
+
+// Gate: transferencia com placa faltando -> abre a captura e NAO deixa prosseguir.
+function gateTransferencia(c){
+  if(ehTransferencia(c) && placasFaltando(c) > 0){ abrirCapturaPlacas(c); return false; }
+  return true;
+}
+
+// OCR de placa (espelha lerKmDoPainel, contra /api/ler-placa) -> {ok,placa,legivel,confianca}
+async function lerPlacaDaFoto(dataUrl){
+  try {
+    const resp = await fetch(PLACA_OCR_ENDPOINT, { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ image: dataUrl }) });
+    const r = await resp.json();
+    if(!resp.ok || !r.ok) return { ok:false, erro:(r && r.erro) || 'falha' };
+    return r;
+  } catch(e){ return { ok:false, erro: e.message || 'sem rede' }; }
+}
+
+// Modal de captura das placas da transferencia
+function abrirCapturaPlacas(chamado){
+  const c = fila.find(x => x.id === chamado.id) || chamado;
+  if(!ehTransferencia(c)) return;
+  let ov = document.getElementById('placasModal');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'placasModal'; ov.style.cssText = 'position:fixed;inset:0;background:rgba(4,10,20,.92);z-index:10050;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:14px'; document.body.appendChild(ov); }
+  renderPlacasModal(c.id);
+}
+function renderPlacasModal(chamadoId){
+  const ov = document.getElementById('placasModal'); if(!ov) return;
+  const c = fila.find(x => x.id === chamadoId); if(!c){ ov.remove(); return; }
+  const n = qtdTransf(c), motos = motosArr(c), faltam = placasFaltando(c);
+  let slots = '';
+  for(let i=0;i<n;i++){
+    const m = motos[i], placa = _placaDeSlot(m);
+    if(placa){
+      const modelo = (m && typeof m==='object' && m.modelo) || '';
+      const status = (m && typeof m==='object' && (m.motoStatus||m.status)) || '';
+      const cat = (m && typeof m==='object' && m.categoria) || catComfortCpxColab(modelo);
+      const catTag = cat ? `<span style="font-weight:800;font-size:10px;padding:1px 6px;border-radius:5px;background:${cat==='CPX'?'#7c3aed':'#0891b2'};color:#fff">${cat}</span>` : '';
+      slots += `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(22,163,74,.12);border:1px solid #16a34a;border-radius:10px;margin-bottom:8px">
+        <span style="font-size:18px">✓</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:monospace;font-weight:800;font-size:15px">${esc(placa)} ${catTag}</div>
+          <div style="font-size:11px;color:var(--txt2)">${esc(modelo||'modelo —')} · ${esc(status||'status —')}</div>
+        </div>
+        <button data-refazer="${i}" style="background:transparent;border:1px solid var(--bdr);color:var(--txt3);border-radius:8px;padding:5px 8px;font-size:11px">trocar</button>
+      </div>`;
+    } else {
+      slots += `<div style="padding:12px;background:var(--surf2);border:1px dashed var(--bdr2);border-radius:10px;margin-bottom:8px">
+        <div style="font-weight:700;margin-bottom:8px">🏍 Moto ${i+1} <span style="color:var(--txt3);font-weight:600;font-size:12px">— sem placa</span></div>
+        <div id="slotStat-${i}" style="font-size:12px;color:var(--txt2);margin-bottom:8px;min-height:16px"></div>
+        <input type="file" accept="image/*" capture="environment" id="slotCam-${i}" style="display:none">
+        <div style="display:flex;gap:8px">
+          <button data-scan="${i}" style="flex:1;background:rgba(0,180,229,.15);border:1.5px solid var(--acc);color:var(--acc);border-radius:10px;padding:11px;font-weight:800;font-size:13px">📸 Escanear placa</button>
+          <button data-manual="${i}" style="background:transparent;border:1px solid var(--bdr);color:var(--txt2);border-radius:10px;padding:11px 14px;font-size:12px">⌨</button>
+        </div>
+      </div>`;
+    }
+  }
+  ov.innerHTML = `<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:16px;max-width:520px;width:100%;padding:18px;margin:auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <h2 style="font-size:16px;flex:1">🚚 Placas da transferência</h2>
+      <button id="placasClose" style="background:transparent;border:1px solid var(--bdr);color:var(--txt2);border-radius:8px;padding:4px 10px;font-size:18px">×</button>
+    </div>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:4px">${esc(baseNomeColab(c.baseSaida))} → <b style="color:var(--acc)">${esc(baseNomeColab(c.baseEntrega))}</b></div>
+    <div style="font-size:12px;font-weight:800;color:${faltam?'#fbbf24':'#4ade80'};margin-bottom:12px">${n-faltam} de ${n} placa(s)${faltam?` · faltam ${faltam}`:' ✓'}</div>
+    ${slots}
+    <button id="placasDone" ${faltam?'disabled':''} style="width:100%;margin-top:6px;background:${faltam?'var(--surf2)':'#16a34a'};border:none;color:#fff;border-radius:12px;padding:14px;font-weight:800;font-size:14px;${faltam?'opacity:.5':''}">${faltam? `Escaneie a(s) ${faltam} placa(s) restante(s)` : '✓ Pronto — pode iniciar a rota'}</button>
+  </div>`;
+  ov.querySelector('#placasClose').onclick = () => { ov.remove(); renderChamadoCard(); };
+  const done = ov.querySelector('#placasDone'); if(done && !faltam) done.onclick = () => { ov.remove(); showToast('✅ Placas ok — toque em Iniciar rota'); renderChamadoCard(); };
+  ov.querySelectorAll('[data-scan]').forEach(b => { const i = +b.dataset.scan; const cam = ov.querySelector('#slotCam-'+i); b.onclick = () => cam && cam.click(); if(cam) cam.onchange = () => { if(cam.files && cam.files[0]) onScanPlaca(c.id, i, cam.files[0]); }; });
+  ov.querySelectorAll('[data-manual]').forEach(b => b.onclick = () => onManualPlaca(c.id, +b.dataset.manual));
+  ov.querySelectorAll('[data-refazer]').forEach(b => b.onclick = () => limparSlotPlaca(c.id, +b.dataset.refazer));
+}
+async function onScanPlaca(chamadoId, idx, file){
+  const stat = document.getElementById('slotStat-'+idx);
+  if(stat) stat.innerHTML = '📸 processando foto…';
+  let dataUrl;
+  try { dataUrl = await compressToDataUrl(file, 1024, 0.7); } catch { if(stat) stat.textContent = '⚠ erro na foto — tente de novo'; return; }
+  if(stat) stat.innerHTML = '🤖 lendo a placa…';
+  const res = await lerPlacaDaFoto(dataUrl);
+  if(!res.ok || !res.legivel || !res.placa || (res.confianca||0) < PLACA_OCR_MIN_CONF){
+    if(stat) stat.innerHTML = `⚠ não deu pra ler${res.placa?` (leu "${esc(res.placa)}")`:''} — re-escaneie ou ⌨ digite`;
+    return;
+  }
+  await validarEGravarPlaca(chamadoId, idx, res.placa, stat);
+}
+async function onManualPlaca(chamadoId, idx){
+  const p = prompt('Digite a placa da moto ' + (idx+1) + ' (ex: ABC1D23):');
+  if(p == null) return;
+  await validarEGravarPlaca(chamadoId, idx, p, document.getElementById('slotStat-'+idx));
+}
+async function validarEGravarPlaca(chamadoId, idx, placaRaw, stat){
+  const c = fila.find(x => x.id === chamadoId); if(!c) return;
+  const placa = normPlaca(placaRaw);
+  if(placa.length < 7){ if(stat) stat.innerHTML = '⚠ placa incompleta (precisa de 7 caracteres)'; return; }
+  const dup = motosArr(c).some((m,j) => j !== idx && normPlaca(_placaDeSlot(m)) === placa);
+  if(dup){ if(stat) stat.innerHTML = `⚠ a placa <b>${esc(placa)}</b> já foi adicionada em outro slot`; return; }
+  if(stat) stat.innerHTML = '🔎 validando no backoffice…';
+  let lk = null;
+  try { lk = await (await fetch('/api/moto_lookup?placa=' + encodeURIComponent(placa))).json(); } catch(_){ lk = null; }
+  if(lk && lk.found === false){ if(stat) stat.innerHTML = `⚠ placa <b>${esc(placa)}</b> não encontrada no backoffice Vammo — confira e re-escaneie`; return; }
+  const modelo = (lk && lk.modelo) || '', status = (lk && lk.status) || '';
+  // vira slot de carga (pra descarga funcionar) — respeita isFull
+  if(!checkInMoto({ source:'transferencia', chamadoId: c.id, placa })){
+    if(stat) stat.innerHTML = '⚠ seu veículo está cheio — descarregue antes de continuar';
+    return;
+  }
+  const slot = { placa, modelo: modelo||null, motoStatus: status||null, categoria: catComfortCpxColab(modelo), deposito:(lk&&lk.deposito)||null, found: !!(lk&&lk.found), scannedByColab: true, ocupadoEm: Date.now() };
+  const arr = motosArr(c); arr[idx] = slot; c.motos = arr; c._motosLocalTs = Date.now();
+  // grava o ARRAY DENSO inteiro (slots vazios = {vazio:true}) pra o Firebase nunca virar objeto esparso
+  const denso = arr.map(m => (m && _placaDeSlot(m)) ? m : { vazio: true });
+  try { if(typeof firebase !== 'undefined' && firebase.apps?.length){ firebase.database().ref('vammo/chamados/' + c.id + '/motos').set(cleanForFb(denso)); } } catch(_){}
+  vibrate(60);
+  renderPlacasModal(c.id);
+}
+function limparSlotPlaca(chamadoId, idx){
+  const c = fila.find(x => x.id === chamadoId); if(!c || !confirm('Trocar a placa da moto ' + (idx+1) + '?')) return;
+  const placa = normPlaca(_placaDeSlot(c.motos && c.motos[idx]));
+  const arr = motosArr(c); arr[idx] = null; c.motos = arr; c._motosLocalTs = Date.now();
+  const denso = arr.map(m => (m && _placaDeSlot(m)) ? m : { vazio: true });
+  try { if(typeof firebase !== 'undefined' && firebase.apps?.length){ firebase.database().ref('vammo/chamados/' + c.id + '/motos').set(cleanForFb(denso)); } } catch(_){}
+  if(placa && turnoAtivo && Array.isArray(turnoAtivo.slotsOcupados)){
+    const si = turnoAtivo.slotsOcupados.findIndex(s => s && s.chamadoId === c.id && normPlaca(s.placa) === placa);
+    if(si >= 0){ turnoAtivo.slotsOcupados.splice(si,1); turnoAtivo._slotsLocalTs = Date.now(); saveTurno(); syncTurnoToTorre(); renderTopBar(); }
+  }
+  renderPlacasModal(c.id);
+}
+
 // Monta a lista ORDENADA de passos conforme as respostas atuais (progressive disclosure)
 function buildFlow(c){
   const fx = fluxoDoMotivo(c.motivo);
   const S = c.rotinaSteps || {};
   const steps = [];
+  // TRANSFERÊNCIA: as placas já foram escaneadas ANTES de iniciar (pré-rota) e as motos já estão a bordo
+  // (slotsOcupados). No destino é DESCARGA (fluxo existente), não recolhimento — sem steps de rotina aqui.
+  if(ehTransferencia(c)) return steps;
   // MOTO NÃO ENCONTRADA — vale pra TODO chamado (qualquer motivo/fluxo). Se a moto não está no
   // local, finaliza aqui com evidência. É a PRIMEIRA pergunta de qualquer atendimento.
   steps.push({ id:'moto_encontrada', label:'A moto está no local?', tipo:'bool' });
@@ -1810,6 +1967,7 @@ function distInicioAMoto(chamado){
   return haversine(myPos, { lat: chamado._motoLat, lng: chamado._motoLng });
 }
 function onIniciarConfirmado(chamado){
+  if(!gateTransferencia(chamado)) return;   // TRANSFERÊNCIA: exige todas as placas escaneadas antes de iniciar
   // SEM gatekeeping da torre: o colaborador SEMPRE pode iniciar. Se estiver longe do alvo
   // (endereço OU moto), só AVISA e deixa REGISTRADO — a torre é notificada, não autoriza.
   const dAddr = distInicioAoLocal(chamado);
@@ -1824,6 +1982,7 @@ function onIniciarConfirmado(chamado){
 }
 
 function iniciarAtendimento(chamado){
+  if(ehTransferencia(chamado) && placasFaltando(chamado) > 0){ abrirCapturaPlacas(chamado); return; }   // backstop do gate de placas
   chamado.iniciadoEm = Date.now();
   chamado.status = 'em_rota';
   chamado.rotinaSteps = chamado.rotinaSteps || {};
@@ -1964,6 +2123,8 @@ function setupSlideConfirm(container, onConfirm){
 }
 
 function rotinaCompleta(chamado){
+  // TRANSFERÊNCIA: só conclui depois de descarregar as motos na base de entrega (descargaEm setado).
+  if(ehTransferencia(chamado)) return !!(chamado.descargaEm || chamado.descargaBaseNome);
   const steps = buildFlow(chamado);
   const S = chamado.rotinaSteps || {};
   return steps.length > 0 && steps.every(s => s.opcional || stepDone(s, S));
@@ -2876,7 +3037,7 @@ function renderChamadoCard(){
   // caso é o FALLBACK MANUAL: se o GPS estiver fraco/parado e a chegada automática não disparar,
   // o colab ainda consegue iniciar (antes ficava travado sem nenhum botão). O onIniciarConfirmado
   // segue protegendo: só inicia dentro de RANGE_INICIO_M (200m) OU com autorização da torre.
-  const _podeIniciar = (c.arrived || c.status === 'em_rota' || c.status === 'novo') && !c.iniciadoEm;
+  const _podeIniciar = (c.arrived || c.status === 'em_rota' || c.status === 'novo') && !c.iniciadoEm && todasPlacasPreenchidas(c);
   const inicioSlide = _podeIniciar ? `
     <div style="margin:14px 0;padding:14px;background:linear-gradient(135deg,rgba(0,180,229,0.15),rgba(0,180,229,0.05));border:2px solid var(--acc);border-radius:14px">
       <div style="font-size:12px;font-weight:800;color:var(--acc);text-align:center;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">🎯 ${c.arrived ? 'Confirme o início do atendimento' : 'Chegou no local? Deslize pra iniciar'}</div>
@@ -2905,9 +3066,18 @@ function renderChamadoCard(){
     ? `<div class="aguarda-banner ${_aguardaSim ? 'sim' : 'nao'}"><span class="ic">${_aguardaSim ? '✅' : '❌'}</span><span class="tx">${_aguardaSim ? 'Cliente AGUARDANDO no local' : 'Cliente NÃO está no local'}</span></div>`
     : '';
 
+  // TRANSFERÊNCIA: banner de progresso das placas + botão de escanear (pré-início)
+  const transfBox = (ehTransferencia(c) && !c.iniciadoEm) ? `
+    <div style="margin:12px 0;padding:12px;background:${placasFaltando(c)?'rgba(245,158,11,.12)':'rgba(22,163,74,.12)'};border:1px solid ${placasFaltando(c)?'#f59e0b':'#16a34a'};border-radius:12px">
+      <div style="font-weight:800;font-size:13px;margin-bottom:5px">🚚 Transferência · ${esc(baseNomeColab(c.baseSaida))} → ${esc(baseNomeColab(c.baseEntrega))}</div>
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:9px">${motosCheias(c)} de ${qtdTransf(c)} placa(s) · ${placasFaltando(c)?`escaneie a(s) ${placasFaltando(c)} restante(s) pra liberar a rota`:'✓ todas escaneadas — pode iniciar'}</div>
+      <button data-scanplacas="1" style="width:100%;background:${placasFaltando(c)?'rgba(0,180,229,.15)':'transparent'};border:1.5px solid var(--acc);color:var(--acc);border-radius:10px;padding:11px;font-weight:800;font-size:13px">📸 ${placasFaltando(c)?'Escanear placas':'Rever placas'}</button>
+    </div>` : '';
+
   el.innerHTML = `
     ${queueHead}
     ${arrivedBanner}
+    ${transfBox}
     ${inicioSlide}
     <div class="head">
       <div class="icon">${c.icon || iconFromMotivo(c.motivo)}</div>
@@ -2941,7 +3111,7 @@ function renderChamadoCard(){
     ${c.iniciadoEm ? renderRotinaHtml(c) : ''}
     ${c.iniciadoEm ? renderPecasUsoHtml(c) : ''}
     <div class="actions">
-      ${c.status === 'novo' && !c.iniciadoEm ? '<button class="go" data-act="em_rota">▶ Iniciar rota</button>' : ''}
+      ${c.status === 'novo' && !c.iniciadoEm && todasPlacasPreenchidas(c) ? '<button class="go" data-act="em_rota">▶ Iniciar rota</button>' : ''}
       ${c.iniciadoEm ? `<button class="done" data-act="concluido" ${rotinaCompleta(c)?'':'disabled style="opacity:0.45;cursor:not-allowed"'}>${rotinaCompleta(c)?`✓ Concluir${fila.length>1?' → Próximo':''}`:'⏳ Complete a rotina pra concluir'}</button>` : ''}
       <button class="canc" data-act="recusar">Recusar este</button>
     </div>
@@ -2951,6 +3121,7 @@ function renderChamadoCard(){
   el.querySelectorAll('button[data-act]').forEach(b => {
     b.onclick = () => handleAction(b.dataset.act);
   });
+  { const sb = el.querySelector('[data-scanplacas]'); if(sb) sb.onclick = () => abrirCapturaPlacas(c); }
   // Wire do slide inline de "iniciar atendimento"
   const inlineSlide = el.querySelector('#iniSlideInline');
   if(inlineSlide){
@@ -3165,6 +3336,7 @@ function handleAction(act){
   }
 
   if(act === 'em_rota'){
+    if(!gateTransferencia(ativo)) return;   // TRANSFERÊNCIA: exige placas antes de sair pra rota
     ativo.status = 'em_rota';
     setStatus('busy');
     vibrate(50);
@@ -3442,6 +3614,7 @@ function fecharProxModal(){ document.getElementById('proxModal').style.display =
 function iniciarProximoAtendimento(){
   if(fila.length === 0){ fecharProxModal(); return; }
   const ativo = fila[0];
+  if(!gateTransferencia(ativo)){ fecharProxModal(); return; }   // TRANSFERÊNCIA: exige placas antes de sair pra rota
   ativo.status = 'em_rota';
   setStatus('busy');
   vibrate(50);
@@ -3715,11 +3888,15 @@ function confirmarDescarga(){
     try {
       if(typeof firebase !== 'undefined' && firebase.apps?.length){
         const db = firebase.database();
+        const _dEm = Date.now();
         aSair.forEach(s => {
           if(s && s.chamadoId){
             db.ref('vammo/chamados/' + s.chamadoId).update({
-              descargaBaseId: _descBase.id, descargaBaseNome: _descBase.nome, descargaEm: Date.now()
+              descargaBaseId: _descBase.id, descargaBaseNome: _descBase.nome, descargaEm: _dEm
             }).catch(()=>{});
+            // reflete no objeto LOCAL da fila — rotinaCompleta/transferência lê descargaEm daqui (senão Concluir trava)
+            const lc = fila.find(x => x.id === s.chamadoId);
+            if(lc){ lc.descargaBaseId = _descBase.id; lc.descargaBaseNome = _descBase.nome; lc.descargaEm = _dEm; }
           }
         });
       }
@@ -3733,6 +3910,7 @@ function confirmarDescarga(){
   // Sai do modo descarga (mesmo se ainda tem motos — colab decide manter)
   sairModoDescarga();
   fecharModalDescarga();
+  renderChamadoCard();   // reflete descargaEm no card → libera o Concluir da transferência
 }
 
 function afterFilaChange(msg){
