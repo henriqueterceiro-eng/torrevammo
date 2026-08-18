@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v74 · 2026-08-17';
+const APP_VERSION = 'v75 · 2026-08-17';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1634,7 +1634,9 @@ function fluxoEhServico(fx){ return fx==='socorro'||fx==='pneu_tras'||fx==='pneu
 // snapshot de vammo/chamados (spread {id,...ch}). Cada placa vira DOIS registros: um slot de carga
 // (slotsOcupados, pra a descarga na base funcionar) e um motos[idx] no chamado (Fleet le ao vivo).
 // ============================================================
-function ehTransferencia(c){ return !!(c && c.origemFleet && c.motos && typeof c.motos === 'object' && (c.tipoMovimentacao || c.baseEntrega)); }
+// Detecção pela QUANTIDADE (qtdMotos), NÃO por c.motos: o Fleet grava motos:[] quando abre sem placa,
+// e o RTDB descarta array vazio (vira null) — se exigisse c.motos, transferência sem placa viraria chamado comum.
+function ehTransferencia(c){ return !!(c && c.origemFleet && (c.tipoMovimentacao || c.baseEntrega) && ((c.qtdMotos != null && c.qtdMotos > 0) || (c.motos && typeof c.motos === 'object'))); }
 function _placaDeSlot(m){ return !m ? '' : (typeof m === 'string' ? m : (m.placa || '')); }
 function qtdTransf(c){ if(c && c.qtdMotos != null) return c.qtdMotos; const m = c && c.motos; if(Array.isArray(m)) return m.length; if(m && typeof m === 'object') return Object.keys(m).length; return 0; }
 // motos[] pode vir do Firebase como ARRAY ou como OBJETO {0:..,2:..} (RTDB vira objeto quando esparso) — normaliza pra array denso de tamanho qtdMotos
@@ -3067,7 +3069,7 @@ function renderChamadoCard(){
     : '';
 
   // TRANSFERÊNCIA: banner de progresso das placas + botão de escanear (pré-início)
-  const transfBox = (ehTransferencia(c) && !c.iniciadoEm) ? `
+  const transfBox = (ehTransferencia(c) && (!c.iniciadoEm || placasFaltando(c) > 0)) ? `
     <div style="margin:12px 0;padding:12px;background:${placasFaltando(c)?'rgba(245,158,11,.12)':'rgba(22,163,74,.12)'};border:1px solid ${placasFaltando(c)?'#f59e0b':'#16a34a'};border-radius:12px">
       <div style="font-weight:800;font-size:13px;margin-bottom:5px">🚚 Transferência · ${esc(baseNomeColab(c.baseSaida))} → ${esc(baseNomeColab(c.baseEntrega))}</div>
       <div style="font-size:12px;color:var(--txt2);margin-bottom:9px">${motosCheias(c)} de ${qtdTransf(c)} placa(s) · ${placasFaltando(c)?`escaneie a(s) ${placasFaltando(c)} restante(s) pra liberar a rota`:'✓ todas escaneadas — pode iniciar'}</div>

@@ -1,6 +1,6 @@
 // Service Worker do Vammo Colaborador
 // Faz cache dos assets pra abrir offline + sobreviver a quedas de rede
-const CACHE_VERSION = 'vammo-colab-v76';
+const CACHE_VERSION = 'vammo-colab-v77';
 const CORE_ASSETS = [
   '/',
   '/colab',
