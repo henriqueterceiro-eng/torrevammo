@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v80 · 2026-08-17';
+const APP_VERSION = 'v81 · 2026-08-17';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1313,6 +1313,13 @@ function syncFilaFromSnapshot(data){
       if(!fb) continue;
       if(fb.status && fb.status !== c.status){ c.status = fb.status; anyChange = true; }
       if(fb.arrived && !c.arrived){ c.arrived = true; c.arrivedAt = fb.arrivedAt || Date.now(); anyChange = true; }
+      // BACKFILL de campos de TRANSFERÊNCIA: o evento chamado:atribuir chega SEM eles → ehTransferencia dava
+      // false e não pedia as placas. Completa do snapshot autoritativo (só preenche o que falta).
+      if(fb.origemFleet != null && c.origemFleet == null){ c.origemFleet = fb.origemFleet; anyChange = true; }
+      if(fb.qtdMotos != null && c.qtdMotos == null){ c.qtdMotos = fb.qtdMotos; anyChange = true; }
+      if(fb.tipoMovimentacao != null && c.tipoMovimentacao == null){ c.tipoMovimentacao = fb.tipoMovimentacao; anyChange = true; }
+      if(fb.baseSaida != null && c.baseSaida == null){ c.baseSaida = fb.baseSaida; anyChange = true; }
+      if(fb.baseEntrega != null && c.baseEntrega == null){ c.baseEntrega = fb.baseEntrega; anyChange = true; }
       // TRANSFERÊNCIA: reflete a descarga (libera Concluir) + placas de outra sessão (fora da janela de scan local)
       if(fb.descargaEm && !c.descargaEm){ c.descargaEm = fb.descargaEm; c.descargaBaseNome = fb.descargaBaseNome; c.descargaBaseId = fb.descargaBaseId; anyChange = true; }
       if(fb.motos && ehTransferencia(c) && !(c._motosLocalTs && (Date.now() - c._motosLocalTs < 20000))){ c.motos = fb.motos; anyChange = true; }
