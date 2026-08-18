@@ -10,20 +10,21 @@
 // Response (JSON): { ok, provider, placa, legivel, confianca, observacao }
 //   placa = 7 chars A-Z0-9 SEM hífen/espaço (ex: ABC1D23 Mercosul, ou ABC1234 antigo), ou "" se ilegível.
 
-const OPENAI_MODEL = 'gpt-4o-mini';
+const OPENAI_MODEL = 'gpt-4o';   // placa suja/ângulo ruim exige o modelo maior (o mini errava letra na 5ª posição)
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
 const PROMPT = [
-  'Você é um leitor de PLACAS de veículo brasileiras. A imagem é a foto da placa de uma MOTO.',
-  'Leia a placa. Formatos possíveis:',
-  '- Mercosul: 3 letras + 1 número + 1 letra + 2 números (ex: ABC1D23).',
-  '- Antigo: 3 letras + 4 números (ex: ABC1234).',
-  'Regras:',
-  '- Retorne a placa em MAIÚSCULAS, só letras e números, SEM hífen, espaço ou pontos (7 caracteres).',
-  '- Cuidado com confusões comuns: 0/O, 1/I, 5/S, 8/B, 2/Z — use a POSIÇÃO no formato pra decidir (posições 1-3 são letras; no Mercosul a 5ª é letra; as demais numéricas no antigo).',
-  '- Se a placa estiver ilegível (borrada, cortada, reflexo, suja demais, ângulo ruim), marque legivel=false e devolva placa="".',
+  'Você é um leitor de PLACAS de veículo brasileiras. A imagem é a foto da placa de uma MOTO (geralmente em 2 linhas: 3 caracteres em cima, 4 embaixo).',
+  'ESTRUTURA (use SEMPRE a posição pra decidir letra vs número):',
+  '- Mercosul (7 chars): posições 1,2,3 = LETRAS · posição 4 = NÚMERO · posição 5 = LETRA · posições 6,7 = NÚMEROS. Ex: ABC1D23.',
+  '- Antigo (7 chars): posições 1,2,3 = LETRAS · posições 4,5,6,7 = NÚMEROS. Ex: ABC1234.',
+  'REGRA DE OURO: numa posição que é LETRA, o resultado NUNCA pode ser dígito; numa posição que é NÚMERO, NUNCA pode ser letra. Se o traço estiver ambíguo, escolha o caractere do TIPO CERTO pra aquela posição.',
+  'Confusões frequentes (resolva pela posição): O↔0, I↔1, J↔1↔I, S↔5, B↔8, Z↔2, A↔4, G↔6, D↔0, U↔V. A 5ª posição (letra do Mercosul) é a que mais erra — olhe com atenção; um traço que parece "1" nessa posição é a letra I ou J.',
+  'SAÍDA:',
+  '- Retorne a placa em MAIÚSCULAS, só A-Z e 0-9, SEM hífen/espaço/ponto (exatamente 7 caracteres).',
+  '- Se estiver ilegível (borrada, cortada, reflexo, suja demais, ângulo ruim) OU você não tiver certeza dos 7 caracteres, marque legivel=false e placa="".',
   '- Se a imagem não tiver uma placa de veículo, legivel=false e placa="".',
-  '- confianca de 0 a 1 indicando o quanto você confia na leitura.'
+  '- confianca de 0 a 1 = o quanto você confia na leitura EXATA dos 7 caracteres (seja rigoroso: dúvida numa letra = confiança baixa).'
 ].join('\n');
 
 const FIELDS = {

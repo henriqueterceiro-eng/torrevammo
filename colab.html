@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v76 · 2026-08-17';
+const APP_VERSION = 'v77 · 2026-08-17';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -4248,6 +4248,12 @@ function bootApp(){
         }
       }
     }
+    // TRANSFERÊNCIA: a base de descarga já é a ALVO (baseEntrega) — vai DIRETO, sem escolher base.
+    const _ativo = fila[0];
+    if(_ativo && ehTransferencia(_ativo) && _ativo.baseEntrega && bases[_ativo.baseEntrega]){
+      entrarModoDescarga(_ativo.baseEntrega);
+      return;
+    }
     // Senão, abre seletor pra escolher qual base ir
     abrirModalBase(false);
   };
@@ -5408,8 +5414,9 @@ function checkInMoto(opts){
   saveTurno();
   syncTurnoToTorre();
   renderTopBar();
-  // Se ficou full agora, sugere ir pra base
-  if(isFull() && (!turnoAtivo || turnoAtivo.modo !== 'descarregando')){
+  // Se ficou full agora, sugere ir pra base — MAS não numa TRANSFERÊNCIA: aí a base já é a ALVO
+  // (baseEntrega), encher é esperado (carregando as motos) e a escolha de base NÃO deve aparecer.
+  if(isFull() && (!turnoAtivo || turnoAtivo.modo !== 'descarregando') && opts.source !== 'transferencia'){
     setTimeout(() => {
       vibrate([200, 100, 200]);
       playBeep();
