@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v81 · 2026-08-17';
+const APP_VERSION = 'v82 · 2026-08-19';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1282,7 +1282,12 @@ function syncFilaFromSnapshot(data){
       if(snap && !snap.motoristaId){   // existe mas ficou sem dono → re-reivindica pra torre não re-colocar
         // restaura status em_rota também: a desatribuição da torre reseta pra 'novo', mas o colab
         // está de fato a caminho — senão a torre mostra o chamado como novo sem dono.
-        try { firebase.database().ref('vammo/chamados/' + c.id).update({ motoristaId: me.id, motoristaNome: me.nome, motoristaPlaca: me.placa || '', status: 'em_rota' }); } catch(_){}
+        // ⛔ SÓ se a torre não tiver FECHADO o chamado: desatribuir + cancelar em sequência fazia este
+        // re-claim (em voo) gravar em_rota DEPOIS do cancelamento, ressuscitando o chamado cancelado.
+        chamadoAindaAberto(c.id).then(ok => {
+          if(!ok) return;
+          try { firebase.database().ref('vammo/chamados/' + c.id).update({ motoristaId: me.id, motoristaNome: me.nome, motoristaPlaca: me.placa || '', status: 'em_rota' }); } catch(_){}
+        });
       }
     }
     const removidosReais = removidos.filter(c => !protegidosIds.has(c.id));
@@ -1302,6 +1307,14 @@ function syncFilaFromSnapshot(data){
     } else if(removidosReais.length > 0){
       showToast(`Chamado(s) removido${removidosReais.length>1?'s':''} pela torre`);
       if(fila.length === 0) setStatus('online');
+    }
+
+    // Saiu da fila porque a torre FECHOU (cancelou/concluiu)? Então mata também corrida, modais e
+    // modo descarga — tirar da fila não bastava (era o furo do "cancelei e o colab seguiu pra rota").
+    for(const c of removidosReais){
+      const fbc = data[c.id];
+      const stf = (fbc && (fbc.status === 'cancelado' || fbc.status === 'concluido')) ? fbc.status : null;
+      if(stf && !_concluidosIds.has(c.id)) chamadoFechadoPelaTorre(c.id, stf, c);
     }
 
     afterFilaChange();
@@ -2035,6 +2048,10 @@ function distInicioAMoto(chamado){
 }
 function onIniciarConfirmado(chamado){
   if(!gateTransferencia(chamado)) return;   // TRANSFERÊNCIA: exige todas as placas escaneadas antes de iniciar
+  // ⛔ TRAVA DE CANCELAMENTO: chamado fechado pela torre não inicia atendimento
+  chamadoAindaAberto(chamado.id).then(ok => { if(ok) _onIniciarConfirmadoOk(chamado); });
+}
+function _onIniciarConfirmadoOk(chamado){
   // SEM gatekeeping da torre: o colaborador SEMPRE pode iniciar. Se estiver longe do alvo
   // (endereço OU moto), só AVISA e deixa REGISTRADO — a torre é notificada, não autoriza.
   const dAddr = distInicioAoLocal(chamado);
@@ -3411,6 +3428,88 @@ function persistRotina(c){
   } catch(_){}
 }
 
+// ===== CHAMADO FECHADO PELA TORRE (cancelado/concluído) =====
+// A torre cancela gravando status no chamado + no livro-razão vammo/chamados_fechados (nó que
+// nenhuma sync re-escreve). Antes desta versão o cancelamento só tirava o chamado da FILA pelo
+// snapshot: a corrida, a rota, os modais abertos e — no caso de TRANSFERÊNCIA (Fleet) — o MODO
+// DESCARGA (que vive no TURNO, não no chamado) continuavam de pé, então o colab seguia viagem
+// com o chamado cancelado. Aqui o fechamento mata todo o estado de uma vez.
+const _fechadoAlertado = new Set();   // não alertar 2x (evento + snapshot chegam juntos)
+function chamadoFechadoPelaTorre(chamadoId, status, cRef){
+  const idx = fila.findIndex(c => c.id === chamadoId);
+  const c = cRef || (idx >= 0 ? fila[idx] : null);
+  const eraAtivo = idx === 0 || !!(currentRide && currentRide.chamadoId === chamadoId);
+  if(idx >= 0) fila.splice(idx, 1);
+  // 1) fecha modais presos nesse chamado (o colab podia concluir o slide já com ele cancelado)
+  try { fecharModalIniciar(); } catch(_){}
+  try { fecharProxModal(); } catch(_){}
+  try { fecharModalCarga(); } catch(_){}
+  try { const ov = document.getElementById('placasModal'); if(ov) ov.remove(); } catch(_){}
+  // 2) encerra a corrida em curso (GPS/nota não ficam amarrados num chamado morto)
+  if(currentRide && currentRide.chamadoId === chamadoId){ try { rideFinalize('cancelado'); } catch(_){} }
+  // 3) TRANSFERÊNCIA: desliga a rota vermelha pra base de ENTREGA (estado do turno, não do chamado)
+  if(c && turnoAtivo && turnoAtivo.modo === 'descarregando' && c.baseEntrega && turnoAtivo.baseDestinoId === c.baseEntrega){
+    try { sairModoDescarga(); } catch(_){}
+  }
+  if(fila.length === 0) setStatus('online');
+  try { afterFilaChange(); } catch(_){}
+  if(_fechadoAlertado.has(chamadoId)) return;
+  _fechadoAlertado.add(chamadoId);
+  const txt = status === 'cancelado' ? 'CANCELADO' : 'ENCERRADO';
+  vibrate([200, 80, 200, 80, 200]);
+  showToast('⛔ Chamado ' + txt + ' pela torre', true);
+  setTimeout(() => {
+    try {
+      alert('⛔ CHAMADO ' + txt + ' PELA TORRE\n\n' + ((c && c.cliente) ? c.cliente + '\n\n' : '') +
+            'NÃO siga para a rota / não continue este atendimento.' +
+            (eraAtivo ? '\n\nEle saiu da sua fila agora.' : '') +
+            ((turnoAtivo && slotsCount() > 0) ? '\n\nSe já tem moto a bordo, fale com a torre antes de descarregar.' : ''));
+    } catch(_){}
+  }, 60);
+}
+
+// Confere no BANCO se o chamado ainda está aberto, ANTES de sair pra rota / iniciar atendimento.
+// Regra: só BLOQUEIA com resposta definitiva de "fechado". Erro, timeout ou app offline LIBERA —
+// nunca travar o colab na rua por falta de rede.
+function chamadoAindaAberto(chamadoId){
+  try {
+    if(typeof firebase === 'undefined' || !firebase.apps?.length) return Promise.resolve(true);
+    const db = firebase.database();
+    const race = pr => Promise.race([pr, new Promise(r => setTimeout(() => r(null), 2500))]);
+    return Promise.all([
+      race(db.ref('vammo/chamados_fechados/' + chamadoId).once('value')).catch(() => null),
+      race(db.ref('vammo/chamados/' + chamadoId + '/status').once('value')).catch(() => null)
+    ]).then(([fs, ss]) => {
+      const f = (fs && typeof fs.val === 'function') ? fs.val() : null;
+      const st = (ss && typeof ss.val === 'function') ? ss.val() : null;
+      const fechado = (f && (f.status === 'cancelado' || f.status === 'concluido')) ? f.status
+                    : ((st === 'cancelado' || st === 'concluido') ? st : null);
+      if(fechado && !_concluidosIds.has(chamadoId)){ chamadoFechadoPelaTorre(chamadoId, fechado); return false; }
+      return true;
+    }).catch(() => true);
+  } catch(_){ return Promise.resolve(true); }
+}
+
+// Grava o "em rota" de fato — chamado por handleAction / iniciarProximoAtendimento DEPOIS da trava.
+function _seguirEmRota(chamadoId){
+  const ativo = fila[0];
+  if(!ativo || ativo.id !== chamadoId) return;   // fila mudou enquanto a trava consultava o banco
+  ativo.status = 'em_rota';
+  setStatus('busy');
+  vibrate(50);
+  rideMarkEnRoute();
+  sync.send('chamado:status', { chamadoId: ativo.id, status: 'em_rota', motoristaId: me.id });
+  // Nó autoritativo direto → torre + app do cliente veem na hora (não dependem do evento)
+  try {
+    if(typeof firebase !== 'undefined' && firebase.apps?.length){
+      firebase.database().ref('vammo/chamados/' + ativo.id)
+        .update({ status: 'em_rota', emRotaEm: Date.now(), motoristaId: me.id }).catch(()=>{});
+    }
+  } catch(_){}
+  renderChamadoCard();
+  updateChamadoMarkers();
+}
+
 function handleAction(act){
   if(fila.length === 0) return;
   const ativo = fila[0];
@@ -3425,20 +3524,9 @@ function handleAction(act){
 
   if(act === 'em_rota'){
     // (transferência: "ir até a base de saída" NÃO é gated — o gate fica no INICIAR A ENTREGA, após escanear na base)
-    ativo.status = 'em_rota';
-    setStatus('busy');
-    vibrate(50);
-    rideMarkEnRoute();
-    sync.send('chamado:status', { chamadoId: ativo.id, status: 'em_rota', motoristaId: me.id });
-    // Nó autoritativo direto → torre + app do cliente veem na hora (não dependem do evento)
-    try {
-      if(typeof firebase !== 'undefined' && firebase.apps?.length){
-        firebase.database().ref('vammo/chamados/' + ativo.id)
-          .update({ status: 'em_rota', emRotaEm: Date.now(), motoristaId: me.id }).catch(()=>{});
-      }
-    } catch(_){}
-    renderChamadoCard();
-    updateChamadoMarkers();
+    // ⛔ TRAVA DE CANCELAMENTO: sem ela o app gravava status:'em_rota' de volta no nó e RESSUSCITAVA
+    // um chamado que a torre já tinha cancelado (a torre mostrava cancelado e o colab ia pra rua).
+    chamadoAindaAberto(ativo.id).then(ok => { if(ok) _seguirEmRota(ativo.id); });
     return;
   }
 
@@ -3702,21 +3790,13 @@ function fecharProxModal(){ document.getElementById('proxModal').style.display =
 function iniciarProximoAtendimento(){
   if(fila.length === 0){ fecharProxModal(); return; }
   const ativo = fila[0];
-  ativo.status = 'em_rota';
-  setStatus('busy');
-  vibrate(50);
-  rideMarkEnRoute();
-  sync.send('chamado:status', { chamadoId: ativo.id, status: 'em_rota', motoristaId: me.id });
-  try {
-    if(typeof firebase !== 'undefined' && firebase.apps?.length){
-      firebase.database().ref('vammo/chamados/' + ativo.id)
-        .update({ status: 'em_rota', emRotaEm: Date.now(), motoristaId: me.id }).catch(()=>{});
-    }
-  } catch(_){}
-  fecharProxModal();
-  renderChamadoCard();
-  updateChamadoMarkers();
-  if(myPos) updateRoute();
+  // ⛔ mesma trava de cancelamento do handleAction — não sair pra rota em chamado fechado pela torre
+  chamadoAindaAberto(ativo.id).then(ok => {
+    fecharProxModal();
+    if(!ok) return;
+    _seguirEmRota(ativo.id);
+    if(myPos) updateRoute();
+  });
 }
 
 function confirmarPausaProx(){
@@ -3976,10 +4056,16 @@ function confirmarDescarga(){
       if(typeof firebase !== 'undefined' && firebase.apps?.length){
         const db = firebase.database();
         const _dEm = Date.now();
+        const _patch = { descargaBaseId: _descBase.id, descargaBaseNome: _descBase.nome, descargaEm: _dEm };
         aSair.forEach(s => {
           if(s && s.chamadoId){
-            db.ref('vammo/chamados/' + s.chamadoId).update({
-              descargaBaseId: _descBase.id, descargaBaseNome: _descBase.nome, descargaEm: _dEm
+            // ⚠ NÃO usar update() cego: a faxina diária da torre arquiva o chamado em chamados_hist e
+            // apaga do nó vivo. update() em nó inexistente RECRIA o chamado com só estes 3 campos →
+            // aparecia na torre como chamado FANTASMA ("?" · NOVO · NaN:NaN). Descarregar hoje uma moto
+            // recolhida ontem cai exatamente nesse caso. Sem nó vivo, grava no hist.
+            db.ref('vammo/chamados/' + s.chamadoId + '/ts').once('value').then(sn => {
+              const alvo = sn.exists() ? ('vammo/chamados/' + s.chamadoId) : ('vammo/chamados_hist/' + s.chamadoId);
+              db.ref(alvo).update(_patch).catch(()=>{});
             }).catch(()=>{});
             // reflete no objeto LOCAL da fila — rotinaCompleta/transferência lê descargaEm daqui (senão Concluir trava)
             const lc = fila.find(x => x.id === s.chamadoId);
@@ -4087,6 +4173,18 @@ function setupSyncListeners(){
     if(fila.length === 0) setStatus('online');
     showToast(wasActive ? 'Chamado ativo removido pela torre' : 'Chamado removido da fila');
     afterFilaChange();
+  });
+
+  // Torre CANCELOU / CONCLUIU pela torre (updateStatus → sync 'chamado:status_torre').
+  // Este evento existia mas o colab NÃO o escutava: o cancelamento só chegava pelo snapshot de
+  // chamados e não matava corrida/rota/modo-descarga → colab seguia pra rota com chamado cancelado.
+  sync.on('chamado:status_torre', (data) => {
+    if(!me || !data || !data.chamadoId) return;
+    if(data.status !== 'cancelado' && data.status !== 'concluido') return;
+    if(_concluidosIds.has(data.chamadoId)) return;                 // fui eu que concluí
+    const meu = fila.some(x => x.id === data.chamadoId) || !!(currentRide && currentRide.chamadoId === data.chamadoId);
+    if(!meu) return;
+    chamadoFechadoPelaTorre(data.chamadoId, data.status);
   });
 
   // Torre reordenou a fila

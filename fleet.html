@@ -349,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v15 · 2026-08-17';
+const FLEET_VERSION = 'v16 · 2026-08-19';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -540,6 +540,8 @@ function card(c, etapaN){
   const aguard = c.clienteAguardando===true;
   const motos = Array.isArray(c.motos) ? c.motos : (c.motos && typeof c.motos === 'object' ? Object.assign([], c.motos) : null);
   const badges=[];
+  // CANCELADO: sem isto o chamado cancelado caía calado na coluna "Concluídos" e parecia finalizado.
+  if(c.status==='cancelado') badges.push(`<span class="b" style="background:rgba(220,38,38,.22);border:1px solid #dc2626;color:#fca5a5;font-weight:800">✕ CANCELADO</span>`);
   if(aguard) badges.push(`<span class="b b-aguard">🙋 AGUARDANDO</span>`);
   const nSlots = c.qtdMotos!=null ? c.qtdMotos : (motos?motos.length:0);
   const nCheias = motos ? motos.filter(m=>m&&m.placa).length : 0;
@@ -845,6 +847,7 @@ const STAGE_DEFS = [
   {ic:'✅', label:'Concluído',              get:(c,r)=>c.concluidoEm||(r&&r.completedTs)}
 ];
 function detStatusChip(c){
+  if(c.status==='cancelado') return `<span class="det-chip" style="background:#dc2626;color:#fff">✕ Cancelado</span>`;
   if(ehTransf(c) && (c.descargaEm||c.descargaBaseNome) && c.status!=='cancelado'){
     return `<span class="det-chip" style="background:#16a34a;color:#04121e">✅ Entregue</span>`;
   }

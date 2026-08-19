@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v81 · 2026-08-17'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v112 · 2026-08-17';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v113 · 2026-08-19';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1594,6 +1594,12 @@ setInterval(pruneEvents, 120000);
 // Efeito duplo: (1) limpa a poluição da lista, (2) impede o nó de inchar de novo (raiz do travamento).
 // SEGURO: o Relatório NÃO usa chamados finalizados (lê de `corridas`), então nada some do relatório.
 // NUNCA toca em chamado ATIVO (em_rota, ou novo COM motorista, ou finalizado de HOJE).
+// NÓ FANTASMA / RESÍDUO: um update() cego em chamado JÁ ARQUIVADO pela faxina recria o nó só com
+// os campos do update (ex.: o colab descarrega hoje uma moto recolhida ontem → o nó volta com
+// descargaBaseId/descargaBaseNome/descargaEm). Sem ts/cliente/motivo não é chamado: aparecia na
+// lista como "?" · NOVO · NaN:NaN. A torre ignora no render e a faxina junta no hist e limpa.
+function ehResiduoChamado(c){ return !!c && !c.ts && !c.cliente && !c.motivo; }
+
 async function faxinaChamados(manual){
   if(typeof firebase === 'undefined' || !firebase.apps?.length) throw new Error('Firebase desconectado');
   const agora = Date.now();
@@ -1609,11 +1615,19 @@ async function faxinaChamados(manual){
     if(c.status === 'novo' && !c.motoristaId && (c.ts || 0) < cutNovo) return true;
     return false;
   });
+  // Fantasmas (não estão em `chamados` — o render os ignora): entram na faxina pra sair do nó vivo.
+  for(const r of (window._residuoChamados || [])){ if(r && r.id) alvos.push(r); }
   if(!alvos.length) return 0;
   const updates = {};
   for(const c of alvos){
     const limpo = {}; for(const k in c){ if(k[0] !== '_') limpo[k] = c[k]; }   // tira props de runtime
     limpo.arquivadoEm = agora;
+    if(ehResiduoChamado(c)){
+      // resíduo: MERGE campo a campo no hist (um set apagaria o chamado real já arquivado lá)
+      for(const k in limpo){ if(k !== 'id') updates['chamados_hist/' + c.id + '/' + k] = limpo[k]; }
+      updates['chamados/' + c.id] = null;
+      continue;
+    }
     updates['chamados_hist/' + c.id] = limpo;
     updates['chamados/' + c.id] = null;
     // chamados_fechados (livro-razão) é mantido de propósito: rede de segurança se o id reaparecer.
@@ -7563,7 +7577,10 @@ function setupStoreListeners(){
     onChamadosSnapshot: (data) => {
       // data = { id1: chamado1, id2: chamado2, ... }
       const ids = Object.keys(data);
-      const novosArr = Object.values(data);
+      const novosArr = Object.values(data).filter(ch => !ehResiduoChamado(ch));   // sem nós fantasma
+      // Fantasmas ficam FORA da lista/render, mas guardados COM a chave pra faxina tirar do nó vivo
+      // (o nó fantasma não tem campo `id` — ele nunca foi criado por saveChamado).
+      window._residuoChamados = Object.entries(data).filter(([, ch]) => ehResiduoChamado(ch)).map(([id, ch]) => ({ ...ch, id }));
       // Reconstrói chamados mantendo ordem por ts desc
       const byTs = novosArr.slice().sort((a,b) => (b.ts||0) - (a.ts||0));
       // Detecta novos: os que precisam de ACEITE tocam + entram no overlay de slide;
