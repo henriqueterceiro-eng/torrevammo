@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v82 · 2026-08-19';
+const APP_VERSION = 'v83 · 2026-08-21';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -4299,6 +4299,54 @@ function cancelPresence(){   // chamado no checkout/logout intencional (evita n�
   try { if(_heartbeatTimer){ clearInterval(_heartbeatTimer); _heartbeatTimer = null; } } catch(_){}   // para de recriar o nó após o .remove() do checkout
 }
 
+// ===== BAIXA DURÁVEL DA TELEMETRIA (checkout / logout intencional) =====
+// 🔴 BUG "colab deslogado fica pra sempre no mapa" (medido 21/08/2026: 9 nós vazados, o mais velho
+// de 4,4 dias). O fluxo antigo era: cancelPresence() → remove() FIRE-AND-FORGET → reload em 800ms.
+// Duas falhas somadas: (1) cancelPresence CANCELA o onDisconnect, que é o ÚNICO escritor de
+// online:false no sistema (a torre só lê vammo/motoristas, nunca escreve); (2) o remove() não era
+// aguardado e o reload matava o write pendente. Resultado: nó colado em {online:true,status:'online'}
+// sem ninguém que volte a marcá-lo offline — e online:true é AUTORITATIVO sobre o TTL na torre, então
+// o colab que já deu baixa continuava plotado VERDE (contando na legenda e atribuível) por até 3h,
+// voltando em todo resync. Assinatura do bug: turno ativo:false + motoristas.online:true (os colabs
+// saudáveis ficam com online:false, escrito pelo onDisconnect — a inversão é o que denuncia).
+// Ordem à prova de queda; cada passo tem prazo curto e NUNCA trava o colab:
+//   1) mata GPS + heartbeats (senão eles RECRIAM o nó depois do remove);
+//   2) re-arma o onDisconnect como INERTE (status:'off') em vez de cancelar — se a página morrer no
+//      meio, o SERVIDOR marca off e a torre descarta no próximo resync, sem depender da rede do celular.
+//      NÃO usa onDisconnect().remove(): se o motorista relogar em poucos segundos, o remove atrasado
+//      apagaria o nó da sessão NOVA;
+//   3) grava status:'off' + online:false agora (nó sobrevivente já nasce inerte);
+//   4) DELETE via REST com keepalive (sobrevive ao unload) + remove() do SDK, aguardados;
+//   5) confirma: se o nó sumiu, desarma o onDisconnect (senão ele recria um nó inerte no reload).
+async function baixarTelemetria(){
+  const prazo = (p, ms) => Promise.race([ Promise.resolve(p).catch(() => null), new Promise(r => setTimeout(r, ms)) ]);
+  try { stopGPS(); } catch(_){}
+  try { if(_heartbeatTimer){ clearInterval(_heartbeatTimer); _heartbeatTimer = null; } } catch(_){}
+  try { if(_presenceConn) _presenceConn.off(); } catch(_){}
+  if(!me || !me.id) return;
+  if(typeof firebase === 'undefined' || !firebase.apps?.length) return;
+  const inerteAgora = { status: 'off', online: false, offlineAt: Date.now() };
+  let armado = false;
+  try {
+    if(_presenceRef){
+      await prazo(_presenceRef.onDisconnect().update({ status: 'off', online: false, offlineAt: firebase.database.ServerValue.TIMESTAMP }), 1200);
+      armado = true;
+    }
+  } catch(_){}
+  const ref = firebase.database().ref('vammo/motoristas/' + me.id);
+  try { await prazo(ref.update(inerteAgora), 1200); } catch(_){}
+  try { await prazo(fetch(FIREBASE_CONFIG.databaseURL + '/vammo/motoristas/' + me.id + '.json', { method: 'DELETE', keepalive: true }), 1500); } catch(_){}
+  try { await prazo(ref.remove(), 1200); } catch(_){}
+  // Só desarma a rede de segurança se o nó REALMENTE sumiu. Se a leitura falhar/expirar, deixa
+  // armado (fail-safe: prefere um nó inerte a um nó online:true).
+  try {
+    const snap = await prazo(ref.once('value'), 1200);
+    if(armado && snap && typeof snap.exists === 'function' && !snap.exists()){
+      await prazo(_presenceRef.onDisconnect().cancel(), 800);
+    }
+  } catch(_){}
+}
+
 // ====================== BOLINHA FLUTUANTE (overlay nativo, estilo Uber) ======================
 // Só existe no APP NATIVO (plugin VammoBubble). No web/PWA não faz nada. Pede a permissão
 // "Exibir sobre outros apps" 1x (amigável) e habilita; o nativo mostra/esconde a bolinha sozinho
@@ -5548,9 +5596,9 @@ async function finalizarCheckOut(){
   try { if(turnoAtivo?.turnoId) db.ref('vammo/turnos_hist/' + me.id + '/' + turnoAtivo.turnoId).update(_checkOut).catch(()=>{}); } catch(_){}
   // Logout + reload
   if(sync) sync.send('motorista:logout', { id: me.id });
-  // Remove o nó de telemetria pra sumir do mapa da torre na hora (não fica fantasma)
-  try { cancelPresence(); } catch(_){}   // cancela onDisconnect antes de remover (senão recria {online:false})
-  try { if(typeof firebase !== 'undefined' && firebase.apps?.length && me) firebase.database().ref('vammo/motoristas/' + me.id).remove(); } catch(_){}
+  // Baixa DURÁVEL do nó de telemetria (ver baixarTelemetria): era aqui que nascia o colab
+  // fantasma, que seguia plotado como ONLINE no mapa da torre depois de dar baixa no turno.
+  await baixarTelemetria();
   if(watchId) navigator.geolocation.clearWatch(watchId);
   if(wakeLock && !wakeLock.released){ try{ await wakeLock.release(); }catch(_){} }
   clearMe();
@@ -6202,8 +6250,7 @@ async function encerrarTurno(){
 async function encerrarTurnoOrfao(){
   try { await encerrarTurno(); } catch(err){ console.warn('encerrarTurnoOrfao:', err); }
   try { if(sync) sync.send('motorista:logout', { id: me.id }); } catch(_){}
-  try { cancelPresence(); } catch(_){}
-  try { if(typeof firebase !== 'undefined' && firebase.apps?.length && me) firebase.database().ref('vammo/motoristas/' + me.id).remove(); } catch(_){}
+  try { await baixarTelemetria(); } catch(_){}   // mesma baixa durável do checkout normal
   try { if(watchId) navigator.geolocation.clearWatch(watchId); } catch(_){}
   try { if(wakeLock && !wakeLock.released){ await wakeLock.release(); } } catch(_){}
   clearMe();
