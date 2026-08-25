@@ -349,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v17 · 2026-08-25';
+const FLEET_VERSION = 'v18 · 2026-08-25';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -678,10 +678,12 @@ function motosValidas(){ return wiz.motos.filter(m => m.placa && ['ok','forabase
 // BOLSÃO DE RETIRADA — onde, DENTRO da base de saída, as motos estão estacionadas. Escolha ÚNICA
 // por chamado (pedido do Terceiro, 25/08/2026): o colab precisa saber pra onde ir dentro do pátio,
 // e a torre precisa ver isso sem abrir o chamado. Pra acrescentar bolsão, é só somar nesta lista.
+// CORRIGIDO 25/08/2026 (Terceiro): são DOIS bolsões, não três — e o nome carrega o pátio.
+// A chave é a IDENTIDADE do bolsão (a função) e o rótulo diz onde ele está hoje: se a Ativação
+// mudar de pátio, muda só o `t` e todo chamado antigo continua fazendo sentido.
 const BOLSOES = [
-  { k: 'ativacao', t: 'Pátio Ativação' },
-  { k: 'pronta',   t: 'Pronta entrega' },
-  { k: 'patio3',   t: 'Pátio 3' },
+  { k: 'pronta',   t: 'Pronta-entrega — Pátio 1' },
+  { k: 'ativacao', t: 'Ativação — Pátio 3' },
 ];
 function bolsaoLabel(k){ const b = BOLSOES.find(x => x.k === k); return b ? b.t : (k || ''); }
 function qtdTotal(){ return (wiz ? ((wiz.qtdCPX|0) + (wiz.qtdComfort|0)) : 0); }
