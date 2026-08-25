@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v83 · 2026-08-21';
+const APP_VERSION = 'v85 · 2026-08-25';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1042,9 +1042,16 @@ function setupChamadosListener(){
       console.log('[colab] ordem da fila sincronizada pela torre:', queueOrder.length, 'itens');
       applyQueueOrder();
     });
-    firebase.database().ref('vammo/turnos/' + me.id).on('value', snap => {
-      const remote = snap.val();
-      if(!remote || !turnoAtivo) return;
+    // ⚠ CONSUMO: este listener assinava o turno INTEIRO (1,0 a 1,64 MB, por causa das fotos do
+    // check-in) e o corpo abaixo usa UM campo: slotsOcupados (~32 bytes). Agora assina só o campo.
+    // O objeto `remote` é sintético pra não mudar nada no corpo do handler. Dois cuidados:
+    //  (a) valor null (a torre removeu a ÚLTIMA moto) tem que virar [] e SEGUIR — se caísse no
+    //      guard, o colab ficaria com a moto fantasma no slot;
+    //  (b) RTDB devolve OBJETO quando o array não é denso → normaliza pra array.
+    firebase.database().ref('vammo/turnos/' + me.id + '/slotsOcupados').on('value', snap => {
+      if(!turnoAtivo) return;
+      const _rs = snap.val();
+      const remote = { slotsOcupados: Array.isArray(_rs) ? _rs : (_rs ? Object.assign([], _rs) : []) };
       // BLINDAGEM "descarreguei mas voltou cheio": remove do remoto as motos que o colab acabou de
       // DESCARREGAR. Sem isso, um snapshot stale (write que não pegou por rede/GPS) repunha a moto e
       // o pill voltava a 5/5 (chegava até a vibrar "Moto registrada pela torre").
@@ -1333,6 +1340,10 @@ function syncFilaFromSnapshot(data){
       if(fb.tipoMovimentacao != null && c.tipoMovimentacao == null){ c.tipoMovimentacao = fb.tipoMovimentacao; anyChange = true; }
       if(fb.baseSaida != null && c.baseSaida == null){ c.baseSaida = fb.baseSaida; anyChange = true; }
       if(fb.baseEntrega != null && c.baseEntrega == null){ c.baseEntrega = fb.baseEntrega; anyChange = true; }
+      if(fb.qtdCPX != null && c.qtdCPX == null){ c.qtdCPX = fb.qtdCPX; anyChange = true; }
+      if(fb.qtdComfort != null && c.qtdComfort == null){ c.qtdComfort = fb.qtdComfort; anyChange = true; }
+      if(fb.bolsao != null && c.bolsao == null){ c.bolsao = fb.bolsao; anyChange = true; }
+      if(fb.bolsaoNome != null && c.bolsaoNome == null){ c.bolsaoNome = fb.bolsaoNome; anyChange = true; }
       // TRANSFERÊNCIA: reflete a descarga (libera Concluir) + placas de outra sessão (fora da janela de scan local)
       if(fb.descargaEm && !c.descargaEm){ c.descargaEm = fb.descargaEm; c.descargaBaseNome = fb.descargaBaseNome; c.descargaBaseId = fb.descargaBaseId; anyChange = true; }
       if(fb.motos && ehTransferencia(c) && !(c._motosLocalTs && (Date.now() - c._motosLocalTs < 20000))){ c.motos = fb.motos; anyChange = true; }
@@ -1664,6 +1675,35 @@ function motosArr(c){ const src = (c && c.motos && typeof c.motos === 'object') 
 function motosCheias(c){ return motosArr(c).filter(m => _placaDeSlot(m).trim()).length; }
 function placasFaltando(c){ if(!ehTransferencia(c)) return 0; return Math.max(0, qtdTransf(c) - motosCheias(c)); }
 function todasPlacasPreenchidas(c){ return !ehTransferencia(c) || placasFaltando(c) === 0; }
+// ===== QUOTA POR CATEGORIA (Fleet, 25/08/2026) =====
+// O chamado de Fleet declara quantas CPX e quantas Comfort. O colab NÃO pode carregar mais de uma
+// categoria do que foi declarado (se o chamado pede 5 CPX, a 6ª CPX é recusada no escaneamento).
+// Chamado antigo (sem qtdCPX/qtdComfort) fica sem trava por categoria — só o total, como antes.
+function quotaCat(c){
+  if(!c) return null;
+  if(c.qtdCPX == null && c.qtdComfort == null) return null;
+  return { CPX: (c.qtdCPX|0), COMFORT: (c.qtdComfort|0) };
+}
+function contaCat(c, ignoraIdx){
+  const out = { CPX:0, COMFORT:0, INDEF:0 };
+  motosArr(c).forEach((m, j) => {
+    if(j === ignoraIdx || !m || !_placaDeSlot(m)) return;
+    const cat = (m && m.categoria === 'CPX') ? 'CPX' : ((m && m.categoria === 'COMFORT') ? 'COMFORT' : 'INDEF');
+    out[cat]++;
+  });
+  return out;
+}
+// Linha "CPX 2/5 · Comfort 0/2" pro card e pro modal — o colab vê o que falta de cada categoria.
+function resumoQuota(c){
+  const q = quotaCat(c); if(!q) return '';
+  const t = contaCat(c, -1);
+  const p = [];
+  if(q.CPX) p.push(`CPX ${t.CPX}/${q.CPX}`);
+  if(q.COMFORT) p.push(`Comfort ${t.COMFORT}/${q.COMFORT}`);
+  if(t.INDEF) p.push(`${t.INDEF} sem categoria`);
+  return p.join(' · ');
+}
+function bolsaoDoChamado(c){ return (c && (c.bolsaoNome || c.bolsao)) || ''; }
 function catComfortCpxColab(modelo){ const m = (modelo||'').toUpperCase(); if(m.includes('CPX')) return 'CPX'; if(m.includes('COMFORT')) return 'COMFORT'; return null; }
 function baseNomeColab(id){ return (typeof bases !== 'undefined' && bases && bases[id] && bases[id].nome) ? bases[id].nome : (id || '—'); }
 
@@ -1729,6 +1769,8 @@ function renderPlacasModal(chamadoId){
       <button id="placasClose" style="background:transparent;border:1px solid var(--bdr);color:var(--txt2);border-radius:8px;padding:4px 10px;font-size:18px">×</button>
     </div>
     <div style="font-size:12px;color:var(--txt2);margin-bottom:4px">${esc(baseNomeColab(c.baseSaida))} → <b style="color:var(--acc)">${esc(baseNomeColab(c.baseEntrega))}</b></div>
+    ${bolsaoDoChamado(c) ? `<div style="font-size:12.5px;font-weight:800;color:#c4b5fd;margin-bottom:4px">📍 Retirar no ${esc(bolsaoDoChamado(c))}</div>` : ''}
+    ${resumoQuota(c) ? `<div style="font-size:12px;font-weight:700;margin-bottom:4px">🏍 ${esc(resumoQuota(c))}</div>` : ''}
     <div style="font-size:12px;font-weight:800;color:${faltam?'#fbbf24':'#4ade80'};margin-bottom:12px">${n-faltam} de ${n} placa(s)${faltam?` · faltam ${faltam}`:' ✓'}</div>
     ${slots}
     <button id="placasDone" ${faltam?'disabled':''} style="width:100%;margin-top:6px;background:${faltam?'var(--surf2)':'#16a34a'};border:none;color:#fff;border-radius:12px;padding:14px;font-weight:800;font-size:14px;${faltam?'opacity:.5':''}">${faltam? `Escaneie a(s) ${faltam} placa(s) restante(s)` : '✓ Pronto — pode iniciar a rota'}</button>
@@ -1826,12 +1868,36 @@ async function validarEGravarPlaca(chamadoId, idx, placaRaw, stat){
   try { lk = await (await fetch('/api/moto_lookup?placa=' + encodeURIComponent(placa))).json(); } catch(_){ lk = null; }
   if(lk && lk.found === false){ if(stat) stat.innerHTML = `⚠ placa <b>${esc(placa)}</b> não encontrada no backoffice Vammo — confira e re-escaneie`; return; }
   const modelo = (lk && lk.modelo) || '', status = (lk && lk.status) || '';
+  // ⛔ TRAVA POR CATEGORIA: o chamado declara quantas CPX e quantas Comfort; não deixa carregar além.
+  const _cat = catComfortCpxColab(modelo);
+  const _q = quotaCat(c);
+  if(_q && _cat){
+    const _ja = contaCat(c, idx);
+    if(_ja[_cat] >= _q[_cat]){
+      if(stat) stat.innerHTML = `⛔ este chamado pede <b>${_q[_cat]} ${_cat}</b> e você já escaneou <b>${_ja[_cat]}</b>.<br>A placa <b>${esc(placa)}</b> é <b>${_cat}</b> (${esc(modelo||'modelo —')}) — fale com a torre antes de carregar.`;
+      vibrate([200,80,200]);
+      return;
+    }
+  }
+  // Modelo que não é CPX nem Comfort. Medido na frota em 25/08/2026: 651 motos em 14 modelos
+  // (VMOTO VS1, EVS, NIU, Tinbot, Yadea…) fora dos dois produtos de locação. Nesse caso a moto não
+  // pode contar em nenhuma das duas quotas, então NÃO passa calada: exige confirmação explícita do
+  // motorista e fica marcada no chamado (categoriaIndefinida) pra torre ver. Travar de vez pararia
+  // o motorista na rua; passar em silêncio quebraria a contagem que o chamado declarou.
+  if(_q && !_cat){
+    if(!confirm('⚠ A moto ' + placa + ' é ' + (modelo || 'de modelo não identificado') + ' — não é CPX nem Comfort.\n\n' +
+                'Este chamado pede ' + (_q.CPX||0) + ' CPX e ' + (_q.COMFORT||0) + ' Comfort, então ela não entra em nenhuma das contas.\n\n' +
+                'Confirme com a torre antes de carregar. Carregar mesmo assim?')){
+      if(stat) stat.innerHTML = '⚠ carregamento cancelado — fale com a torre sobre a placa <b>' + esc(placa) + '</b>';
+      return;
+    }
+  }
   // vira slot de carga (pra descarga funcionar) — respeita isFull
   if(!checkInMoto({ source:'transferencia', chamadoId: c.id, placa })){
     if(stat) stat.innerHTML = '⚠ seu veículo está cheio — descarregue antes de continuar';
     return;
   }
-  const slot = { placa, modelo: modelo||null, motoStatus: status||null, categoria: catComfortCpxColab(modelo), deposito:(lk&&lk.deposito)||null, found: !!(lk&&lk.found), scannedByColab: true, ocupadoEm: Date.now() };
+  const slot = { placa, modelo: modelo||null, motoStatus: status||null, categoria: _cat, categoriaIndefinida: (_q && !_cat) ? true : null, deposito:(lk&&lk.deposito)||null, found: !!(lk&&lk.found), scannedByColab: true, ocupadoEm: Date.now() };
   const arr = motosArr(c); arr[idx] = slot; c.motos = arr; c._motosLocalTs = Date.now();
   // grava o ARRAY DENSO inteiro (slots vazios = {vazio:true}) pra o Firebase nunca virar objeto esparso
   const denso = arr.map(m => (m && _placaDeSlot(m)) ? m : { vazio: true });
@@ -2664,7 +2730,9 @@ function writeMotoristaNode(extra){
   // pausa em background. É o que faz a posição chegar na torre com o app atrás (Waze na frente).
   try {
     if(FIREBASE_CONFIG.databaseURL){
-      fetch(FIREBASE_CONFIG.databaseURL + '/vammo/motoristas/' + me.id + '.json',
+      // ?print=silent → o Firebase responde 204 sem corpo. Sem isso ele ECOA o payload inteiro
+      // de volta em cada posição (medido: PATCH de 287 B → resposta de 287 B), dobrando o custo.
+      fetch(FIREBASE_CONFIG.databaseURL + '/vammo/motoristas/' + me.id + '.json?print=silent',
         { method: 'PATCH', body: JSON.stringify(data), keepalive: true });
     }
   } catch(_){}
@@ -2763,7 +2831,9 @@ function initMap(){
   //   L.tileLayer(`https://api.tomtom.com/map/1/tile/basic/night/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, attribution: '© TomTom' }).addTo(map);
   //   L.tileLayer(`https://api.tomtom.com/traffic/map/4/tile/flow/relative-delay/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`, { ...tileOpts, opacity: 0.7, attribution: '' }).addTo(map);
   // } else {
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { ...tileOpts, subdomains: 'abcd', attribution: '© OSM · CARTO' }).addTo(map);
+  // {r} = tile @2x (retina): 53 KB por tile contra 13-24 KB em 1x, quase 3x o custo de dados no
+  // primeiro turno de um aparelho novo. Mapa operacional não precisa de retina.
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', { ...tileOpts, subdomains: 'abcd', attribution: '© OSM · CARTO' }).addTo(map);
   // }
   setTimeout(() => map.invalidateSize(), 100);
   window.addEventListener('resize', () => map.invalidateSize());
@@ -3162,6 +3232,8 @@ function renderChamadoCard(){
   const transfBox = (ehTransferencia(c) && (!c.iniciadoEm || placasFaltando(c) > 0)) ? `
     <div style="margin:12px 0;padding:12px;background:${placasFaltando(c)?'rgba(245,158,11,.12)':'rgba(22,163,74,.12)'};border:1px solid ${placasFaltando(c)?'#f59e0b':'#16a34a'};border-radius:12px">
       <div style="font-weight:800;font-size:13px;margin-bottom:5px">🚚 Transferência · ${esc(baseNomeColab(c.baseSaida))} → ${esc(baseNomeColab(c.baseEntrega))}</div>
+      ${bolsaoDoChamado(c) ? `<div style="font-size:13px;font-weight:800;color:#c4b5fd;background:rgba(139,92,246,.15);border:1px solid #8b5cf6;border-radius:8px;padding:7px 10px;margin-bottom:8px">📍 Retirar no <b>${esc(bolsaoDoChamado(c))}</b></div>` : ''}
+      ${resumoQuota(c) ? `<div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:6px">🏍 ${esc(resumoQuota(c))}</div>` : ''}
       <div style="font-size:12px;color:var(--txt2);margin-bottom:9px">${motosCheias(c)} de ${qtdTransf(c)} placa(s) · ${placasFaltando(c)?`escaneie a(s) ${placasFaltando(c)} restante(s) na base pra liberar a ENTREGA`:'✓ todas escaneadas — pode iniciar a entrega'}</div>
       <button data-scanplacas="1" style="width:100%;background:${placasFaltando(c)?'rgba(0,180,229,.15)':'transparent'};border:1.5px solid var(--acc);color:var(--acc);border-radius:10px;padding:11px;font-weight:800;font-size:13px">📸 ${placasFaltando(c)?'Escanear placas':'Rever placas'}</button>
     </div>` : '';
@@ -3341,7 +3413,7 @@ function bindRotinaInputs(c){
       // Anota no rotinaSteps pra persistir
       chamado.rotinaSteps = chamado.rotinaSteps || {};
       chamado.rotinaSteps._pecasUsadas = chamado._pecasUsadasNoChamado;
-      persistRotina(chamado);
+      persistRotina(chamado, '_pecasUsadas');
       vibrate(40);
       renderChamadoCard();
     };
@@ -3371,7 +3443,8 @@ function bindRotinaInputs(c){
             showToast('✓ ' + (meta?.label || 'Roda') + ' usada — resíduo pra descarregar na base');
           }
           steps[id] = val;
-          persistRotina(c);
+          // peça marcada como usada tambem mexe em _pecasUsadas → grava os dois passos
+          persistRotina(c, (tipo === 'peca' && val === true) ? ['_pecasUsadas', id] : id);
           vibrate(30);
           renderChamadoCard();
         };
@@ -3390,13 +3463,28 @@ function bindRotinaInputs(c){
           }
         }
         steps[id] = cb.checked;
-        persistRotina(c);
+        persistRotina(c, id);
         renderChamadoCard();
       };
     } else if(tipo === 'obs'){
       const ta = step.querySelector('textarea');
-      ta.oninput = () => { steps[id] = ta.value; persistRotina(c); };
-      ta.onblur = () => renderChamadoCard();
+      // ⚠ CONSUMO + DURABILIDADE. Era persistRotina a CADA TECLA (~145 KB por caractere quando a
+      // rotina já tem foto). O valor continua entrando no estado local na hora (validação e UI não
+      // mudam); só o WRITE é adiado. Mas debounce PURO tem dois furos, e os dois estão fechados aqui:
+      //  (a) SEM TETO, digitação corrida ou ditado de voz (o GBoard dispara input sem parar) nunca
+      //      deixaria o texto sair do aparelho — 10-20s só na RAM, e um reload perdia a observação.
+      //      Agora tem maxWait: passou de OBS_MAX_ESPERA desde a 1ª tecla não gravada, grava mesmo
+      //      que ele siga digitando.
+      //  (b) o timer morava num closure que o re-render do card (innerHTML) orfanava, e o objeto `c`
+      //      do closure podia virar um chamado MORTO (syncFilaFromSnapshot troca a identidade do
+      //      objeto quando muda a quantidade da fila). Agora o pendente vive num Map de módulo por
+      //      chamadoId+passo, e o persistRotina resolve o chamado VIVO por id na hora de gravar.
+      const _obsKey = c.id + '|' + id;
+      ta.oninput = () => {
+        steps[id] = ta.value;
+        agendarObs(_obsKey, c.id, id);
+      };
+      ta.onblur = () => { flushObs(_obsKey); renderChamadoCard(); };
     } else if(tipo === 'foto'){
       const inp = step.querySelector('input[type=file]');
       inp.onchange = async (e) => {
@@ -3404,7 +3492,7 @@ function bindRotinaInputs(c){
         try {
           const dataUrl = await compressToDataUrl(f, 1024, 0.7);
           steps[id] = dataUrl;
-          persistRotina(c);
+          persistRotina(c, id);
           renderChamadoCard();
         } catch(err){ showToast('❌ Erro na foto: '+err.message, true); }
       };
@@ -3412,19 +3500,64 @@ function bindRotinaInputs(c){
   });
 }
 
-function persistRotina(c){
+// ===== ESCRITA ADIADA DA OBSERVAÇÃO (debounce com teto, à prova de re-render e de reload) =====
+const OBS_IDLE_MS = 800;      // parou de digitar por isso → grava
+const OBS_MAX_ESPERA = 2500;  // digitando sem parar → grava de qualquer forma a cada isso
+const _obsPend = new Map();   // "chamadoId|passo" -> { tmr, desde, chamadoId, passo }
+function agendarObs(key, chamadoId, passo){
+  const ag = _obsPend.get(key) || { tmr: null, desde: Date.now(), chamadoId, passo };
+  ag.chamadoId = chamadoId; ag.passo = passo;
+  if(ag.tmr) clearTimeout(ag.tmr);
+  const espera = Math.max(0, Math.min(OBS_IDLE_MS, ag.desde + OBS_MAX_ESPERA - Date.now()));
+  ag.tmr = setTimeout(() => flushObs(key), espera);
+  _obsPend.set(key, ag);
+}
+function flushObs(key){
+  const ag = _obsPend.get(key); if(!ag) return;
+  if(ag.tmr) clearTimeout(ag.tmr);
+  _obsPend.delete(key);
+  const vivo = fila.find(x => x.id === ag.chamadoId);   // resolve o objeto VIVO (nunca o do closure)
+  if(vivo) persistRotina(vivo, ag.passo);
+}
+function flushObsTudo(){ for(const k of [..._obsPend.keys()]) flushObs(k); }
+// Rede de segurança de ciclo de vida: app indo pro background / sendo fechado / recarregado grava o
+// que estiver pendente. pagehide é o único evento confiável no WebView do Android.
+try {
+  window.addEventListener('pagehide', flushObsTudo);
+  window.addEventListener('beforeunload', flushObsTudo);
+  document.addEventListener('visibilitychange', () => { if(document.hidden) flushObsTudo(); });
+} catch(_){}
+
+function persistRotina(c, passos){
   // Salva rotina junto com a corrida ativa (ride)
   if(currentRide && currentRide.chamadoId === c.id){
     currentRide.rotinaSteps = c.rotinaSteps;
   }
-  // Sync simples — manda update do chamado pro Firebase
+  // ⚠ CONSUMO DE INTERNET DO MOTORISTA (medido 23/08/2026): este update mandava o rotinaSteps
+  // INTEIRO a cada interação — a 2ª foto remandava a 1ª, e cada TECLA num campo de obs reenviava
+  // todas as fotos já tiradas (~145 KB por caractere; uma frase de 53 letras = ~7,7 MB). Pior: o nó
+  // vammo/chamados é assinado por INTEIRO pela torre, CX, Fleet e por TODO colab, então cada
+  // reenvio era empurrado pra todos eles de novo. Agora grava só o passo que mudou (~centenas de
+  // bytes). Sem `passos`, mantém o write completo — usado no início do atendimento, quando a rotina
+  // ainda está vazia e o iniciadoEm precisa ir junto.
+  // ⚠ SOBRE DURABILIDADE, sem promessa falsa: o ÚNICO write durável de um passo é este. A corrida
+  // (vammo/corridas) só materializa a rotina na CONCLUSÃO — não protege nada contra reload no meio
+  // do atendimento. Por isso a observação tem teto de espera + flush no pagehide (ver agendarObs).
   try {
-    if(typeof firebase !== 'undefined' && firebase.apps?.length){
-      firebase.database().ref('vammo/chamados/' + c.id).update({
-        iniciadoEm: c.iniciadoEm,
-        rotinaSteps: c.rotinaSteps
-      }).catch(()=>{});
+    if(typeof firebase === 'undefined' || !firebase.apps?.length) return;
+    const ref = firebase.database().ref('vammo/chamados/' + c.id);
+    const lista = (passos == null) ? null : (Array.isArray(passos) ? passos : [passos]);
+    // id de passo vira caminho no RTDB: se tiver caractere proibido, cai no write completo.
+    const ilegal = id => typeof id !== 'string' || !id.length || /[.#$\[\]\/]/.test(id);
+    if(lista && lista.length && !lista.some(ilegal)){
+      const steps = c.rotinaSteps || {};
+      for(const id of lista){
+        const v = steps[id];
+        ref.child('rotinaSteps/' + id).set(v === undefined ? null : v).catch(()=>{});
+      }
+      return;
     }
+    ref.update({ iniciadoEm: c.iniciadoEm, rotinaSteps: c.rotinaSteps }).catch(()=>{});
   } catch(_){}
 }
 
@@ -5617,11 +5750,27 @@ function isFull(){ return turnoAtivo && slotsCount() >= slotsTotalCount() && slo
 const _descargaRecente = new Map();   // slotId -> ts da descarga
 function _marcarDescarregado(ids){ const t = Date.now(); (ids||[]).forEach(id => { if(id) _descargaRecente.set(id, t); }); }
 function _foiDescarregadoRecente(id){ const t = _descargaRecente.get(id); if(!t) return false; if(Date.now() - t > 45000){ _descargaRecente.delete(id); return false; } return true; }
+// Campos MUTÁVEIS do turno — os únicos que o saveTurno reescreve. Todo o resto (o bloco checkIn
+// com 5 fotos + assinatura, veículo, carreta, km inicial) é escrito UMA vez no check-in e nunca
+// muda. Conferido contra os 8 call sites do saveTurno: eles só mexem nestes campos.
+const TURNO_CAMPOS_MUTAVEIS = ['slotsOcupados', '_slotsLocalTs', 'modo', 'baseDestinoId', 'estoque', 'pecasUsadas'];
 async function saveTurno(tent){
   if(!turnoAtivo) return;
   try {
     await ensureFb();
-    await firebase.database().ref('vammo/turnos/' + me.id).set(cleanForFb(turnoAtivo));
+    // ⚠ CONSUMO DE INTERNET DO MOTORISTA (medido 23/08/2026): era .set(turnoAtivo) — o objeto
+    // INTEIRO, que carrega o checkIn (5 fotos do veículo + assinatura em base64) o turno todo.
+    // Medido: 1,00 MB por chamada, disparado a cada moto recolhida e a cada ciclo de descarga
+    // (8 call sites) = ~8 MB por turno pra gravar uma lista de slots de ~32 bytes.
+    // NÃO voltar pra .set() sem antes tirar as fotos de dentro do nó do turno.
+    if(!turnoAtivo.turnoId){
+      // sem turno criado ainda: set completo (update em nó inexistente CRIARIA um nó parcial)
+      await firebase.database().ref('vammo/turnos/' + me.id).set(cleanForFb(turnoAtivo));
+      return;
+    }
+    const patch = {};
+    for(const k of TURNO_CAMPOS_MUTAVEIS) patch[k] = (turnoAtivo[k] === undefined) ? null : turnoAtivo[k];
+    await firebase.database().ref('vammo/turnos/' + me.id).update(cleanForFb(patch));
   } catch(e){
     console.warn('saveTurno fail:', e);
     if((tent||0) < 3) setTimeout(() => saveTurno((tent||0)+1), 1500 * ((tent||0)+1));   // retry: o write do turno NÃO pode se perder
@@ -6674,7 +6823,9 @@ if('serviceWorker' in navigator){
       console.log('[PWA] service worker registrado:', reg.scope);
       reg.update().catch(()=>{});
       // Checa atualização periodicamente também (app aberto por horas)
-      setInterval(() => reg.update().catch(()=>{}), 60000);
+      // 12min em vez de 60s: eram 540 requisições por turno pra detectar um deploy que acontece
+      // ~1,4x por dia. O HTML é network-first, então versão nova entra na próxima abertura de todo jeito.
+      setInterval(() => reg.update().catch(()=>{}), 12 * 60 * 1000);
     }).catch(err => console.warn('[PWA] SW fail:', err));
   });
 }

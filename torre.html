@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v83 · 2026-08-21'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v114 · 2026-08-21';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v115 · 2026-08-25';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -2957,10 +2957,18 @@ function checkAtribuicaoSLA(){
 function _baseNome(idOuNome){ if(!idOuNome) return ''; const b = bases[idOuNome]; return (b && b.nome) || String(idOuNome); }
 function ehTransferencia(c){ return !!(c && (c.baseSaida || c.baseEntrega || categoriaDoMotivo(c.motivo) === 'logistica')); }
 // Linha "🏁 Saída → 🎯 Entrega" pro card/detalhe (só quando há ao menos uma base definida)
-function transfInfo(c){
+function transfInfo(c, compacto){
   if(!c || (!c.baseSaida && !c.baseEntrega)) return '';
   const s = _baseNome(c.baseSaida), e = _baseNome(c.baseEntrega);
-  return `🏁 <b>${esc(s||'—')}</b> &nbsp;→&nbsp; 🎯 <b>${esc(e||'—')}</b>`;
+  let out = `🏁 <b>${esc(s||'—')}</b> &nbsp;→&nbsp; 🎯 <b>${esc(e||'—')}</b>`;
+  // no CARD da lista mostra só o bolsão, em linha; o split de categoria fica pro detalhe
+  if(compacto){ const b = c.bolsaoNome || c.bolsao; return b ? out + ` &nbsp;·&nbsp; 📍 <b>${esc(b)}</b>` : out; }
+  // BOLSÃO DE RETIRADA (Fleet, 25/08/2026): onde as motos estão DENTRO da base de saída. O
+  // controlador precisa ver isso sem abrir o chamado — e o colab recebe o mesmo dado no app.
+  const bol = c.bolsaoNome || c.bolsao;
+  if(bol) out += `<br>📍 Bolsão: <b>${esc(bol)}</b>`;
+  if(c.qtdCPX != null || c.qtdComfort != null) out += `<br>🏍 <b>${(c.qtdCPX|0)} CPX</b> + <b>${(c.qtdComfort|0)} Comfort</b>`;
+  return out;
 }
 
 // ===== ATRIBUIÇÃO EM MASSA (botão Selecionar + caixinhas) =====
@@ -3119,7 +3127,7 @@ function renderList(){
     const aguardBadge = aguard ? `<span class="b b-aguard" title="Cliente aguardando no local — prioridade">🙋 AGUARDANDO</span>` : '';
     const esperaBadge = aguardSemMotorista(c) ? (() => { const ms = esperaAtribMs(c); return `<span class="b b-espera${ms > slaAtribMs() ? ' over' : ''}" title="Cliente aguardando SEM motorista — atribua rápido (SLA ${cfg.slaAtribMin||2}min)">⏱ ${fmtEspera(ms)} p/ atribuir</span>`; })() : '';
     const aceitoBadge = (c.status === 'novo' && c.aceitoPor && !c.motoristaId && !c.terceiroId) ? `<span class="b" style="background:#f59e0b;color:#1a1200" title="Aceito por ${esc(c.aceitoPor)} — controlador já assumiu">✋ ${esc((c.aceitoPor||'').split(' ')[0])}</span>` : '';
-    const transfLine = transfInfo(c);
+    const transfLine = transfInfo(c, true);
     const _num = c.seq != null ? c.seq : numMap[c.id];
     const numTag = _num ? `<span style="font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800;margin-right:5px">#${_num}</span>` : '';
     const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : ((catDim(c) || ctrlDim(c)) ? ' style="opacity:0.3"' : '');
@@ -4159,6 +4167,10 @@ function atribuir(chamadoId, motoristaId, batch){
       origemFleet: c.origemFleet || null,
       tipoMovimentacao: c.tipoMovimentacao || null,
       qtdMotos: (c.qtdMotos != null ? c.qtdMotos : null),
+      qtdCPX: (c.qtdCPX != null ? c.qtdCPX : null),
+      qtdComfort: (c.qtdComfort != null ? c.qtdComfort : null),
+      bolsao: c.bolsao || null,
+      bolsaoNome: c.bolsaoNome || null,
       baseSaida: c.baseSaida || null,
       baseEntrega: c.baseEntrega || null,
       motos: c.motos || null
@@ -4817,6 +4829,20 @@ function renderCad(){
         const now = Date.now();
         // 1) desloga todos — sessão com iniciadoEm < epoch cai na carga (colab compara e desloga)
         firebase.database().ref('vammo/config/authEpoch').set(now);
+        // 1b) ⚠ authEpoch só é lido no BOOT do colab (once, sem listener ao vivo), então sozinho ele
+        // não desloga ninguém agora: o app segue aberto e trabalhando. Isso passou a importar muito
+        // com o colab v84 — o saveTurno virou update() de campos mutáveis e o `ativo:false` do passo
+        // (3) abaixo agora COLA (antes o .set() do colab ressuscitava ativo:true) — e a torre v114
+        // tira do mapa quem tem turno encerrado. Resultado sem este bloco: mapa vazio com a frota
+        // toda na rua. Manda o MESMO par de comandos do "deslogar individual", que o app honra ao
+        // vivo, pro estado do aparelho bater com o do banco.
+        try {
+          Object.keys(turnos || {}).forEach(cid => {
+            if(!turnos[cid] || turnos[cid].ativo === false) return;
+            firebase.database().ref('vammo/cmds/' + cid + '/logout').set({ ts: now, by: getOperadorTorre() });
+            firebase.database().ref('vammo/cmds/' + cid + '/reload').set({ ts: now });
+          });
+        } catch(_){}
         // 2) libera TODOS os veículos atribuídos (senão fica carro preso = o bug do Fabio)
         let libe = 0;
         Object.values(veiculos).forEach(v => { if(v && v.atribuidoA){ const fixed = { ...v, atribuidoA: null, atribuidoEm: null }; veiculos[v.id] = fixed; STORE.saveVeiculo(fixed); libe++; } });

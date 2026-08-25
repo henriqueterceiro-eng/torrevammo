@@ -349,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v16 · 2026-08-19';
+const FLEET_VERSION = 'v17 · 2026-08-25';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -547,6 +547,9 @@ function card(c, etapaN){
   const nCheias = motos ? motos.filter(m=>m&&m.placa).length : 0;
   if(nSlots) badges.push(`<span class="b b-moto">🏍 ${nCheias}/${nSlots} placa${nSlots>1?'s':''}</span>`);
   if(ehTransf(c)) badges.push(`<span class="b b-transf">🚚 ${esc(baseNome(c.baseSaida)||'?')} → ${esc(baseNome(c.baseEntrega)||'?')}</span>`);
+  // BOLSÃO: aparece no card pra não precisar abrir o chamado pra saber onde a moto está
+  if(c.bolsao||c.bolsaoNome) badges.push(`<span class="b" style="background:rgba(139,92,246,.18);border:1px solid #8b5cf6;color:#c4b5fd;font-weight:800">📍 ${esc(c.bolsaoNome||bolsaoLabel(c.bolsao))}</span>`);
+  if((c.qtdCPX!=null)||(c.qtdComfort!=null)) badges.push(`<span class="b" style="background:rgba(255,255,255,.06);border:1px solid var(--bdr2)">${(c.qtdCPX|0)} CPX + ${(c.qtdComfort|0)} Comfort</span>`);
   if(ehTransf(c) && (c.descargaEm||c.descargaBaseNome)) badges.push(`<span class="b" style="background:rgba(22,163,74,.2);border:1px solid #16a34a;color:#4ade80;font-weight:800">✅ ENTREGUE</span>`);
   if(motos && motos.some(m=>m.iotForaDaBase)) badges.push(`<span class="b b-warn" title="Uma ou mais motos com IoT fora da base de saída">⚠ moto fora da base</span>`);
   if(c.terceiroId) badges.push(`<span class="b b-ext">🤝 externo</span>`);
@@ -664,7 +667,7 @@ function baseOpts(sel){
       .map(([id,b])=>`<option value="${id}"${id===sel?' selected':''}>${esc(b.nome)}</option>`).join('');
 }
 function openModal(){
-  wiz = { tipo:null, baseSaida:'', baseEntrega:'', qtd:1, motos:[{placa:''}] };
+  wiz = { tipo:null, baseSaida:'', bolsao:'', baseEntrega:'', qtdCPX:0, qtdComfort:0, qtd:0, motos:[] };
   $('#modal').classList.add('on');
   renderWizard();
 }
@@ -672,6 +675,29 @@ function closeModal(){ $('#modal').classList.remove('on'); }
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
 
 function motosValidas(){ return wiz.motos.filter(m => m.placa && ['ok','forabase','iotoff'].includes(m.status)); }
+// BOLSÃO DE RETIRADA — onde, DENTRO da base de saída, as motos estão estacionadas. Escolha ÚNICA
+// por chamado (pedido do Terceiro, 25/08/2026): o colab precisa saber pra onde ir dentro do pátio,
+// e a torre precisa ver isso sem abrir o chamado. Pra acrescentar bolsão, é só somar nesta lista.
+const BOLSOES = [
+  { k: 'ativacao', t: 'Pátio Ativação' },
+  { k: 'pronta',   t: 'Pronta entrega' },
+  { k: 'patio3',   t: 'Pátio 3' },
+];
+function bolsaoLabel(k){ const b = BOLSOES.find(x => x.k === k); return b ? b.t : (k || ''); }
+function qtdTotal(){ return (wiz ? ((wiz.qtdCPX|0) + (wiz.qtdComfort|0)) : 0); }
+// Define a quantidade de UMA categoria e reflete no total (que é a soma das duas, não um campo à parte).
+function setQtdCat(cat, n){
+  n = Math.max(0, Math.min(MAX_MOTOS, n|0));
+  if(cat === 'CPX') wiz.qtdCPX = n; else wiz.qtdComfort = n;
+  const tot = qtdTotal();
+  if(tot > MAX_MOTOS){   // estourou o teto: devolve o excedente na própria categoria que acabou de mudar
+    const outro = (cat === 'CPX') ? (wiz.qtdComfort|0) : (wiz.qtdCPX|0);
+    if(cat === 'CPX') wiz.qtdCPX = Math.max(0, MAX_MOTOS - outro); else wiz.qtdComfort = Math.max(0, MAX_MOTOS - outro);
+  }
+  setQtd(Math.max(1, qtdTotal()));      // mantém o array de placas do tamanho do total
+  wiz.qtd = qtdTotal();
+  if(wiz.qtd === 0) wiz.motos = [];
+}
 function catComfortCpx(modelo){ const m=(modelo||'').toUpperCase(); if(m.includes('CPX')) return 'CPX'; if(m.includes('COMFORT')) return 'COMFORT'; return null; }
 function setQtd(n){
   n = Math.max(1, Math.min(MAX_MOTOS, n|0));
@@ -680,7 +706,8 @@ function setQtd(n){
   else if(wiz.motos.length > n){ wiz.motos = wiz.motos.slice(0, n); }
 }
 function podeAbrir(){
-  if(!wiz||!wiz.tipo||!wiz.baseSaida||!wiz.baseEntrega||!(wiz.qtd>=1)) return false;
+  // bolsão é OBRIGATÓRIO: sem ele o colab não sabe onde retirar dentro do pátio
+  if(!wiz||!wiz.tipo||!wiz.baseSaida||!wiz.bolsao||!wiz.baseEntrega||!(qtdTotal()>=1)) return false;
   // placas são OPCIONAIS (o colab escaneia a placa no local); mas as que o Fleet digitar precisam estar válidas
   return wiz.motos.filter(m=>m.placa).every(m=>['ok','forabase','iotoff'].includes(m.status));
 }
@@ -688,20 +715,28 @@ function updateGo(){ const g=$('#wGo'); if(g) g.disabled=!podeAbrir(); const c=$
 
 function renderWizard(){
   const w=wiz;
-  const showSaida=!!w.tipo, showEntrega=showSaida&&w.baseSaida, showMotos=showEntrega&&w.baseEntrega;
+  const showSaida=!!w.tipo, showBolsao=showSaida&&w.baseSaida, showEntrega=showBolsao&&w.bolsao, showMotos=showEntrega&&w.baseEntrega;
   let h='';
   // 1 — tipo
   h+=`<div class="wsec"><div class="wlabel"><span class="wn">1</span> Tipo de chamado</div>
     <div class="wtipo">${TIPOS.map(t=>`<button data-tipo="${t.k}" class="${w.tipo===t.k?'sel':''}"><span class="em">${t.em}</span><div><div class="tt">${t.t}</div><div class="ts">${t.s}</div></div></button>`).join('')}</div></div>`;
   // 2 — base saída
   if(showSaida) h+=`<div class="wsec"><div class="wlabel"><span class="wn">2</span> Base de saída</div><select id="wSaida">${baseOpts(w.baseSaida)}</select></div>`;
-  // 3 — base entrega
-  if(showEntrega) h+=`<div class="wsec"><div class="wlabel"><span class="wn">3</span> Base de entrega</div><select id="wEntrega">${baseOpts(w.baseEntrega)}</select>${(w.baseEntrega&&w.baseEntrega===w.baseSaida)?'<div class="mstat warn">⚠ Saída e entrega são a mesma base.</div>':''}</div>`;
-  // 4 — QUANTIDADE (numeral) define os slots; 5 — placas OPCIONAIS (o colab escaneia no local)
-  if(showMotos) h+=`<div class="wsec"><div class="wlabel"><span class="wn">4</span> Quantas motos movimentar?</div>
-    <div class="wqty"><button id="wQtyMinus" type="button">−</button><span class="qn" id="wQtyN">${w.qtd}</span><button id="wQtyPlus" type="button">＋</button>
-      <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">moto(s)</span></div>
-    <div class="wlabel" style="margin-top:16px"><span class="wn">5</span> Placas <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">· opcional — o colaborador escaneia no local</span></div>
+  // 3 — BOLSÃO de retirada (onde as motos estão dentro da base de saída)
+  if(showBolsao) h+=`<div class="wsec"><div class="wlabel"><span class="wn">3</span> Bolsão de retirada <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">· onde as motos estão</span></div>
+    <div class="wtipo">${BOLSOES.map(b=>`<button data-bolsao="${b.k}" class="${w.bolsao===b.k?'sel':''}"><span class="em">📍</span><div><div class="tt">${esc(b.t)}</div></div></button>`).join('')}</div></div>`;
+  // 4 — base entrega
+  if(showEntrega) h+=`<div class="wsec"><div class="wlabel"><span class="wn">4</span> Base de entrega</div><select id="wEntrega">${baseOpts(w.baseEntrega)}</select>${(w.baseEntrega&&w.baseEntrega===w.baseSaida)?'<div class="mstat warn">⚠ Saída e entrega são a mesma base.</div>':''}</div>`;
+  // 5 — QUANTIDADE POR CATEGORIA: o total é a SOMA das duas linhas. Isso é o que trava a carga do
+  //     colab: ele não consegue escanear mais CPX (nem mais Comfort) do que o declarado aqui.
+  // 6 — placas OPCIONAIS (o colab escaneia no local)
+  if(showMotos) h+=`<div class="wsec"><div class="wlabel"><span class="wn">5</span> Quantas motos, por categoria?</div>
+    <div class="wqty" style="margin-bottom:8px"><span style="font-weight:800;font-size:12px;padding:2px 8px;border-radius:6px;background:#7c3aed;color:#fff;letter-spacing:0">CPX</span>
+      <button id="wCpxMinus" type="button">−</button><span class="qn" id="wCpxN">${w.qtdCPX|0}</span><button id="wCpxPlus" type="button">＋</button></div>
+    <div class="wqty"><span style="font-weight:800;font-size:12px;padding:2px 8px;border-radius:6px;background:#0891b2;color:#fff;letter-spacing:0">COMFORT</span>
+      <button id="wCfMinus" type="button">−</button><span class="qn" id="wCfN">${w.qtdComfort|0}</span><button id="wCfPlus" type="button">＋</button></div>
+    <div class="mstat ${qtdTotal()?'ok':'info'}" style="margin-top:10px">${qtdTotal()? `Total: <b>${qtdTotal()} moto(s)</b> · ${w.qtdCPX|0} CPX + ${w.qtdComfort|0} Comfort` : 'Escolha ao menos 1 moto em uma das categorias'}</div>
+    <div class="wlabel" style="margin-top:16px"><span class="wn">6</span> Placas <span style="font-weight:600;text-transform:none;color:var(--txt3);letter-spacing:0">· opcional — o colaborador escaneia no local</span></div>
     <div id="wizMotos"></div></div>`;
   // rodapé
   h+=`<div class="mrow"><button class="cancel" onclick="closeModal()">Cancelar</button><button class="go" id="wGo" onclick="abrirMov()" ${podeAbrir()?'':'disabled'}>📢 Abrir movimentação</button></div>`;
@@ -710,8 +745,11 @@ function renderWizard(){
   document.querySelectorAll('#wizBody [data-tipo]').forEach(b=> b.onclick=()=>{ wiz.tipo=b.dataset.tipo; renderWizard(); });
   { const s=$('#wSaida'); if(s) s.onchange=()=>{ wiz.baseSaida=s.value; recheckMotos(); renderWizard(); }; }
   { const e=$('#wEntrega'); if(e) e.onchange=()=>{ wiz.baseEntrega=e.value; renderWizard(); }; }
-  { const mn=$('#wQtyMinus'); if(mn) mn.onclick=()=>{ setQtd(wiz.qtd-1); const n=$('#wQtyN'); if(n) n.textContent=wiz.qtd; renderMotoCards(); updateGo(); }; }
-  { const pl=$('#wQtyPlus'); if(pl) pl.onclick=()=>{ setQtd(wiz.qtd+1); const n=$('#wQtyN'); if(n) n.textContent=wiz.qtd; renderMotoCards(); updateGo(); setTimeout(()=>{ const inp=$('#mp-'+(wiz.motos.length-1)); if(inp) inp.focus(); },30); }; }
+  document.querySelectorAll('#wizBody [data-bolsao]').forEach(b=> b.onclick=()=>{ wiz.bolsao=b.dataset.bolsao; renderWizard(); });
+  { const mn=$('#wCpxMinus'); if(mn) mn.onclick=()=>{ setQtdCat('CPX',(wiz.qtdCPX|0)-1); renderWizard(); }; }
+  { const pl=$('#wCpxPlus'); if(pl) pl.onclick=()=>{ setQtdCat('CPX',(wiz.qtdCPX|0)+1); renderWizard(); }; }
+  { const mn=$('#wCfMinus'); if(mn) mn.onclick=()=>{ setQtdCat('COMFORT',(wiz.qtdComfort|0)-1); renderWizard(); }; }
+  { const pl=$('#wCfPlus'); if(pl) pl.onclick=()=>{ setQtdCat('COMFORT',(wiz.qtdComfort|0)+1); renderWizard(); }; }
   if(showMotos) renderMotoCards();
   updateGo();
 }
@@ -806,7 +844,7 @@ async function abrirMov(){
   if(!podeAbrir()) return;
   const w=wiz, nS=baseNome(w.baseSaida), nE=baseNome(w.baseEntrega);
   const motos=motosValidas();     // placas que o Fleet OPTOU por preencher (pode ser nenhuma)
-  const qtd=w.qtd;                // quantidade = o NUMERAL escolhido (não o nº de placas)
+  const qtd=qtdTotal();           // quantidade = SOMA das duas categorias (não o nº de placas)
   const fora=motos.filter(m=>m.status==='forabase');
   if(fora.length && !confirm(`⚠ ${fora.length} moto(s) com IoT FORA da base de saída (${nS}):\n`+
     fora.map(m=>`• ${m.placa} — ${m.iotLocal||'outro local'} (~${(m.iotDist/1000).toFixed(1)}km)`).join('\n')+
@@ -817,7 +855,10 @@ async function abrirMov(){
     id:genId(), ts:Date.now(),
     tipoMovimentacao:w.tipo, motivo:tipoLabel(w.tipo),
     cliente:`${nS} → ${nE} · ${qtd} moto${qtd>1?'s':''}`,
-    qtdMotos:qtd, baseSaida:w.baseSaida, baseEntrega:w.baseEntrega,
+    qtdMotos:qtd,                                  // TOTAL — mantido: é por ele que o colab detecta transferência
+    qtdCPX:(w.qtdCPX|0), qtdComfort:(w.qtdComfort|0), // TRAVA de carga por categoria no app do colab
+    bolsao:w.bolsao, bolsaoNome:bolsaoLabel(w.bolsao), // onde retirar dentro da base de saída
+    baseSaida:w.baseSaida, baseEntrega:w.baseEntrega,
     motos:motos.map(m=>clean({ placa:m.placa, modelo:m.modelo||null, categoria:catComfortCpx(m.modelo), motoStatus:m.motoStatus||null,
       iotForaDaBase:m.status==='forabase'?true:null, iotDistM:m.iotDist!=null?Math.round(m.iotDist):null,
       iotLocal:m.iotLocal||null, iotOffline:m.status==='iotoff'?true:null })),
