@@ -1009,7 +1009,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v83 · 2026-08-21'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v115 · 2026-08-25';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v116 · 2026-08-25';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1041,6 +1041,12 @@ cfg.fbKey = cfg.fbKey || 'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I';
 cfg.tomtomKey = cfg.tomtomKey || 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 cfg.showTraffic = cfg.showTraffic !== false; // default ON
 cfg.showIncidents = cfg.showIncidents !== false;
+// TETO DE ORIGENS DO /matrix: o Distance Matrix do Google cobra por ELEMENTO (origens × destinos),
+// não por requisição. Mandar os 25 colabs online = 25 elementos por despacho = ~24.750/mês = US$ 197.
+// Com os 5 MAIS PRÓXIMOS (ranking haversine antes da chamada) são ~4.950/mês, dentro da franquia
+// grátis de 5.000 → custo ZERO. E não muda a decisão: quem está a 20km não vai ser despachado.
+// Ajustável sem deploy: cfg.matrixMax = N + saveCfg2(cfg).
+cfg.matrixMax = (cfg.matrixMax != null ? cfg.matrixMax : 5);
 cfg.rotasSmart = cfg.rotasSmart !== false; // KILL-SWITCH das rotas inteligentes (ETA no despacho + auto-otimização). Default ON; pra desligar sem redeploy: cfg.rotasSmart=false + saveCfg2(cfg)
 cfg.showHeatmap = cfg.showHeatmap === true; // default OFF
 cfg.routeType = cfg.routeType || 'fastest';     // fastest | shortest | eco
@@ -1237,7 +1243,16 @@ let lastSync = null;
 
 const TRAIL_MAX = 40;            // últimas N posições
 const TRAIL_TTL_MS = 30 * 60000; // pontos > 30min são descartados
-const ROUTE_REFRESH_M = 400;     // refaz a rota só se o motorista andou >400m (economia — antes 150m estourava chamadas)
+// Distância que o colab precisa andar pra torre REDESENHAR a rota dele. É o maior consumidor de
+// Directions do sistema: applyMotoristaTelemetry chama updateRouteFor a CADA posição recebida
+// (uma a cada ~3,5s por colab em movimento), e só esta trava segura a chamada.
+// Conta medida em 25/08/2026: 40km com chamado ativo ÷ 400m = ~100 chamadas por colab por turno.
+// Com 10-15 colabs ativos = 1.000-1.500/dia — E MULTIPLICA POR CADA ABA DA TORRE ABERTA.
+// 400 → 1200 corta 3x. O custo é só visual (a linha desenhada fica até 1,2km atrás do pino); o ETA
+// que decide despacho vem do /matrix no select, não desta linha.
+// Ajustável sem deploy: cfg.routeRefreshM = N + saveCfg2(cfg).
+const ROUTE_REFRESH_M_DEFAULT = 1200;
+function routeRefreshM(){ const v = +(cfg.routeRefreshM); return (v > 0) ? v : ROUTE_REFRESH_M_DEFAULT; }
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
 
 // localStorage maps
@@ -2689,6 +2704,11 @@ async function fetchMultiRoute(from, stops){
 async function updateRouteFor(motoristaId){
   const m = motoristas[motoristaId];
   if(!m || !m.lat || !m.lng){ clearRoute(motoristaId); return; }
+  // ABA OCULTA NÃO PAGA ROTA: com a torre em segundo plano (outra aba, monitor apagado, aba
+  // esquecida aberta a noite toda) ninguém está olhando o mapa, mas a telemetria continua chegando
+  // e cada posição disparava uma chamada de Directions. Zero perda de qualidade: ao voltar pra
+  // frente, o listener de visibilitychange redesenha tudo de uma vez.
+  if(typeof document !== 'undefined' && document.hidden) return;
   const q = loadQueues();
   const ordem = q[motoristaId] || [];
   const posNaFila = id => { const i = ordem.indexOf(id); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
@@ -2724,7 +2744,7 @@ async function updateRouteFor(motoristaId){
   const existing = routeLines[motoristaId];
   if(existing && existing._hash === hashKey && existing._fromLat != null){
     const moved = haversine({lat:existing._fromLat, lng:existing._fromLng}, {lat:m.lat, lng:m.lng});
-    if(moved < ROUTE_REFRESH_M) return;
+    if(moved < routeRefreshM()) return;
   }
   if(routePending[motoristaId]) return;
   routePending[motoristaId] = true;
@@ -2969,6 +2989,18 @@ function transfInfo(c, compacto){
   if(bol) out += `<br>📍 Bolsão: <b>${esc(bol)}</b>`;
   if(c.qtdCPX != null || c.qtdComfort != null) out += `<br>🏍 <b>${(c.qtdCPX|0)} CPX</b> + <b>${(c.qtdComfort|0)} Comfort</b>`;
   return out;
+}
+
+// Corta a lista de candidatos aos N mais próximos EM LINHA RETA antes de pagar o /matrix.
+// O ranking fino (com trânsito) continua sendo do Google — só não pagamos por quem está longe.
+function maisProximos(origins, c, max){
+  const teto = max || cfg.matrixMax || 5;
+  if(!c || c.lat == null || c.lng == null || origins.length <= teto) return origins;
+  return origins
+    .map(o => ({ o, d: haversine({ lat: o.lat, lng: o.lng }, { lat: c.lat, lng: c.lng }) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, teto)
+    .map(x => x.o);
 }
 
 // ===== ATRIBUIÇÃO EM MASSA (botão Selecionar + caixinhas) =====
@@ -3373,7 +3405,9 @@ async function enriquecerSelectEta(c, motIds, onlineMots){
   if(cfg.rotasSmart === false) return;
   if(!c || c.lat == null || c.lng == null) return;
   const sel = document.getElementById('dasel'); if(!sel) return;
-  const origins = onlineMots.map(id => motoristas[id]).filter(m => m && m.lat != null && m.lng != null && !m.isFull).map(m => ({ id: m.id, lat: m.lat, lng: m.lng }));
+  const todos = onlineMots.map(id => motoristas[id]).filter(m => m && m.lat != null && m.lng != null && !m.isFull).map(m => ({ id: m.id, lat: m.lat, lng: m.lng }));
+  if(!todos.length) return;
+  const origins = maisProximos(todos, c);   // paga ETA só dos mais próximos (ver cfg.matrixMax)
   if(!origins.length) return;
   const key = c.id + '|' + origins.map(o => o.id + ':' + o.lat.toFixed(3) + ',' + o.lng.toFixed(3)).join(';');
   let data = _etaCache[key];
@@ -3784,9 +3818,11 @@ function renderDetail(){
     sug.disabled = true;
     const showErr = (msg) => { $('#dasugresult').innerHTML = `<div style="margin-top:6px;padding:8px;background:rgba(220,38,38,0.15);border:1px solid var(--novo);border-radius:6px;font-size:10px;color:#fca5a5">${esc(msg)}</div>`; sug.disabled = false; sug.textContent = '🎯 Sugerir colab mais próximo (c/ trânsito)'; };
     if(!c.lat || !c.lng){ showErr('⚠ Este chamado não tem coordenadas. Adicione um endereço/local antes.'); return; }
-    const origins = onlineMots.map(id => motoristas[id]).filter(m => m.lat && m.lng && !m.isFull).map(m => ({ id: m.id, lat: m.lat, lng: m.lng, nome: m.nome }));
-    if(origins.length === 0){ showErr('⚠ Sem colaboradores online com GPS (os com slots cheios ficam de fora).'); return; }
-    sug.textContent = '⏳ Calculando rotas para ' + origins.length + ' colab' + (origins.length>1?'s':'') + '…';
+    const todosCand = onlineMots.map(id => motoristas[id]).filter(m => m.lat && m.lng && !m.isFull).map(m => ({ id: m.id, lat: m.lat, lng: m.lng, nome: m.nome }));
+    if(todosCand.length === 0){ showErr('⚠ Sem colaboradores online com GPS (os com slots cheios ficam de fora).'); return; }
+    const origins = maisProximos(todosCand, c);   // ETA com trânsito só dos mais próximos
+    const _cortou = todosCand.length - origins.length;
+    sug.textContent = '⏳ Calculando rotas para ' + origins.length + ' colab' + (origins.length>1?'s':'') + (_cortou>0?` (os ${origins.length} mais próximos de ${todosCand.length})`:'') + '…';
     try {
       let ranked = null, metodo = '(linha reta)';
       // 1) Google Distance Matrix COM TRÂNSITO (a empresa banca) — despacha quem chega mais rápido de verdade
@@ -7566,6 +7602,9 @@ function scheduleUpdateRoutes(){
   if(_updateRoutesTo) return;
   _updateRoutesTo = setTimeout(() => { _updateRoutesTo = null; updateAllRoutes(); }, 300);
 }
+// Aba voltou pra frente: as rotas ficaram congeladas enquanto estava oculta (ver updateRouteFor) →
+// redesenha todas de uma vez, com uma chamada por colab em vez de uma por posição recebida.
+try { document.addEventListener('visibilitychange', () => { if(!document.hidden) scheduleUpdateRoutes(); }); } catch(_){}
 
 // Geocodifica (Google via /geocode) chamados que chegaram só com endereço (sem lat/lng),
 // pra plotar no mapa. Cacheia por endereço e persiste a coord no chamado (geocoda 1x).
