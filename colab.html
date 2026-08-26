@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v85 · 2026-08-25';
+const APP_VERSION = 'v87 · 2026-08-26';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1283,6 +1283,16 @@ function syncFilaFromSnapshot(data){
       const snap = data[c.id];
       if(snap && (snap.status === 'concluido' || snap.status === 'cancelado')) continue; // fechado de verdade
       if(snap && snap.motoristaId && snap.motoristaId !== me.id) continue;                 // torre re-atribuiu a OUTRO colab
+      // ⛔ DESATRIBUIÇÃO DELIBERADA vence a proteção anti-sumiço, e tem que vencer ANTES do push:
+      // se a torre carimbou desatribuidoEm, ela tirou o chamado de mim de propósito. Proteger aqui
+      // fazia o controlador remover e o chamado voltar sozinho ("removo e ele volta"). O carimbo
+      // viaja no próprio snapshot, então não corre com o evento chamado:desatribuir.
+      if(snap && !snap.motoristaId && snap.desatribuidoEm){
+        console.warn('[colab] a torre desatribuiu este chamado (por', snap.desatribuidoPor || '?', ') — sai da fila');
+        vibrate([120, 60, 120]);
+        showToast('Chamado removido da sua fila pela torre');
+        continue;   // não entra em novaFila → sai da fila de verdade
+      }
       novaFila.push(c);
       protegidosIds.add(c.id);
       console.warn('[colab] chamado em andamento protegido de sumiço (Waze/background); motoristaId snap=', snap && snap.motoristaId, '·', c.id);
