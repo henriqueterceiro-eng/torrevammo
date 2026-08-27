@@ -837,7 +837,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v88 · 2026-08-27';
+const APP_VERSION = 'v89 · 2026-08-27';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2904,6 +2904,17 @@ function updateChamadoMarkers(){
 
 let routeInfo = null;     // {distance, duration, legs:[{distance,duration}]} — pernas individuais
 let routeFromPos = null;  // posição usada na última requisição
+// 💸 QUANTO ANDAR ANTES DE PAGAR OUTRA ROTA. Cada recálculo é 1 chamada de Google Directions
+// Advanced (departure_time=now → SKU pago). Estava em 100 m: rodando 410 km/dia (mediana medida
+// em 18 dias de produção), isso dava ~4.100 chamadas/dia, pico de 6.600 — contra 5.000/MÊS de
+// cota grátis. A 500 m cai pra ~820/dia sem perder nada de qualidade: a linha até um destino fixo
+// praticamente não muda em 500 m, e quando o motorista SAI da rota o detector de desvio
+// (colab:fora-rota) zera o hash e força o recálculo na hora. Ou seja: a atualização que importa é
+// por DESVIO, não por distância — a distância virou só o piso.
+const ROTA_REFRESH_M = 500;
+// Estado da rota até a base (modo descarregando) — precisa ser separado do routeFromPos porque
+// as duas rotas se alternam no mesmo routeLine.
+let routeBaseFrom = null, routeBaseId = null;
 let routeFromQueueIds = ''; // hash dos ids da fila pra invalidar cache se mudou
 let routeCoords = null;   // coordenadas da rota desenhada [[lat,lng], ...] pra detectar desvio
 
@@ -2987,7 +2998,7 @@ async function updateRoute(){
     return;
   }
   const queueHash = validStops.map(c => c.id).join('|');
-  if(routeFromPos && haversine(routeFromPos, myPos) < 100 && routeLine && queueHash === routeFromQueueIds) return;
+  if(routeFromPos && haversine(routeFromPos, myPos) < ROTA_REFRESH_M && routeLine && queueHash === routeFromQueueIds) return;
   // Linha reta provisória enquanto OSRM responde
   if(!routeLine){
     const fallback = [[myPos.lat, myPos.lng], ...validStops.map(c => [c.lat, c.lng])];
@@ -5896,6 +5907,7 @@ function sairModoDescarga(){
   saveTurno();
   syncTurnoToTorre();
   routeColorOverride = null;
+  routeBaseFrom = null; routeBaseId = null;   // zera a guarda: a próxima base desenha na hora
   if(baseDestinoMarker){ map.removeLayer(baseDestinoMarker); baseDestinoMarker = null; }
   if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
   routeInfo = null;
@@ -5918,6 +5930,15 @@ async function updateRouteToBase(){
   if(!turnoAtivo?.baseDestinoId || !myPos) return;
   const base = bases[turnoAtivo.baseDestinoId];
   if(!base || base.lat == null) return;
+  // 💸 ESTA FUNÇÃO NÃO TINHA GUARDA NENHUMA — e quem chama é o updateMeMarker(), que roda a CADA
+  // ping de GPS. Com o GPS nativo em distanceFilter:5, era 1 chamada de Directions a cada 5 METROS
+  // dirigidos no modo descarregando; no modo web, 1 a cada 6 s. Um retorno de 10 km pra base podia
+  // sozinho gerar ~2.000 chamadas. É a explicação mais provável do OVER_QUERY_LIMIT, que é limite
+  // por SEGUNDO, não por mês. Agora usa a mesma régua da rota de atendimento.
+  // Bônus: o fitBounds abaixo também rodava por ping, então o mapa ficava se recentrando na cara
+  // do motorista enquanto ele dirigia. Agora só enquadra no primeiro desenho de cada base.
+  const primeira = (routeBaseId !== turnoAtivo.baseDestinoId) || !routeLine;
+  if(!primeira && routeBaseFrom && haversine(routeBaseFrom, myPos) < ROTA_REFRESH_M) return;
   try {
     const route = await fetchOsrmRoute({lat:myPos.lat,lng:myPos.lng}, [{lat:base.lat,lng:base.lng}]);
     if(routeLine) map.removeLayer(routeLine);
@@ -5926,7 +5947,9 @@ async function updateRouteToBase(){
       className:'osrm-route'
     }).addTo(map);
     routeInfo = { distance: route.distance, duration: route.duration, legs: route.legs, trafficDelay: route.trafficDelay || 0 };
-    map.fitBounds(L.latLngBounds([[myPos.lat,myPos.lng],[base.lat,base.lng]]), { padding:[60,60], maxZoom:15 });
+    routeBaseFrom = { lat: myPos.lat, lng: myPos.lng };
+    routeBaseId = turnoAtivo.baseDestinoId;
+    if(primeira) map.fitBounds(L.latLngBounds([[myPos.lat,myPos.lng],[base.lat,base.lng]]), { padding:[60,60], maxZoom:15 });
     renderChamadoCard();
   } catch(e){ console.warn('rota base fail:', e); }
 }
