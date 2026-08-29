@@ -116,6 +116,8 @@ body.sidehide #sidebar:hover::after{opacity:0}
 #catfilter .catchip{padding:5px 9px;border-radius:14px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background .15s,border-color .15s,color .15s}
 #catfilter .catchip .cn{background:var(--surf2);color:var(--txt2);padding:0 6px;border-radius:8px;font-size:10px;font-family:var(--mono)}
 #catfilter .catchip.clear{color:var(--txt3);border-style:dashed}
+#catfilter .catnote{flex-basis:100%;font-size:10px;color:var(--txt3);font-weight:600;padding:1px 2px 0}
+#catfilter .catnote b{color:var(--acc);font-family:var(--mono)}
 .card{background:var(--surf);border-bottom:1px solid var(--bdr);padding:10px 12px;cursor:pointer;font-size:12px;position:relative;transition:background 0.1s}
 .card:hover{background:var(--surf2)}
 .card.sel{background:rgba(0,180,229,0.08);border-left:3px solid var(--acc);padding-left:9px}
@@ -1009,7 +1011,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v89 · 2026-08-27'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v117 · 2026-08-26';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v118 · 2026-08-29';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1198,7 +1200,7 @@ let chamados = [];         // produção (Fleet/CX escrevem em vammo/chamados) O
 let fechados = {};         // livro-razão {chamadoId: {status,ts,por}} — finalizações que a sync do Slack não pode reverter
 let motoristas = {};       // {id: {nome, placa, color, lat, lng, status, lastSeen}}
 let filtro = null;
-let catFiltro = new Set(); // filtro por CATEGORIA de chamado (escurece no mapa/lista; vazio = todos acesos)
+let catFiltro = new Set(); // filtro por CATEGORIA de chamado — EXIBE SOMENTE os marcados (vazio = todos)
 let ctrlFiltro = new Set(); // filtro por CONTROLADOR responsável (admin) — acende só os marcados
 let selId = null;
 let _chamadoAbertoMoto = null;   // último chamado aberto (pra mostrar a moto/perguntar 1x ao abrir)
@@ -2452,6 +2454,8 @@ function renderChamadoMarkers(){
     if(!c.lat || !c.lng) continue;
     if(chamadoOcultoPorTempo(c)) continue;   // concluído/cancelado há +12h → não plota (limpo abaixo)
     if(c.status === 'cancelado') continue;   // cancelado NUNCA vai pro mapa (some na hora, não polui)
+    if(catFora(c)) continue;                 // filtro de categoria: fora do `seen` → o varredor lá
+                                             // embaixo (removeLayer + delete) tira o pino sozinho
     seen.add(c.id);
     const al = alertCls(c);
     const isSel = c.id === selId;
@@ -2475,7 +2479,7 @@ function renderChamadoMarkers(){
       chamadoMarkers[c.id] = m;
     }
     // Concluído/cancelado fica bem transparente pra não poluir o mapa (mas continua clicável)
-    chamadoMarkers[c.id].setOpacity((c.status === 'concluido' || c.status === 'cancelado') ? 0.25 : ((catDim(c) || ctrlDim(c)) ? 0.3 : 1));
+    chamadoMarkers[c.id].setOpacity((c.status === 'concluido' || c.status === 'cancelado') ? 0.25 : (ctrlDim(c) ? 0.3 : 1));
   }
   for(const id in chamadoMarkers){
     if(!seen.has(id)){ map.removeLayer(chamadoMarkers[id]); delete chamadoMarkers[id]; }
@@ -2904,15 +2908,21 @@ function renderPills(){
 
 function filtered(){
   return chamados.filter(c => !chamadoOcultoPorTempo(c) && (!filtro || c.status === filtro)
-    && (origemFiltro === 'todos' || (origemFiltro === 'externo' ? ehTerceiro(c) : !ehTerceiro(c))));
+    && (origemFiltro === 'todos' || (origemFiltro === 'externo' ? ehTerceiro(c) : !ehTerceiro(c)))
+    && !catFora(c));
 }
 
 // ===== FILTRO POR CATEGORIA (escurece os não-selecionados; não remove) =====
+// Rótulos pedidos pelo Terceiro em 29/08/2026. As CHAVES não mudam (socorro/recolhimento/
+// logistica/outros) porque o classificador, o catCounts e o histórico dependem delas — só o texto
+// que o controlador lê. Conferido contra as 35 strings distintas de motivo que existem em produção
+// (1.303 chamados, 26/07→29/08): o categoriaDoMotivo abaixo classifica TODAS exatamente como as 3
+// listas do pedido, inclusive as 4 grafias de "Movimentação" e o par pátio cobrar × pátio n cobrar.
 const CATS = [
-  { k:'socorro',      lbl:'Socorro',      e:'🔧', cor:'#00B4E5' },
-  { k:'recolhimento', lbl:'Recolhimento', e:'📦', cor:'#d97706' },
-  { k:'logistica',    lbl:'Logística',    e:'🚚', cor:'#8b5cf6' },
-  { k:'outros',       lbl:'Outros',       e:'📍', cor:'#6b7280' },
+  { k:'socorro',      lbl:'Suporte de campo', e:'🔧', cor:'#00B4E5' },
+  { k:'recolhimento', lbl:'Inadimplente',     e:'💸', cor:'#d97706' },
+  { k:'logistica',    lbl:'Mov. entre bases', e:'🚚', cor:'#8b5cf6' },
+  { k:'outros',       lbl:'Outros',           e:'📍', cor:'#6b7280' },
 ];
 function categoriaDoMotivo(motivo){
   const m = (motivo || '').toLowerCase();
@@ -2921,7 +2931,15 @@ function categoriaDoMotivo(motivo){
   if(/acidente|pneu|roda|bateria|freio|manete|não liga|nao liga|não anda|nao anda|erro|eletr|travad|chave|igni|retrovisor|paralama|caixa de dire|garfo|guid|pedal/.test(m)) return 'socorro';
   return 'outros'; // inclui 'Outros' e 'Time de Pronta Resposta'
 }
-function catDim(c){ return catFiltro.size > 0 && !catFiltro.has(categoriaDoMotivo(c.motivo)); }
+// ANTES escurecia (opacity .3) e o chamado continuava na lista e no mapa. Agora REMOVE, que é o
+// que o pedido de 29/08 descreve: "sejam exibidos somente os chamados relacionados aos motivos
+// selecionados". Aplicado em 3 lugares — filtered() (lista), o laço de renderChamadoMarkers (pinos)
+// e chamadosAtivos() (camada 🛵 de IoT) — pra lista e mapa nunca discordarem.
+// ⚠ NUNCA filtrar o array global `chamados`: pruneQueues() (1273) APAGA a fila do colab no Firebase
+// a partir dele, e ~40 caminhos de escrita usam chamados.find(id) + if(!c) return — com o array
+// encolhido, atribuir/concluir/os handlers do app do colab falham EM SILÊNCIO. O filtro é de
+// RENDERIZAÇÃO e só pode viver nos pontos de render.
+function catFora(c){ return catFiltro.size > 0 && !catFiltro.has(categoriaDoMotivo(c.motivo)); }
 function catCounts(){
   const c = { socorro:0, recolhimento:0, logistica:0, outros:0 };
   for(const x of chamados){ if(x.status === 'concluido' || x.status === 'cancelado') continue; c[categoriaDoMotivo(x.motivo)]++; }
@@ -2934,7 +2952,15 @@ function renderCatFilter(){
     const on = catFiltro.has(cat.k);
     const st = on ? `border-color:${cat.cor};background:${cat.cor}22;color:${cat.cor}` : '';
     return `<button class="catchip${on?' on':''}" data-cat="${cat.k}" style="${st}">${cat.e} ${cat.lbl} <span class="cn">${cc[cat.k]||0}</span></button>`;
-  }).join('') + (catFiltro.size ? `<button class="catchip clear" data-cat="__clear">✕ limpar</button>` : '');
+  }).join('') + (catFiltro.size ? `<button class="catchip clear" data-cat="__clear">✕ limpar</button>` : '')
+  // Com o filtro REMOVENDO (e não mais escurecendo), o que está fora some da tela inteira. Numa torre
+  // de operação isso é perigoso calado: o controlador precisa ver que existe chamado que ele não está
+  // enxergando. Este contador aparece só quando há filtro ativo.
+  + (catFiltro.size ? (() => {
+      const at = chamados.filter(c => !chamadoOcultoPorTempo(c) && c.status !== 'concluido' && c.status !== 'cancelado');
+      const vis = at.filter(c => !catFora(c)).length;
+      return `<span class="catnote">mostrando <b>${vis}</b> de <b>${at.length}</b> chamados ativos — ${at.length - vis} escondido(s) pelo filtro</span>`;
+    })() : '');
   el.querySelectorAll('.catchip').forEach(b => b.onclick = () => {
     const k = b.dataset.cat;
     if(k === '__clear') catFiltro.clear();
@@ -3164,7 +3190,7 @@ function renderList(){
     const transfLine = transfInfo(c, true);
     const _num = c.seq != null ? c.seq : numMap[c.id];
     const numTag = _num ? `<span style="font-family:var(--mono);font-size:10px;color:var(--acc);font-weight:800;margin-right:5px">#${_num}</span>` : '';
-    const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : ((catDim(c) || ctrlDim(c)) ? ' style="opacity:0.3"' : '');
+    const fadeStyle = (c.status === 'concluido' || c.status === 'cancelado') ? ' style="opacity:0.45"' : (ctrlDim(c) ? ' style="opacity:0.3"' : '');
     const checkedCls = selSet.has(c.id) ? ' mchecked' : '';
     return `<div class="card${sel} ${al}${aguard?' aguard':''}${checkedCls}" data-id="${c.id}"${fadeStyle}>
       <div class="mcheck">${selSet.has(c.id)?'✓':''}</div>
@@ -8064,7 +8090,11 @@ let motoPingLines = {};        // chamadoId -> L.polyline
 const IOT_RAIO_M = 300;        // ≤300m do endereço = "no local"
 const IOT_ONLINE_MIN = 120;    // pingou ≤120min = online
 
-function chamadosAtivos(){ return chamados.filter(c => c.status === 'novo' || c.status === 'em_rota'); }
+// Acompanha o filtro de categoria: sem isto o pino 🛵 da moto continuava no mapa depois do chamado
+// sumir da lista — que é exatamente a dessincronia que o pedido manda acabar. NÃO filtramos o
+// heatmap nem as rotas: heatmap é panorama de demanda e rota é despacho ativo (apagar rota de
+// motorista em serviço por causa de um filtro visual seria perigoso).
+function chamadosAtivos(){ return chamados.filter(c => (c.status === 'novo' || c.status === 'em_rota') && !catFora(c)); }
 
 async function toggleIot(){
   iotOn = !iotOn;
