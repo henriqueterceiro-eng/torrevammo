@@ -438,7 +438,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const CX_VERSION = 'v11 · 2026-08-19';
+const CX_VERSION = 'v12 · 2026-08-31';
 
 // Motivos oficiais (mesmos do CX/torre)
 // Motivos oficiais do CX (mesmos da torre, SEM os de Fleet/logística — Deslocamento entre bases,
@@ -578,15 +578,21 @@ const COLS = [
 ];
 
 // ================= RENDER =================
-// A dash do Fleet mostra SÓ os chamados abertos pelo próprio operador logado.
-function ehMeuChamado(c){
-  if(c && c._fake) return true;
-  const meu = (currentUser && currentUser.email || '').toLowerCase();
-  return !!meu && (c.abertoPorEmail||'').toLowerCase() === meu;
-}
+// O board do CX é COMPARTILHADO: quem entra no Vammo Assist vê os chamados de todo mundo.
+// (Terceiro, 31/08/2026 — o Jonathan abriu o app e viu tela vazia.)
+//
+// Antes existia aqui um ehMeuChamado() que só deixava passar chamado cujo abertoPorEmail fosse o
+// do usuário logado. Isso veio junto do fleet.html, de onde este arquivo foi derivado — lá cada
+// operador cuidar da própria fila faz sentido; aqui não, porque o CX é plantão: quem está no turno
+// precisa enxergar o que os colegas abriram. Efeito medido em 31/08: 43 chamados vivos no board,
+// de 6 pessoas — cada operador enxergava só a própria fatia (Andressa 20, Eder 11, André 5,
+// Allan 5, Bruna 1, Leandro 1) e quem nunca tinha aberto chamado via ZERO.
+//
+// A autoria não se perde: o card continua mostrando "✍ Aberto por <nome> · <data>" no rodapé, e
+// abertoPor/abertoPorEmail seguem sendo gravados na criação.
 function chamadosVisiveis(){
   const reais = Object.values(chamados).filter(c=>{
-    if(!c||!c.id || !ehMeuChamado(c)) return false;
+    if(!c||!c.id) return false;
     // SEPARAÇÃO Fleet×CX: o board do CX mostra SÓ CX/socorro (nunca movimentação do Fleet)
     if(!c._fake && !(c.origemCX || (!ehTransf(c) && !c.origemFleet))) return false;
     if(c.status==='concluido'||c.status==='cancelado'){
