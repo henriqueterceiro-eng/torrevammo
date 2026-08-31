@@ -349,7 +349,7 @@ const genId = () => 'c_' + Date.now().toString(36) + '_' + Math.random().toStrin
 const FIREBASE_CONFIG = { apiKey:'AIzaSyDTkZHJymDvE2tIn1L961rqEtdJz9zHM8I', databaseURL:'https://vammo-torre-default-rtdb.firebaseio.com' };
 const GOOGLE_CLIENT_ID = '907980665919-jigbiqke19b3dbgp1ucu1ibfd8ct28sm.apps.googleusercontent.com';
 const BASE_RADIUS_M = 300;         // colab dentro desse raio de uma base = "na base"
-const FLEET_VERSION = 'v18 · 2026-08-25';
+const FLEET_VERSION = 'v19 · 2026-08-31';
 
 // Motivos oficiais (mesmos do CX/torre)
 const MOTIVOS = [
@@ -480,7 +480,7 @@ function render(){
   $('#statAtivos').textContent=ativos;
   $('#statRota').textContent=(porEtapa[4]||[]).length;
 
-  board.innerHTML = COLS.map(col=>{
+  const _mudou = pintaBoard(board, COLS.map(col=>{
     const arr=porEtapa[col.n]||[];
     const inner = arr.length ? arr.map(c=>card(c,col.n)).join('')
       : emptyCol(col.ic, col.n===6?'Nada concluído hoje':'Nenhum chamado aqui');
@@ -489,10 +489,36 @@ function render(){
         <div><div class="ct">${col.t}</div><div class="cs">${col.s}</div></div>
         <span class="cn">${arr.length}</span>
       </div>
-      <div class="body">${inner}</div>
+      <div class="body" data-sk="c${col.n}">${inner}</div>
     </div>`;
-  }).join('');
-  board.querySelectorAll('.kc[data-cid]').forEach(el=> el.onclick=()=> openDetalhe(el.dataset.cid));
+  }).join(''));
+  // so reata os onclick quando o DOM foi realmente reescrito (pintaBoard devolveu true)
+  if(_mudou) board.querySelectorAll('.kc[data-cid]').forEach(el=> el.onclick=()=> openDetalhe(el.dataset.cid));
+}
+// ===== SCROLL QUE NAO PULA (Terceiro, 31/08/2026) =====
+// Sintoma: "rolo a pagina pra baixo e ela sobe sozinha".
+// Causa: o board inteiro e reescrito a cada snapshot do Firebase — `chamados`, `motoristas` e
+// `bases` chamam scheduleRender() — e trocar o innerHTML DESTROI as colunas. Cada `.col .body`
+// (que e quem rola, porque o body do documento tem overflow:hidden) nasce de novo com scrollTop 0,
+// e o scroll horizontal do #board volta pra esquerda. Como o RTDB emite evento a cada campo que
+// muda em QUALQUER chamado — e motorista em rota atualiza GPS o tempo todo — isso dispara varias
+// vezes por minuto: na pratica a tela nao para quieta.
+// Duas defesas, nesta ordem:
+//   1. se o HTML gerado for IDENTICO ao que ja esta na tela, NAO escreve nada. Mata o caso mais
+//      comum de vez (a maioria dos snapshots nao muda nada do board) e de quebra acaba o piscar.
+//   2. quando muda de verdade, guarda o scroll de cada coluna pela chave data-sk (estavel entre
+//      renders, diferente do indice do DOM) e devolve depois da troca.
+// Devolve true so quando reescreveu — quem chama usa isso pra so reatar os onclick quando precisa.
+function pintaBoard(board, html){
+  if(board.__ultimoHtml === html) return false;
+  const pos = new Map();
+  board.querySelectorAll('[data-sk]').forEach(el => { if(el.scrollTop) pos.set(el.dataset.sk, el.scrollTop); });
+  const sx = board.scrollLeft;
+  board.innerHTML = html;
+  board.__ultimoHtml = html;
+  board.querySelectorAll('[data-sk]').forEach(el => { const y = pos.get(el.dataset.sk); if(y) el.scrollTop = y; });
+  if(sx) board.scrollLeft = sx;
+  return true;
 }
 function emptyCol(e,txt){ return `<div class="empty"><span class="e">${e}</span>${esc(txt)}</div>`; }
 function prioridade(c){ return c.clienteAguardando===true ? 1 : 0; }
