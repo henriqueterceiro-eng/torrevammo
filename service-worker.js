@@ -1,6 +1,6 @@
 // Service Worker do Vammo Colaborador
 // Faz cache dos assets pra abrir offline + sobreviver a quedas de rede
-const CACHE_VERSION = 'vammo-colab-v85';
+const CACHE_VERSION = 'vammo-colab-v86';   // v86: purga o HTML cacheado que ainda aponta pro CARTO
 const CORE_ASSETS = [
   '/',
   '/colab',
@@ -27,7 +27,7 @@ self.addEventListener('activate', e => {
 });
 
 // Strategy:
-// - Tiles (TomTom/CARTO/ESRI), Firebase, OSRM, TomTom API: SEMPRE rede direto (não cacheia — dados vivos)
+// - Tiles (OSM/ESRI/TomTom), Firebase, OSRM, TomTom API: SEMPRE rede direto (não cacheia — dados vivos)
 // - HTML / navegação: NETWORK-FIRST (sempre pega a versão nova online; cai pro cache só offline)
 //   → evita o app ficar preso numa versão antiga do HTML após cada deploy
 // - Demais assets (JS, CSS, ícones): cache-first (rápido, sobrevive a queda)
@@ -43,7 +43,8 @@ self.addEventListener('fetch', e => {
     url.hostname.includes('tomtom.com') ||
     url.hostname.includes('project-osrm.org') ||
     url.hostname.includes('arcgisonline.com') ||
-    url.hostname.includes('basemaps.cartocdn.com')
+    url.hostname.includes('openstreetmap.org') ||   // 02/09/2026: virou o provedor de tile (CARTO passou a exigir API key)
+    url.hostname.includes('basemaps.cartocdn.com')  // morto, mantido so pra nao reintroduzir cache se alguem voltar
   );
   if(isLiveData){ return; } // deixa o browser tratar normal
 
