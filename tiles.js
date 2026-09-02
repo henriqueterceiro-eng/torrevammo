@@ -21,7 +21,18 @@
   'use strict';
 
   // ▼▼▼ A ÚNICA LINHA QUE MUDA PRA TROCAR DE PROVEDOR ▼▼▼
-  var CARTO_KEY = '';
+  var CARTO_KEY = 'cb1_2s4d_1_151a758f30390bb357079f7e';
+  // Chave gratuita do CARTO (5 milhoes de tiles/mes). Caminhos CONFERIDOS com esta chave em
+  // 02/09/2026, sobre um tile de Sao Paulo (z12/x1517/y2323) — nao sobre a documentacao:
+  //   dark_all na raiz .............. 27.570 B  OK
+  //   rastertiles/dark_all .......... hash IDENTICO ao da raiz (os dois caminhos servem o mesmo)
+  //   rastertiles/voyager ........... 41.433 B  OK
+  //   voyager_only_labels ........... 3.442 B   OK (ignora a chave, tanto faz)
+  //   @2x (retina) .................. 83.890 B  suportado, mas NAO usado — ver nota abaixo
+  // ⚠ RETINA NAO: o @2x triplica o peso por tile (83 KB contra 27 KB). Este arquivo tambem serve o
+  //   app do MOTORISTA, e em 23/08 medimos 63 MB por turno de consumo de dados dele. Mapa mais
+  //   bonito na torre nao vale triplicar o 4G de quem esta na rua. Se um dia quiserem retina SO na
+  //   torre, e passar a opcao por app, nao aqui.
   // Vazio          -> usa OSM (grátis, sem chave, mas mapa claro invertido no tema escuro).
   // Chave preenchida -> usa CARTO e o mapa volta EXATAMENTE como era antes de 02/09/2026.
   // Chave grátis em carto.com/basemaps/apikey — 5 milhões de tiles/mês, sem precisar de conta.
