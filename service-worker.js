@@ -1,9 +1,12 @@
 // Service Worker do Vammo Colaborador
 // Faz cache dos assets pra abrir offline + sobreviver a quedas de rede
-const CACHE_VERSION = 'vammo-colab-v86';   // v86: purga o HTML cacheado que ainda aponta pro CARTO
+const CACHE_VERSION = 'vammo-colab-v87';   // v87: precacheia /tiles.js (dependencia dura do mapa)
 const CORE_ASSETS = [
   '/',
   '/colab',
+  // /tiles.js e DEPENDENCIA DURA do mapa desde 02/09/2026: sem ele, VammoTiles nao existe e o app
+  // fica sem mapa. Precacheado no install pra funcionar offline igual ao resto.
+  '/tiles.js',
   '/manifest.webmanifest',
   '/icon-192.svg',
   '/icon-512.svg'

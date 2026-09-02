@@ -112,8 +112,6 @@ tbody tr:hover{background:rgba(0,180,229,.05)}
 .parc-icon .pin .body .em{transform:rotate(45deg);font-size:18px}
 .parc-icon .lbl{position:absolute;top:48px;left:50%;transform:translateX(-50%);background:var(--parc);color:#1a1200;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;white-space:nowrap;border:1px solid #7a4d00;font-family:var(--mono);z-index:3}
 .note{font-size:11.5px;color:var(--txt3);margin-top:8px}
-/* CARTO passou a exigir API key (02/09/2026) -> OSM sem chave. OSM e claro: inverte pro tema escuro. */
-.tile-inv{filter:invert(1) hue-rotate(180deg) brightness(.78) saturate(.6)}
 </style>
 </head>
 <body>
@@ -241,6 +239,7 @@ tbody tr:hover{background:rgba(0,180,229,.05)}
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/tiles.js"></script>
 <script>
 var VERSION='v53';
 /* ===== 1. novidades ===== */
@@ -327,7 +326,7 @@ function parcIcon(nome){ return L.divIcon({className:'parc-icon',html:'<div clas
 
 function initMap(){
   map=L.map('map',{zoomControl:true}).setView([-23.60,-46.62],10);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OSM',className:'tile-inv'}).addTo(map);
+  VammoTiles.base(map, 'dark');
   BASES_VAMMO.forEach(function(b){ L.marker([b.lat,b.lng],{icon:baseIcon(b.nome),zIndexOffset:300}).addTo(map).bindTooltip('<b style="color:#00B4E5">🏠 '+b.nome+'</b><br>Base Vammo',{direction:'top',offset:[0,-50]}); });
   renderParcMarkers();
 }

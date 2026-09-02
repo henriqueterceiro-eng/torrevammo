@@ -14,6 +14,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="/tiles.js"></script>
 <style>
 :root{
   --bg:#0a1428;
@@ -378,8 +379,6 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #screentip{position:fixed;top:max(60px,env(safe-area-inset-top));left:8px;right:8px;background:rgba(251,191,36,0.95);color:#1f2937;padding:10px 12px;border-radius:8px;font-size:11px;font-weight:600;display:none;z-index:150;line-height:1.4;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
 #screentip.show{display:flex;align-items:center;gap:8px}
 #screentip .x{background:transparent;border:none;color:#1f2937;font-size:16px;padding:0 4px;cursor:pointer;font-weight:400}
-/* CARTO passou a exigir API key (02/09/2026) -> OSM sem chave. OSM e claro: inverte pro tema escuro. */
-.tile-inv{filter:invert(1) hue-rotate(180deg) brightness(.78) saturate(.6)}
 </style>
 </head>
 <body>
@@ -839,7 +838,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v90 · 2026-09-02';
+const APP_VERSION = 'v91 · 2026-09-02';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -2851,8 +2850,8 @@ function initMap(){
   // } else {
   // {r} = tile @2x (retina): 53 KB por tile contra 13-24 KB em 1x, quase 3x o custo de dados no
   // primeiro turno de um aparelho novo. Mapa operacional não precisa de retina.
-  // CARTO exige API key desde 02/09/2026 (tile vinha escrito "API KEY REQUIRED") -> OSM sem chave.
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...tileOpts, attribution: '© OSM', className: 'tile-inv' }).addTo(map);
+  // Provedor, chave, reserva e atribuição vivem em /tiles.js — fonte única dos 6 apps.
+  VammoTiles.base(map, 'dark', tileOpts);
   // }
   setTimeout(() => map.invalidateSize(), 100);
   window.addEventListener('resize', () => map.invalidateSize());

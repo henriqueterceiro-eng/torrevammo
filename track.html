@@ -7,6 +7,7 @@
 <title>Vammo · Acompanhe seu guincho</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="/tiles.js"></script>
 <style>
 :root{
   --bg:#f5f7fa;
@@ -220,8 +221,7 @@ function initMap(){
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   const tileOpts = { maxZoom: 19, minZoom: 6, errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' };
   // Tiles CARTO sempre (gratuito). TomTom desligado por causa de cota.
-  // CARTO exige API key desde 02/09/2026 -> OSM sem chave.
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...tileOpts, attribution: '© OSM' }).addTo(map);
+  VammoTiles.base(map, 'streets', { ...tileOpts, escuro: false });   // app claro: não inverte o tile
   setTimeout(() => map.invalidateSize(), 100);
   window.addEventListener('resize', () => map.invalidateSize());
 }

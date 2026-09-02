@@ -6,6 +6,7 @@
 <title>Vammo · Torre de Controle</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="/tiles.js"></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <style>
 :root{
@@ -387,9 +388,7 @@ body.selmode .card .mcheck{display:flex}
 /* Tile filter adjustments per theme */
 #leafmap.theme-light .leaflet-tile-pane{filter:none}
 #leafmap.theme-satellite .leaflet-tile-pane{filter:saturate(0.85) brightness(0.9)}
-/* Tile do OSM e CLARO. O tema escuro da torre inverte pra continuar legivel no escuro.
-   (CARTO exigiu API key em 02/09/2026 e servia dark_all pronto; OSM nao tem versao escura.) */
-.tile-inv{filter:invert(1) hue-rotate(180deg) brightness(.78) saturate(.6)}
+
 
 /* DEMO PANEL */
 #demopanel{position:absolute;top:12px;left:12px;background:var(--surf);border:1px solid var(--rota);padding:10px;font-size:11px;z-index:500;border-radius:8px;display:none;width:240px}
@@ -1013,8 +1012,8 @@ body.selmode .card .mcheck{display:flex}
 const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
-const LATEST_COLAB_VERSION = 'v90 · 2026-09-02'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v119 · 2026-09-02';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const LATEST_COLAB_VERSION = 'v91 · 2026-09-02'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
+const TORRE_VERSION = 'v120 · 2026-09-02';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1774,16 +1773,19 @@ function getTileLayers(){
   // OSM e um mapa CLARO, entao 'dark' e o MESMO tile com filtro CSS (.tile-inv) invertendo.
   // Se um dia quiserem o dark bonito do CARTO de volta, e criar conta la e por a key na URL —
   // e so trocar estas duas linhas.
-  const OSM = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';   // sem subdominio, sem chave
+  // Provedor, chave, atribuicao e reserva agora vivem em /tiles.js — FONTE UNICA dos 6 apps.
+  // Preenchendo CARTO_KEY la, o mapa volta a ser o de antes de 02/09/2026 sem tocar neste arquivo.
+  // E esse o ponto: o apagao de hoje precisou de 6 edicoes porque a URL estava copiada 6 vezes.
+  const T = window.VammoTiles;
   return {
-    dark:    { url: OSM, sub:'', attr:'© OSM', label:'Dark', cls:'tile-inv' },
-    voyager: { url: OSM, sub:'', attr:'© OSM', label:'Streets' },
+    dark:    { url: T.url('dark'),    sub: T.sub(), attr: T.attr(), label:'Dark',    cls: T.inverte() ? 'tile-inv' : '' },
+    voyager: { url: T.url('streets'), sub: T.sub(), attr: T.attr(), label:'Streets' },
     satellite: {
       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       sub: '', attr: '© Esri', label: 'Satellite',
-      // rotulos do satelite tambem vinham do CARTO -> Esri, que tambem nao pede chave
-      overlayLabels: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-      overlaySub: ''
+      // rotulos: usa os do provedor quando ele tem (o CARTO tem), senao Esri, que nao pede chave
+      overlayLabels: T.rotulos() || 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      overlaySub: T.rotulos() ? T.sub() : ''
     }
   };
 }
@@ -1799,7 +1801,36 @@ let lastIncidentBbox = null;
 let heatLayer = null;
 let currentLayerName = localStorage.getItem('vammo_layer') || 'dark';
 
+// Reserva de tile: estado no nivel do modulo porque applyLayer roda a cada troca de camada.
+let usandoReserva = false;
+let _tileErros = 0;
+
+// Troca o mapa base pelo provedor de reserva e AVISA na tela. O aviso e metade da correcao: em
+// 02/09 o pior nao foi o mapa sumir, foi ninguem saber por que — o errorTileUrl e um PNG escuro
+// que se passa por mapa vazio, entao a falha era MUDA.
+function ligaReserva(nome){
+  const T = window.VammoTiles;
+  const url = T.urlReserva((nome === 'voyager') ? 'streets' : 'dark');
+  // Sem reserva configurada (o provedor JA e o gratuito) nao ha pra onde cair: fica quieto.
+  if(usandoReserva || !url) return;
+  usandoReserva = true;
+  console.warn('[tiles] provedor principal nao entregou tile — caindo pra', T.nomeReserva());
+  try {
+    if(baseLayer) map.removeLayer(baseLayer);
+    baseLayer = L.tileLayer(url, {
+      maxZoom: 19, minZoom: 6, subdomains: T.subReserva() || 'abc',
+      className: T.inverteReserva() ? 'tile-inv' : ''
+    }).addTo(map);
+    baseLayer.bringToBack();
+    T.creditar(map);
+    if(labelsLayer) labelsLayer.bringToFront();
+    if(trafficLayer) trafficLayer.bringToFront();
+  } catch(e){ console.warn('[tiles] falha ao ligar reserva:', e); }
+  T.avisar('⚠ Mapa: provedor principal fora do ar — usando ' + T.nomeReserva() + ' (reserva)');
+}
+
 function applyLayer(name){
+  usandoReserva = false;   // troca manual de camada = nova chance pro provedor principal
   TILE_LAYERS = getTileLayers();
   if(!TILE_LAYERS[name]) name = 'dark';
   const l = TILE_LAYERS[name];
@@ -1807,14 +1838,21 @@ function applyLayer(name){
   if(labelsLayer){ map.removeLayer(labelsLayer); labelsLayer = null; }
   baseLayer = L.tileLayer(l.url, {
     subdomains: l.sub || 'abc',
-    maxZoom: 19,
+    maxZoom: window.VammoTiles.zoomMax(),
     minZoom: 6,
     attribution: l.attr,
-    className: l.cls || '',   // 'tile-inv' no dark: OSM e claro e precisa inverter
+    className: l.cls || '',   // 'tile-inv' quando o provedor e claro (OSM) num tema escuro
     // Quando tile falha ou está fora do range, mostra placeholder dark em vez de esticar tile vizinha
     errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
   }).addTo(map);
   baseLayer.bringToBack();
+  window.VammoTiles.creditar(map, l.attr);   // credito visivel: exigencia de licenca (OSM e CARTO)
+  // Failover: 6 tiles seguidos falhando = provedor fora. Nao 1 nem 2, senao um tile perdido no
+  // meio de um pan derrubaria o mapa sem necessidade. Tile que CARREGA zera a conta, entao
+  // provedor de pe com falha esporadica nao dispara nada.
+  _tileErros = 0;
+  baseLayer.on('tileload',  () => { _tileErros = 0; });
+  baseLayer.on('tileerror', () => { if(!usandoReserva && ++_tileErros >= 6) ligaReserva(name); });
   // Aplica overlay de labels se o layer tiver
   if(l.overlayLabels){
     labelsLayer = L.tileLayer(l.overlayLabels, {

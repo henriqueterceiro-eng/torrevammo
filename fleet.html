@@ -992,8 +992,7 @@ async function simInit(from, to){
   simStop();
   if(sim.map){ sim.map.remove(); sim.map=null; }
   sim.map = L.map($('#simMap'), {zoomControl:true, attributionControl:false});
-  // CARTO exige API key desde 02/09/2026 -> OSM sem chave.
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OSM'}).addTo(sim.map);
+  VammoTiles.base(sim.map, 'streets', { escuro: false });   // app claro: não inverte o tile
   const pin=(emoji)=>L.divIcon({className:'sim-pin', html:`<div>${emoji}</div>`, iconSize:[26,26], iconAnchor:[13,24]});
   L.marker([from.lat,from.lng], {icon:pin('🏁')}).addTo(sim.map);
   L.marker([to.lat,to.lng], {icon:pin('🎯')}).addTo(sim.map);
@@ -1088,5 +1087,6 @@ initAuth();
 console.log('Vammo Fleet', FLEET_VERSION);
 try{ const _fv=document.getElementById('fleetVer'); if(_fv) _fv.textContent=FLEET_VERSION; }catch(_){}
 </script>
+<script src="/tiles.js"></script>
 </body>
 </html>
