@@ -220,7 +220,8 @@ function initMap(){
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   const tileOpts = { maxZoom: 19, minZoom: 6, errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' };
   // Tiles CARTO sempre (gratuito). TomTom desligado por causa de cota.
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { ...tileOpts, subdomains: 'abcd' }).addTo(map);
+  // CARTO exige API key desde 02/09/2026 -> OSM sem chave.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...tileOpts, attribution: '© OSM' }).addTo(map);
   setTimeout(() => map.invalidateSize(), 100);
   window.addEventListener('resize', () => map.invalidateSize());
 }

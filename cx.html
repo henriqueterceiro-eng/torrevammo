@@ -1130,7 +1130,8 @@ async function simInit(from, to){
   simStop();
   if(sim.map){ sim.map.remove(); sim.map=null; }
   sim.map = L.map($('#simMap'), {zoomControl:true, attributionControl:false});
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19}).addTo(sim.map);
+  // CARTO exige API key desde 02/09/2026 -> OSM sem chave.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OSM'}).addTo(sim.map);
   const pin=(emoji)=>L.divIcon({className:'sim-pin', html:`<div>${emoji}</div>`, iconSize:[26,26], iconAnchor:[13,24]});
   L.marker([from.lat,from.lng], {icon:pin('🏁')}).addTo(sim.map);
   L.marker([to.lat,to.lng], {icon:pin('🎯')}).addTo(sim.map);

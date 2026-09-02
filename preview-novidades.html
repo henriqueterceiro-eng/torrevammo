@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vammo Torre · Preview das Novidades</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root{
+  --bg:#070f1f; --surf:rgba(20,33,57,0.74); --surf2:rgba(31,49,82,0.8);
+  --bdr:rgba(125,165,215,0.14); --bdr2:rgba(0,180,229,0.34);
+  --txt:#eaf1fb; --txt2:#9aa8bd; --txt3:#6b7a91;
+  --acc:#00B4E5; --novo:#dc2626; --rota:#d97706; --conc:#16a34a; --busy:#f59e0b;
+  --parc:#f59e0b; /* cor das bases PARCEIRAS */
+  --mono:'IBM Plex Mono','SF Mono','Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:14px;
+  background:radial-gradient(1100px 640px at 12% -12%,rgba(0,180,229,0.14),transparent 58%),
+    radial-gradient(950px 720px at 112% 8%,rgba(90,120,255,0.09),transparent 55%),var(--bg);
+  background-attachment:fixed;min-height:100vh;padding-bottom:60px}
+button{font-family:inherit;cursor:pointer;border:1px solid var(--bdr);background:var(--surf);color:var(--txt);padding:8px 14px;font-size:13px;border-radius:8px;font-weight:600}
+button:hover{background:var(--surf2);border-color:var(--bdr2)}
+button.primary{background:var(--acc);color:#001823;border-color:var(--acc);font-weight:800}
+button.primary:hover{background:#0099c4}
+button.amber{background:var(--parc);color:#1a1200;border-color:var(--parc);font-weight:800}
+input,select,textarea{font-family:inherit;font-size:13px;padding:9px 11px;border:1px solid var(--bdr);background:var(--surf);color:var(--txt);border-radius:8px;width:100%}
+input:focus,select:focus{outline:1px solid var(--acc);border-color:var(--acc)}
+a{color:var(--acc)}
+
+/* header */
+header{background:linear-gradient(180deg,rgba(0,0,0,0.85),rgba(0,0,0,0.6));backdrop-filter:blur(14px);border-bottom:1px solid var(--bdr2);padding:14px 22px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:600}
+header img{height:26px}
+header .ttl{font-weight:800;font-size:15px}
+header .chip{background:rgba(0,180,229,.14);color:var(--acc);border:1px solid var(--bdr2);padding:4px 11px;border-radius:999px;font-size:11px;font-weight:800;font-family:var(--mono)}
+header .warn{margin-left:auto;color:var(--busy);font-size:12px;font-weight:700}
+
+.wrap{max-width:1080px;margin:0 auto;padding:22px}
+.subnav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;position:sticky;top:56px;z-index:500;background:rgba(7,15,31,.85);backdrop-filter:blur(8px);padding:10px 0}
+.subnav a{text-decoration:none;color:var(--txt2);border:1px solid var(--bdr);padding:6px 12px;border-radius:999px;font-size:12.5px;font-weight:600}
+.subnav a:hover{color:var(--acc);border-color:var(--bdr2)}
+
+.card{background:var(--surf);border:1px solid var(--bdr);border-radius:16px;padding:22px;margin-bottom:20px;box-shadow:0 12px 34px rgba(0,0,0,.4)}
+.card h2{font-size:18px;margin-bottom:4px;display:flex;align-items:center;gap:10px}
+.card .lead{color:var(--txt2);font-size:13px;margin-bottom:18px;line-height:1.5}
+.demo{background:rgba(0,0,0,.28);border:1px dashed var(--bdr2);border-radius:12px;padding:18px}
+.tag{display:inline-block;background:rgba(0,180,229,.12);color:var(--acc);font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:6px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px}
+
+/* ===== popup novidades ===== */
+.overlay{position:fixed;inset:0;background:rgba(2,6,15,.72);backdrop-filter:blur(6px);z-index:2000;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.show{display:flex}
+.nov{background:linear-gradient(180deg,#0e1a30,#0b1526);border:1px solid var(--bdr2);border-radius:18px;max-width:440px;width:100%;padding:26px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.nov .hd{text-align:center;margin-bottom:18px}
+.nov .hd .em{font-size:38px}
+.nov .hd h3{font-size:20px;margin-top:6px}
+.nov .hd .v{color:var(--acc);font-family:var(--mono);font-size:12px;font-weight:800;margin-top:4px}
+.nov ul{list-style:none;display:flex;flex-direction:column;gap:11px;margin:16px 0}
+.nov li{display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,.03);border:1px solid var(--bdr);border-radius:10px;padding:11px 13px}
+.nov li .ic{font-size:18px;flex:0 0 auto}
+.nov li b{display:block;font-size:13.5px}
+.nov li span{color:var(--txt2);font-size:12px}
+.nov .foot{display:flex;gap:10px;align-items:center;margin-top:8px}
+.nov .foot label{font-size:11.5px;color:var(--txt3);display:flex;gap:6px;align-items:center;flex:1}
+
+/* ===== recolhimento ===== */
+.step{margin-bottom:14px}
+.step .q{font-weight:700;margin-bottom:8px;display:flex;gap:8px;align-items:center}
+.btn-row{display:flex;gap:10px}
+.btn-row button{flex:1}
+.btn-row button.sel{outline:2px solid var(--acc)}
+.foto-slot{margin-top:8px;aspect-ratio:16/10;max-width:300px;border:2px dashed var(--bdr2);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--txt2);cursor:pointer;background:rgba(0,0,0,.2);text-align:center;padding:10px}
+.foto-slot.has{border-style:solid;border-color:var(--conc);color:var(--conc)}
+.foto-slot .big{font-size:30px}
+.aviso{background:rgba(245,158,11,.14);border:1px solid var(--busy);color:#ffd27a;border-radius:10px;padding:11px 13px;font-size:12.5px;margin:10px 0;display:flex;gap:9px;align-items:flex-start}
+.oblig{color:var(--novo);font-weight:800;font-size:11px}
+
+/* ===== ociosidade ===== */
+.alert-idle{background:linear-gradient(180deg,rgba(220,38,38,.16),rgba(220,38,38,.06));border:1px solid var(--novo);border-radius:12px;padding:14px 16px;display:flex;gap:14px;align-items:center}
+.alert-idle .pulse{width:14px;height:14px;border-radius:50%;background:var(--novo);flex:0 0 auto;animation:pz 1s infinite}
+@keyframes pz{0%{box-shadow:0 0 0 0 rgba(220,38,38,.6)}70%{box-shadow:0 0 0 10px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}
+.alert-idle b{color:#ffb4b4}
+.alert-idle .t{font-family:var(--mono);font-weight:800;color:#fff;font-size:16px}
+.alert-idle .to{margin-left:auto;font-size:11px;color:var(--txt2);text-align:right}
+
+/* ===== tabela parceiros ===== */
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--bdr)}
+th{color:var(--txt2);font-size:11px;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0;background:#0b1526}
+tbody tr:hover{background:rgba(0,180,229,.05)}
+.tbl-wrap{max-height:320px;overflow:auto;border:1px solid var(--bdr);border-radius:10px}
+.pill{background:rgba(245,158,11,.14);color:#ffcf7a;border:1px solid rgba(245,158,11,.4);padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px}
+.formgrid label{font-size:11px;color:var(--txt2);font-weight:700;display:block;margin-bottom:5px}
+
+/* ===== mapa ===== */
+#map{height:460px;border-radius:12px;border:1px solid var(--bdr2);margin-top:6px}
+.leaflet-container{background:#0a1524}
+.legend{display:flex;gap:20px;margin-top:12px;flex-wrap:wrap}
+.legend .it{display:flex;gap:9px;align-items:center;font-size:12.5px;color:var(--txt2)}
+.legend .swatch{width:26px;height:26px;flex:0 0 auto}
+
+/* pins do mapa (mesmo estilo do torre.html) */
+.base-icon{background:transparent!important;border:none!important}
+.base-icon .pin{width:44px;height:54px;position:relative;filter:drop-shadow(0 4px 8px rgba(0,0,0,.4))}
+.base-icon .pin .body{position:absolute;top:0;left:0;width:44px;height:44px;background:#fff;border:3px solid var(--acc);border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center}
+.base-icon .pin .body svg{transform:rotate(45deg);height:18px;color:var(--acc)}
+.base-icon .lbl{position:absolute;top:48px;left:50%;transform:translateX(-50%);background:#fff;color:#001823;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;white-space:nowrap;border:1px solid var(--acc);font-family:var(--mono);z-index:3}
+/* PARCEIRO: gota AMBAR com caminhão */
+.parc-icon{background:transparent!important;border:none!important}
+.parc-icon .pin{width:44px;height:54px;position:relative;filter:drop-shadow(0 4px 8px rgba(0,0,0,.4))}
+.parc-icon .pin .body{position:absolute;top:0;left:0;width:44px;height:44px;background:var(--parc);border:3px solid #7a4d00;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center}
+.parc-icon .pin .body .em{transform:rotate(45deg);font-size:18px}
+.parc-icon .lbl{position:absolute;top:48px;left:50%;transform:translateX(-50%);background:var(--parc);color:#1a1200;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;white-space:nowrap;border:1px solid #7a4d00;font-family:var(--mono);z-index:3}
+.note{font-size:11.5px;color:var(--txt3);margin-top:8px}
+/* CARTO passou a exigir API key (02/09/2026) -> OSM sem chave. OSM e claro: inverte pro tema escuro. */
+.tile-inv{filter:invert(1) hue-rotate(180deg) brightness(.78) saturate(.6)}
+</style>
+</head>
+<body>
+<header>
+  <img alt="Vammo" src="data:image/png;base64,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">
+  <span class="ttl">Torre · Preview das Novidades</span>
+  <span class="chip">v53 (preview)</span>
+  <span class="warn">⚠ Prévia offline — nada foi publicado</span>
+</header>
+
+<div class="wrap">
+  <div class="subnav">
+    <a href="#f1">🎉 Novidades</a>
+    <a href="#f2">🔑 Foto da bateria</a>
+    <a href="#f3">⏱ Alerta de ociosidade</a>
+    <a href="#f4">🤝 Parceiros</a>
+    <a href="#f5">🗺️ Mapa</a>
+  </div>
+
+  <!-- 1. NOVIDADES -->
+  <div class="card" id="f1">
+    <h2>🎉 Popup de novidades por versão</h2>
+    <div class="lead">Toda vez que subirmos uma atualização, <b>cada operador vê 1 vez</b> um popup com as melhorias daquela versão. Fica marcado no aparelho (não incomoda de novo). Aparece no login/abertura do app — na Torre e no app do Colaborador.</div>
+    <div class="demo">
+      <span class="tag">como aparece</span><br>
+      <button class="primary" onclick="showNov()">▶ Ver o popup de novidades</button>
+      <button onclick="resetNov()">↺ Resetar "já vi" (simular novo operador)</button>
+      <div class="note">Controle: <code>localStorage['novidades_vista_v53']</code> por operador. Ao bumpar a versão, todos veem de novo.</div>
+    </div>
+  </div>
+
+  <!-- 2. FOTO DA BATERIA -->
+  <div class="card" id="f2">
+    <h2>🔑 Foto da bateria obrigatória no recolhimento</h2>
+    <div class="lead">No recolhimento, quando o colab marca <b>que a moto POSSUI chave</b>, ele tira a foto da chave e, <b>logo depois, a foto da BATERIA (obrigatória)</b>. Se a moto <b>não tem chave</b>, não pede bateria. O app avisa antes que a foto da bateria será necessária.</div>
+    <div class="demo">
+      <span class="tag">fluxo do colaborador</span>
+      <div class="step">
+        <div class="q">🔧 A moto possui chave?</div>
+        <div class="btn-row">
+          <button id="ch-sim" onclick="setChave(true)">Sim, tem chave</button>
+          <button id="ch-nao" onclick="setChave(false)">Não tem chave</button>
+        </div>
+      </div>
+      <div id="fluxoChave"></div>
+    </div>
+  </div>
+
+  <!-- 3. OCIOSIDADE -->
+  <div class="card" id="f3">
+    <h2>⏱ Alerta de ociosidade (chamado atribuído + parado)</h2>
+    <div class="lead">Se um colaborador <b>tem um chamado atribuído</b> e fica <b>parado (ocioso) por mais de 20 min</b>, dispara um alerta pra <b>Controlador e Admin</b> na Torre. Assim ninguém fica travado sem a torre saber.</div>
+    <div class="demo">
+      <span class="tag">como a torre vê</span>
+      <div class="alert-idle">
+        <div class="pulse"></div>
+        <div>
+          <b>João Pereira</b> está parado com chamado atribuído<br>
+          <span style="color:var(--txt2);font-size:12px">Chamado <b>#1042</b> · GJE4G07 · atribuído há 34 min · sem se mover</span>
+        </div>
+        <div class="t" id="idleClock">21:47</div>
+        <div class="to">enviado a:<br><b style="color:#fbbf24">Controlador + Admin</b></div>
+      </div>
+      <div class="note">Regra: chamado atribuído (não iniciado / sem progresso) + posição parada (velocidade ~0) por &gt; 20 min. Reseta ao se mover ou iniciar o atendimento. Um alerta por colaborador (não spamma).</div>
+      <div style="margin-top:10px"><button onclick="toggleIdle()">▶ Simular contagem passando de 20 min</button></div>
+    </div>
+  </div>
+
+  <!-- 4. PARCEIROS -->
+  <div class="card" id="f4">
+    <h2>🤝 Cadastro de Motoristas Parceiros (terceiros)</h2>
+    <div class="lead">Nova aba nos Cadastros da Torre. Cada parceiro tem <b>Base do terceiro, Endereço, Contato, Cel, Base de descarga</b>. Já vem com os 14 da sua lista e dá pra <b>incluir novos</b>. Ao salvar, o endereço vira um <b>pino no mapa</b> (ícone de parceiro, veja abaixo).</div>
+    <div class="demo">
+      <span class="tag">adicionar novo parceiro</span>
+      <div class="formgrid">
+        <div><label>Base do terceiro</label><input id="p_nome" placeholder="Ex: Guincho Central"></div>
+        <div><label>Endereço do terceiro</label><input id="p_end" placeholder="Rua, nº, bairro, cidade - SP"></div>
+        <div><label>Contato</label><input id="p_contato" placeholder="Nome do contato"></div>
+        <div><label>Cel contato</label><input id="p_cel" placeholder="(11) 9....."></div>
+        <div><label>Base de descarga</label>
+          <select id="p_desc"><option>Osasco</option><option>São Bernardo</option><option>Santa Justina</option><option>Mooca</option></select>
+        </div>
+        <div style="display:flex;align-items:flex-end"><button class="amber" style="width:100%" onclick="addParceiro()">🤝 Cadastrar + marcar no mapa</button></div>
+      </div>
+      <div class="tbl-wrap">
+        <table id="tblParc"><thead><tr>
+          <th>Base do terceiro</th><th>Endereço</th><th>Contato</th><th>Cel</th><th>Base descarga</th><th></th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+      <div class="note" id="parcCount"></div>
+    </div>
+  </div>
+
+  <!-- 5. MAPA -->
+  <div class="card" id="f5">
+    <h2>🗺️ Parceiros no mapa (ícone diferente)</h2>
+    <div class="lead">Bases parceiras aparecem no mesmo mapa da Torre, mas com <b>ícone âmbar de caminhão</b> — fácil de distinguir das <b>bases Vammo (gota branca com o V ciano)</b>.</div>
+    <div class="demo">
+      <div id="map"></div>
+      <div class="legend">
+        <div class="it"><span class="swatch"><span class="base-icon" style="display:inline-block"><span class="pin" style="width:26px;height:32px"><span class="body" style="width:26px;height:26px"><svg viewBox="0 0 134 147" fill="currentColor" style="height:11px"><path d="M78 140H54L3 7H36L67 96 99 7H131Z"/></svg></span></span></span></span> <b style="color:#fff">Base Vammo</b></div>
+        <div class="it"><span class="swatch"><span class="parc-icon" style="display:inline-block"><span class="pin" style="width:26px;height:32px"><span class="body" style="width:26px;height:26px"><span class="em" style="font-size:11px">🚚</span></span></span></span></span> <b style="color:var(--parc)">Base Parceira</b></div>
+      </div>
+      <div class="note">No preview as posições dos parceiros são aproximadas (por bairro). No app real, ao salvar o endereço é geocodificado de verdade (como já é feito com as bases Vammo).</div>
+    </div>
+  </div>
+
+  <div class="note" style="text-align:center;margin-top:10px">Revisou? Me fala o que ajustar. Só depois do seu OK eu integro no torre.html/colab.html e subo (com bump de versão + o popup de novidades disparando pra todos).</div>
+</div>
+
+<!-- POPUP NOVIDADES -->
+<div class="overlay" id="novOverlay">
+  <div class="nov">
+    <div class="hd"><div class="em">🎉</div><h3>Novidades da atualização</h3><div class="v">versão v53 · 30/07/2026</div></div>
+    <ul>
+      <li><span class="ic">🔋</span><div><b>Foto da bateria no recolhimento</b><span>Quando a moto tem chave, agora pedimos também a foto da bateria.</span></div></li>
+      <li><span class="ic">⏱</span><div><b>Alerta de ociosidade</b><span>A torre é avisada se você ficar parado com um chamado atribuído.</span></div></li>
+      <li><span class="ic">🤝</span><div><b>Motoristas parceiros no mapa</b><span>Bases de terceiros agora aparecem no mapa da torre.</span></div></li>
+    </ul>
+    <div class="foot">
+      <label><input type="checkbox" id="novDont" checked> Não mostrar de novo</label>
+      <button class="primary" onclick="closeNov()">Entendi 👍</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+var VERSION='v53';
+/* ===== 1. novidades ===== */
+function showNov(){ document.getElementById('novOverlay').classList.add('show'); }
+function closeNov(){
+  if(document.getElementById('novDont').checked){ try{localStorage.setItem('novidades_vista_'+VERSION,'1');}catch(e){} }
+  document.getElementById('novOverlay').classList.remove('show');
+}
+function resetNov(){ try{localStorage.removeItem('novidades_vista_'+VERSION);}catch(e){} showNov(); }
+// auto na 1ª vez
+try{ if(!localStorage.getItem('novidades_vista_'+VERSION)) setTimeout(showNov,500); }catch(e){ setTimeout(showNov,500); }
+
+/* ===== 2. recolhimento: chave -> foto chave -> foto bateria ===== */
+var flow={chave:null,fchave:false,fbat:false};
+function setChave(v){
+  flow.chave=v; flow.fchave=false; flow.fbat=false;
+  document.getElementById('ch-sim').classList.toggle('sel',v===true);
+  document.getElementById('ch-nao').classList.toggle('sel',v===false);
+  renderFluxo();
+}
+function tirarFoto(which){
+  if(which==='chave'){ flow.fchave=true; } if(which==='bat'){ flow.fbat=true; }
+  renderFluxo();
+}
+function renderFluxo(){
+  var el=document.getElementById('fluxoChave'); if(flow.chave===null){ el.innerHTML=''; return; }
+  var h='';
+  if(flow.chave===false){
+    h='<div class="aviso" style="background:rgba(107,114,128,.12);border-color:#6b7280;color:#c7d0dc">ℹ️ Moto sem chave — <b>não é preciso foto da chave nem da bateria</b>. Segue direto pra "Moto recolhida".</div>'
+      +'<div class="step"><div class="q">✅ Moto recolhida</div><div class="foto-slot"><span class="big">📷</span>Foto da moto embarcada</div></div>';
+    el.innerHTML=h; return;
+  }
+  // chave = sim
+  h+='<div class="step"><div class="q">📸 Foto da chave</div>'
+    +'<div class="foto-slot '+(flow.fchave?'has':'')+'" onclick="tirarFoto(\'chave\')">'
+    +(flow.fchave?'<span class="big">✅</span>Foto da chave registrada':'<span class="big">📷</span>Toque para tirar a foto da chave')+'</div></div>';
+  if(flow.fchave){
+    h+='<div class="aviso"><span style="font-size:18px">🔋</span><div><b>Agora tire a foto da BATERIA.</b> <span class="oblig">OBRIGATÓRIO</span><br>'
+      +'Precisamos registrar a bateria da moto antes de concluir o recolhimento.</div></div>'
+      +'<div class="step"><div class="q">📸 Foto da bateria <span class="oblig">*obrigatória</span></div>'
+      +'<div class="foto-slot '+(flow.fbat?'has':'')+'" onclick="tirarFoto(\'bat\')">'
+      +(flow.fbat?'<span class="big">✅</span>Foto da bateria registrada':'<span class="big">📷</span>Toque para tirar a foto da bateria')+'</div></div>';
+  }
+  if(flow.fchave&&flow.fbat){
+    h+='<div class="step"><div class="q">✅ Moto recolhida</div><div class="foto-slot"><span class="big">📷</span>Foto da moto embarcada</div></div>'
+      +'<div class="aviso" style="background:rgba(22,163,74,.12);border-color:var(--conc);color:#8ff0b0">✔ Chave e bateria registradas — pode concluir o recolhimento.</div>';
+  }
+  el.innerHTML=h;
+}
+
+/* ===== 3. ociosidade (contador demo) ===== */
+var idleSec=20*60+107, idleTimer=null;
+function fmt(s){ var m=Math.floor(s/60), r=s%60; return (m<10?'0':'')+m+':'+(r<10?'0':'')+r; }
+function toggleIdle(){
+  if(idleTimer){ clearInterval(idleTimer); idleTimer=null; return; }
+  idleTimer=setInterval(function(){ idleSec++; document.getElementById('idleClock').textContent=fmt(idleSec); },1000);
+}
+document.getElementById('idleClock').textContent=fmt(idleSec);
+
+/* ===== 4 + 5. parceiros + mapa ===== */
+var PARCEIROS=[
+ {nome:'Pedro Valentim',end:'Rua Santa Lídia, s/n - Carapicuíba - SP, 06360-150',contato:'Pedro Valentim',cel:'11 94700-9985',desc:'Osasco',lat:-23.535,lng:-46.836},
+ {nome:'ABC Valentim',end:'Rua José Portillo, 18 - Jd Maria Lídia, SP, 08370-510',contato:'Pedro Valentim',cel:'11 94700-9985',desc:'São Bernardo',lat:-23.545,lng:-46.455},
+ {nome:'Extremo Sul – Valentim',end:'Rua do Tom Maior, 7 - Jd Santa Margarida, SP, 04930-230',contato:'Pedro Valentim',cel:'11 94700-9985',desc:'Santa Justina',lat:-23.660,lng:-46.760},
+ {nome:'ZN Valentim',end:'Rua Carlo Pallavicino, 260 - Jd Vivan, SP, 02993-110',contato:'Pedro Valentim',cel:'11 94700-9985',desc:'Osasco',lat:-23.470,lng:-46.680},
+ {nome:'DS – ABC Recuperações',end:'Estrada dos Fernandes, s/n - Ribeirão Pires - SP',contato:'Josean (DS)',cel:'11 98677-5024',desc:'São Bernardo',lat:-23.715,lng:-46.410},
+ {nome:'DS Recuperações',end:'Av. Minas Gerais, s/n - Jd Santa Helena, Poá - SP, 08554-120',contato:'Josean (DS)',cel:'11 98677-5024',desc:'Mooca',lat:-23.520,lng:-46.345},
+ {nome:'Guincho Zona Leste',end:'Estrada Iguatemi, 1212-B - Jd Pedra Branca, SP, 08490-500',contato:'Maico',cel:'11 98310-4480',desc:'Mooca',lat:-23.580,lng:-46.415},
+ {nome:'IMI Resgate de Moto ZL',end:'Rua Ulisses Guimarães, s/n - Lajeado, SP, 08452-430',contato:'Iago',cel:'11 99964-4563',desc:'Mooca',lat:-23.540,lng:-46.400},
+ {nome:'Tatu Transporte',end:'R. Comendador Alfaia Rodrigues, s/n - Jabaquara, SP, 04368-140',contato:'Manoel (Tatu)',cel:'11 97063-9914',desc:'São Bernardo',lat:-23.645,lng:-46.640},
+ {nome:'Thiago Queiroz',end:'Estrada Canal de Cocaia, s/n - Grajaú, SP, 04849-032',contato:'Thiago',cel:'11 97991-6304',desc:'Santa Justina',lat:-23.775,lng:-46.685},
+ {nome:'Michael - Mr. Guincho',end:'Estr. de Itapecerica, 4439 - SP, 05849-440',contato:'Michael',cel:'11 95667-7771',desc:'Mooca',lat:-23.670,lng:-46.755},
+ {nome:'Teodoro transporte',end:'R. das Paineiras (Jd Pinheiros), 318',contato:'Tianna Brito',cel:'73 8253-4163',desc:'São Bernardo',lat:-23.560,lng:-46.700},
+ {nome:'Impacto',end:'R. Maria Amélia Gouveia André, 429 - Jd São Luiz, SP, 05850-250',contato:'Lauro',cel:'11 95913-4801',desc:'Santa Justina',lat:-23.660,lng:-46.735},
+ {nome:'Rodolpho Bastos',end:'Rua Amador Pereira, s/n - São Lucas, SP, 03257-181',contato:'—',cel:'—',desc:'São Bernardo',lat:-23.600,lng:-46.545}
+];
+// base Vammo de referência (só pra comparar o ícone)
+var BASES_VAMMO=[{nome:'Osasco',lat:-23.532,lng:-46.792},{nome:'Mooca',lat:-23.556,lng:-46.597}];
+
+var map, parcMarkers=[];
+var VSVG='<svg viewBox="0 0 134 147" fill="currentColor"><path d="M78 140H54L3 7H36L67 96 99 7H131Z"/></svg>';
+function baseIcon(nome){ return L.divIcon({className:'base-icon',html:'<div class="pin"><div class="body">'+VSVG+'</div><div class="lbl">'+nome+'</div></div>',iconSize:[44,68],iconAnchor:[22,52]}); }
+function parcIcon(nome){ return L.divIcon({className:'parc-icon',html:'<div class="pin"><div class="body"><span class="em">🚚</span></div><div class="lbl">'+nome+'</div></div>',iconSize:[44,68],iconAnchor:[22,52]}); }
+
+function initMap(){
+  map=L.map('map',{zoomControl:true}).setView([-23.60,-46.62],10);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OSM',className:'tile-inv'}).addTo(map);
+  BASES_VAMMO.forEach(function(b){ L.marker([b.lat,b.lng],{icon:baseIcon(b.nome),zIndexOffset:300}).addTo(map).bindTooltip('<b style="color:#00B4E5">🏠 '+b.nome+'</b><br>Base Vammo',{direction:'top',offset:[0,-50]}); });
+  renderParcMarkers();
+}
+function renderParcMarkers(){
+  parcMarkers.forEach(function(m){ map.removeLayer(m); }); parcMarkers=[];
+  PARCEIROS.forEach(function(p){
+    if(p.lat==null) return;
+    var m=L.marker([p.lat,p.lng],{icon:parcIcon(p.nome),zIndexOffset:250}).addTo(map)
+      .bindTooltip('<b style="color:#f59e0b">🚚 '+p.nome+'</b><br>'+p.end+'<br><small>Contato: '+p.contato+' · '+p.cel+'</small><br><small>Descarga: '+p.desc+'</small>',{direction:'top',offset:[0,-50]});
+    parcMarkers.push(m);
+  });
+}
+function renderTabela(){
+  var tb=document.querySelector('#tblParc tbody'); tb.innerHTML='';
+  PARCEIROS.forEach(function(p,i){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td><b>'+p.nome+'</b></td><td style="color:var(--txt2)">'+p.end+'</td><td>'+p.contato+'</td><td>'+p.cel+'</td><td><span class="pill">'+p.desc+'</span></td>'
+      +'<td><button onclick="delParc('+i+')" style="padding:4px 8px;font-size:11px">✕</button></td>';
+    tb.appendChild(tr);
+  });
+  document.getElementById('parcCount').textContent=PARCEIROS.length+' parceiros cadastrados. (Os pinos âmbar no mapa abaixo são esses endereços.)';
+}
+function delParc(i){ PARCEIROS.splice(i,1); renderTabela(); renderParcMarkers(); }
+function addParceiro(){
+  var nome=document.getElementById('p_nome').value.trim(), end=document.getElementById('p_end').value.trim();
+  if(!nome||!end){ alert('Preencha ao menos a base do terceiro e o endereço.'); return; }
+  var p={nome:nome,end:end,contato:document.getElementById('p_contato').value.trim()||'—',cel:document.getElementById('p_cel').value.trim()||'—',desc:document.getElementById('p_desc').value,lat:null,lng:null};
+  PARCEIROS.push(p); renderTabela();
+  ['p_nome','p_end','p_contato','p_cel'].forEach(function(id){document.getElementById(id).value='';});
+  // geocodifica de verdade (Nominatim) pra cair no mapa como no app real
+  fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(end+', São Paulo, Brasil'))
+    .then(function(r){return r.json();}).then(function(j){
+      if(j&&j[0]){ p.lat=parseFloat(j[0].lat); p.lng=parseFloat(j[0].lon); renderParcMarkers(); map.setView([p.lat,p.lng],13); }
+      else{ alert('Cadastrado! (não achei as coordenadas do endereço pra fixar no mapa — no app real ajustamos manualmente se o geocode falhar)'); }
+    }).catch(function(){ alert('Cadastrado! (geocode indisponível offline no momento)'); });
+}
+renderTabela();
+window.addEventListener('load',initMap);
+</script>
+</body>
+</html>

@@ -378,6 +378,8 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transp
 #screentip{position:fixed;top:max(60px,env(safe-area-inset-top));left:8px;right:8px;background:rgba(251,191,36,0.95);color:#1f2937;padding:10px 12px;border-radius:8px;font-size:11px;font-weight:600;display:none;z-index:150;line-height:1.4;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
 #screentip.show{display:flex;align-items:center;gap:8px}
 #screentip .x{background:transparent;border:none;color:#1f2937;font-size:16px;padding:0 4px;cursor:pointer;font-weight:400}
+/* CARTO passou a exigir API key (02/09/2026) -> OSM sem chave. OSM e claro: inverte pro tema escuro. */
+.tile-inv{filter:invert(1) hue-rotate(180deg) brightness(.78) saturate(.6)}
 </style>
 </head>
 <body>
@@ -2849,7 +2851,8 @@ function initMap(){
   // } else {
   // {r} = tile @2x (retina): 53 KB por tile contra 13-24 KB em 1x, quase 3x o custo de dados no
   // primeiro turno de um aparelho novo. Mapa operacional não precisa de retina.
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', { ...tileOpts, subdomains: 'abcd', attribution: '© OSM · CARTO' }).addTo(map);
+  // CARTO exige API key desde 02/09/2026 (tile vinha escrito "API KEY REQUIRED") -> OSM sem chave.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...tileOpts, attribution: '© OSM', className: 'tile-inv' }).addTo(map);
   // }
   setTimeout(() => map.invalidateSize(), 100);
   window.addEventListener('resize', () => map.invalidateSize());

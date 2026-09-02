@@ -387,6 +387,9 @@ body.selmode .card .mcheck{display:flex}
 /* Tile filter adjustments per theme */
 #leafmap.theme-light .leaflet-tile-pane{filter:none}
 #leafmap.theme-satellite .leaflet-tile-pane{filter:saturate(0.85) brightness(0.9)}
+/* Tile do OSM e CLARO. O tema escuro da torre inverte pra continuar legivel no escuro.
+   (CARTO exigiu API key em 02/09/2026 e servia dark_all pronto; OSM nao tem versao escura.) */
+.tile-inv{filter:invert(1) hue-rotate(180deg) brightness(.78) saturate(.6)}
 
 /* DEMO PANEL */
 #demopanel{position:absolute;top:12px;left:12px;background:var(--surf);border:1px solid var(--rota);padding:10px;font-size:11px;z-index:500;border-radius:8px;display:none;width:240px}
@@ -1011,7 +1014,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v89 · 2026-08-27'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v118 · 2026-08-29';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v119 · 2026-09-02';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1763,14 +1766,24 @@ function getTileLayers(){
   //     satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', sub: '', attr: '© Esri', label: 'Satellite', overlayLabels: ttTileUrl('labels/main') }
   //   };
   // }
+  // ⚠ 02/09/2026: o CARTO passou a EXIGIR API KEY nos basemaps. Nao foi queda — os tiles voltavam
+  // uma imagem escrita "API KEY REQUIRED", e a torre ficou com fundo escuro liso (o errorTileUrl
+  // abaixo e um PNG 1x1 escuro, entao tile que falha vira exatamente isso, SEM AVISO NENHUM ao
+  // operador). Quebrou nos 6 apps de uma vez sem ninguem mexer em codigo: torre, colab, cx, fleet,
+  // track e preview. Trocado pelo OSM padrao, que nao pede chave.
+  // OSM e um mapa CLARO, entao 'dark' e o MESMO tile com filtro CSS (.tile-inv) invertendo.
+  // Se um dia quiserem o dark bonito do CARTO de volta, e criar conta la e por a key na URL —
+  // e so trocar estas duas linhas.
+  const OSM = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';   // sem subdominio, sem chave
   return {
-    dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', sub:'abcd', attr:'© OSM · CARTO', label:'Dark' },
-    voyager: { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', sub:'abcd', attr:'© OSM · CARTO', label:'Streets' },
+    dark:    { url: OSM, sub:'', attr:'© OSM', label:'Dark', cls:'tile-inv' },
+    voyager: { url: OSM, sub:'', attr:'© OSM', label:'Streets' },
     satellite: {
       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       sub: '', attr: '© Esri', label: 'Satellite',
-      overlayLabels: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
-      overlaySub: 'abcd'
+      // rotulos do satelite tambem vinham do CARTO -> Esri, que tambem nao pede chave
+      overlayLabels: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      overlaySub: ''
     }
   };
 }
@@ -1797,6 +1810,7 @@ function applyLayer(name){
     maxZoom: 19,
     minZoom: 6,
     attribution: l.attr,
+    className: l.cls || '',   // 'tile-inv' no dark: OSM e claro e precisa inverter
     // Quando tile falha ou está fora do range, mostra placeholder dark em vez de esticar tile vizinha
     errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
   }).addTo(map);
