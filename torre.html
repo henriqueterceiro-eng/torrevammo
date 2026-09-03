@@ -1013,7 +1013,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v92 · 2026-09-02'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v121 · 2026-09-02';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v122 · 2026-09-03';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -6867,19 +6867,50 @@ function _revelarAddrRest(){
   const r = $('#addrRest'); if(r) r.style.display = 'block';
   const h = $('#addrPlacaHint'); if(h) h.style.display = 'none';
 }
-async function buscarMotoBackoffice(placa){
+// ⚠ 03/09/2026 — NAO voltar a tratar todo `found:false` como "placa nao existe".
+// O /api/moto_lookup devolve found:false por QUATRO motivos diferentes: placa realmente nao
+// cadastrada, MB_KEY ausente, erro na consulta e timeout do Metabase. Antes o front ignorava o
+// campo `d.error` e mostrava "Placa nao encontrada no Backoffice" em todos — uma afirmacao de FATO
+// que era falsa. Caso real: TJW0F71 (Gustavo Priosta, IN_STREET) existe e o endpoint devolve
+// found:true; a torre disse que nao existia e o operador foi digitar cliente na mao, perdendo
+// telefone, user_id e link do Backoffice — e podendo concluir que a moto nao esta cadastrada.
+// A consulta usa FINAL em 3 tabelas juntadas (vammo_r.bike + user + bike_model) e a placa tem 5
+// versoes no CDC, entao lentidao/timeout ali e plausivel: por isso a retentativa abaixo.
+async function buscarMotoBackoffice(placa, tentativa){
   const res = $('#addrMotoInfo');
-  if(res){ res.style.display = 'block'; res.innerHTML = '🔎 Buscando a moto no Backoffice…'; }
+  if(res){ res.style.display = 'block'; res.innerHTML = (tentativa ? '🔎 Tentando de novo…' : '🔎 Buscando a moto no Backoffice…'); }
   try {
     const r = await fetch('/api/moto_lookup?placa=' + encodeURIComponent(placa));
     const d = await r.json();
+    // FALHA de consulta != placa inexistente. Uma retentativa automatica, e se persistir o texto
+    // diz a verdade (falhou) em vez de afirmar que a placa nao existe.
+    if(d && !d.found && d.error){
+      if(!tentativa){ return buscarMotoBackoffice(placa, 1); }
+      if(res) res.innerHTML = '<span style="color:#fbbf24">⚠ Falha ao consultar o Backoffice — <b>nao</b> quer dizer que a placa nao existe. '
+        + '<a href="#" id="addrRetry" style="color:var(--acc)">tentar de novo</a> ou preencha manualmente.</span>';
+      const _rt = $('#addrRetry');
+      if(_rt) _rt.onclick = (ev) => { ev.preventDefault(); buscarMotoBackoffice(placa); };
+      _revelarAddrRest();
+      console.warn('[moto_lookup] erro:', d.error);
+      return;
+    }
     if(!d || !d.found){ if(res) res.innerHTML = '<span style="color:var(--txt3)">Placa não encontrada no Backoffice — preencha manualmente.</span>'; _revelarAddrRest(); return; }
     d._searched = placa; _addrLookup = d;
     const cli = $('#addrCliente'); if(cli && !cli.value.trim() && d.cliente) cli.value = d.cliente;
     const tel = $('#addrTel');     if(tel && !tel.value.trim() && d.telefone) tel.value = d.telefone;
     if(res) res.innerHTML = `🏍 <strong style="color:var(--acc)">${esc(d.modelo||'moto')}</strong> · 👤 ${esc(d.cliente||'?')}${d.telefone?' · 📞 '+esc(d.telefone):''}<br><small>preenchido do Backoffice${d.backofficeUrl?` · <a href="${esc(d.backofficeUrl)}" target="_blank" style="color:var(--acc)">abrir perfil ↗</a>`:''}</small>`;
     _revelarAddrRest();
-  } catch(e){ if(res) res.innerHTML = '<span style="color:var(--txt3)">Erro ao buscar no Backoffice.</span>'; }
+  } catch(e){
+    // Rede caiu / resposta nao-JSON: mesma regra — uma retentativa e depois a verdade, com o
+    // botao de tentar de novo E os campos liberados, pra o operador nunca ficar travado.
+    if(!tentativa){ return buscarMotoBackoffice(placa, 1); }
+    if(res) res.innerHTML = '<span style="color:#fbbf24">⚠ Nao deu pra falar com o Backoffice — <b>nao</b> quer dizer que a placa nao existe. '
+      + '<a href="#" id="addrRetry" style="color:var(--acc)">tentar de novo</a> ou preencha manualmente.</span>';
+    const _rt = $('#addrRetry');
+    if(_rt) _rt.onclick = (ev) => { ev.preventDefault(); buscarMotoBackoffice(placa); };
+    _revelarAddrRest();
+    console.warn('[moto_lookup] excecao:', e && e.message);
+  }
 }
 function openAddCh(){
   $('#addrEndereco').value = '';
