@@ -1,6 +1,6 @@
 // Service Worker do Vammo Colaborador
 // Faz cache dos assets pra abrir offline + sobreviver a quedas de rede
-const CACHE_VERSION = 'vammo-colab-v88';   // v88: tiles.js com a chave do CARTO — mapa volta ao normal
+const CACHE_VERSION = 'vammo-colab-v89';   // v89: reconciliacao de slots (motorista destravado por reload)
 const CORE_ASSETS = [
   '/',
   '/colab',

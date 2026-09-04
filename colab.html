@@ -838,7 +838,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v92 · 2026-09-02';
+const APP_VERSION = 'v93 · 2026-09-04';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1077,6 +1077,13 @@ function setupChamadosListener(){
           console.log('[colab] turno sincronizado: slotsOcupados', localCount, '→', remoteCount);
           turnoAtivo.slotsOcupados = remoteSlots;
           renderTopBar();
+          // ASSINATURA DA FALHA: o remoto zerou os slots. Pode ser descarga legitima, mas tambem e
+          // exatamente o eco atrasado da delecao do no (array vazio = null no RTDB) apagando placas
+          // escaneadas depois. A reconciliacao decide pelo dado do chamado, nao pelo palpite: so
+          // repoe transferencia carregada e SEM descargaEm.
+          if(remoteCount === 0 && localCount > 0){
+            try { reconciliarSlots('remoto zerou os slots'); } catch(e){ console.warn('[slots] reconciliar falhou:', e); }
+          }
           // Manda heartbeat imediato pra torre saber que o colab já tá ciente
           if(myPos) sendPos(myPos);
           if(remoteCount > localCount){
@@ -4206,6 +4213,7 @@ function confirmarDescarga(){
   const aSair = slotsOriginal.filter(s => _descSelecionadas[s.id]);
   const aSair_ids = new Set(aSair.map(s => s.id));
   _marcarDescarregado([...aSair_ids]);   // blinda: se o write falhar, o remoto stale não repõe essas motos
+  _marcarDescarregadoPlacas(aSair.map(x => x && x.placa));   // idem por PLACA, pra reconciliarSlots não repor
   turnoAtivo.slotsOcupados = slotsOriginal.filter(s => !aSair_ids.has(s.id));
   turnoAtivo._slotsLocalTs = Date.now();
   saveTurno();
@@ -4249,6 +4257,10 @@ function confirmarDescarga(){
 }
 
 function afterFilaChange(msg){
+  // Rede de seguranca: se algum chamado de transferencia esta carregado (iniciadoEm) e sem descarga
+  // mas as placas dele nao estao nos slots, reconstroi. E aqui que o motorista travado se cura so
+  // reabrindo o app — sem ninguem escrever no banco pela torre.
+  try { reconciliarSlots('fila mudou'); } catch(e){ console.warn('[slots] reconciliar falhou:', e); }
   // Sincroniza estado da corrida com o ativo da fila
   if(fila.length > 0){
     const ativo = fila[0];
@@ -5713,6 +5725,11 @@ async function finalizarCheckIn(){
   // HISTÓRICO: um registro por turno (não sobrescreve como o nó vivo) — pro Log de colabs por dia
   try { db.ref('vammo/turnos_hist/' + me.id + '/' + turno.turnoId).set(cleanForFb(turno)).catch(()=>{}); } catch(_){}
   turnoAtivo = turno;
+  // TROCA DE TURNO: o turno nasce com slotsOcupados vazio, mas transferencia carregada e nao
+  // descarregada continua de pe nos chamados. Sem isto, quem troca de veiculo com carga em aberto
+  // NUNCA consegue fechar (caso Ocimar, 03/09). A fila pode ainda nao ter chegado aqui, por isso a
+  // reconciliacao tambem roda no afterFilaChange.
+  try { reconciliarSlots('check-in novo'); } catch(e){ console.warn('[slots] reconciliar falhou:', e); }
   me.veiculoId = vId; me.veiculoPlaca = v.placa; me.placa = v.placa;
   me.vehicle = v.tipo === 'carro' ? (cId ? 'pickup_carreta' : 'pickup') : v.tipo;
   saveMe(me);
@@ -5779,6 +5796,82 @@ function isFull(){ return turnoAtivo && slotsCount() >= slotsTotalCount() && slo
 const _descargaRecente = new Map();   // slotId -> ts da descarga
 function _marcarDescarregado(ids){ const t = Date.now(); (ids||[]).forEach(id => { if(id) _descargaRecente.set(id, t); }); }
 function _foiDescarregadoRecente(id){ const t = _descargaRecente.get(id); if(!t) return false; if(Date.now() - t > 45000){ _descargaRecente.delete(id); return false; } return true; }
+// A blindagem acima e por slotId. A reconciliacao (ver reconciliarSlots) cria slot com id NOVO, e
+// por isso precisa da mesma protecao chaveada por PLACA — senao repunha a moto que o colab acabou
+// de descarregar, no intervalo entre o descargaEm local e o write ecoar.
+const _descargaRecentePlaca = new Map();   // PLACA -> ts
+function _marcarDescarregadoPlacas(placas){ const t = Date.now(); (placas||[]).forEach(p => { const n = normPlaca(p); if(n) _descargaRecentePlaca.set(n, t); }); }
+function _placaDescarregadaRecente(placa){ const n = normPlaca(placa); const t = _descargaRecentePlaca.get(n); if(!t) return false; if(Date.now() - t > 120000){ _descargaRecentePlaca.delete(n); return false; } return true; }
+// ============================================================================
+// RECONCILIACAO DE SLOTS (04/09/2026) — os slots deixam de ser fonte unica da verdade
+//
+// PORQUE ISTO EXISTE: cinco motoristas travados na rua em oito dias, sempre o mesmo sintoma —
+// chamado de transferencia com as placas escaneadas, turno com ZERO slot, botao "Descarregar
+// motos" desabilitado (`btnDesc.disabled = slotsCount() === 0`), descargaEm nunca gravado e o
+// Concluir travado pra sempre. Sem workaround no app: so escrita no banco pela torre.
+//
+// DUAS CAUSAS DISTINTAS, mesmo efeito:
+//   (a) DESCARGA TOTAL + ECO ATRASADO (caso Gustava, 04/09): descarregar TODAS as motos deixa
+//       slotsOcupados = [] e o RTDB APAGA o no (array vazio = null). Se o eco dessa delecao chega
+//       mais de 12s depois — a janela do anti-corrida logo acima — `mexiAgora` e false, o listener
+//       ACEITA remoteCount=0 e apaga as placas escaneadas depois. E o fluxo NORMAL de quem faz
+//       transferencia ida-e-volta: descarrega tudo num destino e carrega de novo no mesmo turno.
+//   (b) TROCA DE TURNO (caso Ocimar, 03/09): vammo/turnos/<colabId> guarda UM turno. Abrir turno
+//       novo (trocar de veiculo) SOBRESCREVE o anterior e leva os slots junto.
+//
+// A SAIDA: os slots de transferencia sao DERIVAVEIS. chamados/<id>/motos tem as placas, iniciadoEm
+// diz que ele carregou e descargaEm diz se ja saiu. Entao, em vez de blindar cada corrida (que e
+// jogo perdido — a blindagem _descargaRecente cobria so o sentido inverso, snapshot velho REPONDO
+// moto descarregada), o app RECONSTROI o que falta a partir dos chamados.
+//
+// TRAVAS DE SEGURANCA, na ordem em que importam:
+//   · So ADICIONA, nunca remove. Nao briga com o motorista nem desfaz descarga.
+//   · So mexe em TRANSFERENCIA com iniciadoEm e SEM descargaEm/descargaBaseNome.
+//   · UMA VEZ por (chamado|placa) por sessao (`_jaReconciliado`). Sem isso haveria loop: se o write
+//     do descargaEm falhasse, descarregar -> reconciliar -> descarregar pra sempre.
+//   · Respeita _descargaRecente por PLACA (nao so por slotId, que e novo a cada reconstrucao).
+// ============================================================================
+const _jaReconciliado = new Set();     // 'chamadoId|PLACA' — no maximo uma reconstrucao por sessao
+
+function reconciliarSlots(porque){
+  if(!turnoAtivo || !Array.isArray(fila) || !fila.length) return 0;
+  const atuais = Array.isArray(turnoAtivo.slotsOcupados) ? turnoAtivo.slotsOcupados.filter(x => x && typeof x === 'object') : [];
+  const tem = new Set(atuais.map(x => (x.chamadoId || '') + '|' + normPlaca(_placaDeSlot(x))));
+  const novos = [];
+  for(const c of fila){
+    if(!ehTransferencia(c)) continue;
+    if(!c.iniciadoEm) continue;                          // ainda nao carregou: nao ha slot a ter
+    if(c.descargaEm || c.descargaBaseNome) continue;      // ja descarregou: NAO repor
+    for(const m of motosArr(c)){
+      const placaRaw = _placaDeSlot(m);
+      const placa = normPlaca(placaRaw);
+      if(!placa) continue;
+      const k = c.id + '|' + placa;
+      if(tem.has(k) || _jaReconciliado.has(k)) continue;
+      if(_placaDescarregadaRecente(placa)) continue;       // acabou de sair do caminhao
+      tem.add(k); _jaReconciliado.add(k);
+      novos.push({
+        id: 'slot_' + Date.now() + '_' + Math.random().toString(36).substring(2,5),
+        ocupadoEm: c.iniciadoEm,                           // quando ele carregou, nao agora
+        source: 'transferencia',
+        chamadoId: c.id,                                   // SEM isto o confirmarDescarga nao grava descargaEm
+        clienteName: null,
+        placa: placaRaw,
+        modelo: (m && m.modelo) || null,
+        categoria: (m && m.categoria) || null,
+        reconciliado: Date.now()                           // rastro: este slot nao veio de scan
+      });
+    }
+  }
+  if(!novos.length) return 0;
+  turnoAtivo.slotsOcupados = atuais.concat(novos);
+  turnoAtivo._slotsLocalTs = Date.now();
+  saveTurno(); syncTurnoToTorre(); renderTopBar();
+  console.warn('[slots] reconciliados ' + novos.length + ' slot(s) a partir dos chamados (' + (porque || '?') + ')');
+  showToast('🔧 ' + novos.length + ' moto(s) restaurada(s) a bordo — pode descarregar');
+  return novos.length;
+}
+
 // Campos MUTÁVEIS do turno — os únicos que o saveTurno reescreve. Todo o resto (o bloco checkIn
 // com 5 fotos + assinatura, veículo, carreta, km inicial) é escrito UMA vez no check-in e nunca
 // muda. Conferido contra os 8 call sites do saveTurno: eles só mexem nestes campos.
