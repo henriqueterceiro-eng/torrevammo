@@ -838,7 +838,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v94 · 2026-09-04';
+const APP_VERSION = 'v95 · 2026-09-04';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -4827,13 +4827,51 @@ const KIT_BOLSA = [
   { key: 'macarrao_pneus',  label: 'Macarrão para reparo de pneus' }
 ];
 
+// ============================================================================
+// ⚠ 04/09/2026 — "o Alexandre aperta o botao de deslogar e nada acontece".
+// Esta funcao era um cano sem valvula: `await ensureFb()` (que baixa o SDK do gstatic) seguido de
+// dois `once('value')` SEM TIMEOUT. Com sinal ruim, ou o ensureFb REJEITA (script nao baixou) ou o
+// once() PENDURA pra sempre. Quem chama e o iniciarWizardCheckout(), que faz `await` nela — entao a
+// falha nao produz erro, spinner nem alerta: o botao simplesmente NAO FAZ NADA. Pior tipo de falha
+// que existe num app de campo, porque o motorista acha que o toque nao pegou e fica tentando.
+// Agravante: `_turnoVeiculos` SO e populado aqui. Quem recarrega o app com turno em andamento pula
+// o wizard de check-in e chega no checkout com ele vazio — e foram dois deploys meus hoje forcando
+// reload em massa com a frota na rua.
+// Agora: timeout por leitura, cache local (o cadastro de veiculos muda rarissimo) e a promessa
+// SEMPRE resolve. Devolve false quando serviu do cache, pra quem chama poder avisar.
+// ============================================================================
+function _comTimeout(promessa, ms, rotulo){
+  return Promise.race([
+    promessa,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + rotulo)), ms))
+  ]);
+}
 async function loadVeiculosDisponiveis(){
-  await ensureFb();
-  const snap = await firebase.database().ref('vammo/veiculos').once('value');
-  _turnoVeiculos = snap.val() || {};
-  const baseSnap = await firebase.database().ref('vammo/bases').once('value');
-  bases = baseSnap.val() || {};
-  return _turnoVeiculos;
+  let online = true;
+  try {
+    await _comTimeout(ensureFb(), 12000, 'sdk');
+    const snap = await _comTimeout(firebase.database().ref('vammo/veiculos').once('value'), 12000, 'veiculos');
+    const v = snap.val() || {};
+    if(Object.keys(v).length){
+      _turnoVeiculos = v;
+      try { localStorage.setItem('vammo_veiculos_cache', JSON.stringify(v)); } catch(_){}
+    }
+    try {
+      const baseSnap = await _comTimeout(firebase.database().ref('vammo/bases').once('value'), 12000, 'bases');
+      const b = baseSnap.val() || {};
+      if(Object.keys(b).length){
+        bases = b;
+        try { localStorage.setItem('vammo_bases_cache', JSON.stringify(b)); } catch(_){}
+      }
+    } catch(e){ console.warn('[colab] bases:', e && e.message); online = false; }
+  } catch(e){
+    console.warn('[colab] loadVeiculosDisponiveis caiu pro cache:', e && e.message);
+    online = false;
+    if(!Object.keys(_turnoVeiculos || {}).length){
+      try { _turnoVeiculos = JSON.parse(localStorage.getItem('vammo_veiculos_cache') || '{}') || {}; } catch(_){ _turnoVeiculos = {}; }
+    }
+  }
+  return online;
 }
 async function loadTurnoExistente(colabId){
   await ensureFb();
@@ -5027,12 +5065,23 @@ async function startCheckOut(){
     abrirCheckoutLongeBase(chk.base, chk.dist);
     return;
   }
-  await iniciarWizardCheckout();
+  // Rede final: se QUALQUER coisa estourar daqui pra frente, o motorista ve o motivo em vez de um
+  // botao inerte. Era exatamente esse silencio o sintoma relatado em 04/09.
+  try {
+    await iniciarWizardCheckout();
+  } catch(e){
+    console.error('[colab] checkout falhou:', e);
+    alert('⚠ Não consegui abrir o check-out.\n\n' + ((e && e.message) || 'erro desconhecido') +
+          '\n\nCheque o sinal e tente de novo. Se persistir, avise a torre.');
+  }
 }
 
 // Abre o wizard de check-out (chamado quando passou as travas OU quando o colab confirma
 // manualmente que já está na base — botão "Já estou na base" do modal de bloqueio).
 async function iniciarWizardCheckout(){
+  // Feedback imediato: sem isto, qualquer lentidao vira "apertei e nao aconteceu nada" e o
+  // motorista fica batendo no botao.
+  try { showToast('⏳ Abrindo check-out…'); } catch(_){}
   wizMode = 'out';
   wizStep = 0;
   wizData = {
@@ -5046,7 +5095,12 @@ async function iniciarWizardCheckout(){
     kmConfianca: null, kmEhPainel: null, kmLegivel: null, kmObs: '', kmManualMotivo: '',
     assinaturaData: null
   };
-  await loadVeiculosDisponiveis();
+  const online = await loadVeiculosDisponiveis();
+  if(!online){
+    // O wizard ABRE mesmo assim (com o cadastro do cache): travar o motorista fora do check-out por
+    // causa de sinal e pior que deixar ele seguir. Mas ele PRECISA saber que esta sem servidor.
+    try { showToast('⚠ Sem conexão com o servidor — usando o último cadastro salvo. Cheque o sinal antes de finalizar.', true); } catch(_){}
+  }
   wizSteps = [renderStepKit, renderStepVeiculoOut, renderStepResumo];
   setupValidators();
   document.getElementById('wiz-ic').textContent = '🏁';

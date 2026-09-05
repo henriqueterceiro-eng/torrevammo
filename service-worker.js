@@ -1,6 +1,6 @@
 // Service Worker do Vammo Colaborador
 // Faz cache dos assets pra abrir offline + sobreviver a quedas de rede
-const CACHE_VERSION = 'vammo-colab-v90';   // v90: precacheia o SDK do Firebase (sem ele: 'nao tem base')
+const CACHE_VERSION = 'vammo-colab-v91';   // v91: checkout com timeout — botao nunca mais fica inerte
 const CORE_ASSETS = [
   '/',
   '/colab',
