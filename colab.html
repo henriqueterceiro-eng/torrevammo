@@ -838,7 +838,7 @@ const TOMTOM_KEY = 'h4vlkkobj8TCTDTayC1D3OIIeXxiS5zv';
 const SYNC_CHANNEL = 'vammo-fase1';
 // Versão do app — bumpa toda vez que sai release nova. Torre compara pra avisar
 // gestor se algum colab está em build antigo.
-const APP_VERSION = 'v93 · 2026-09-04';
+const APP_VERSION = 'v94 · 2026-09-04';
 const GPS_MIN_INTERVAL = 3000;     // ms entre updates (quando se mexe) — estável, não sobrecarrega o GPS
 const GPS_MIN_DELTA_M  = 5;         // metros pra disparar update de movimento
 const GPS_HEARTBEAT_MS = 20000;     // mesmo parado, envia "tá vivo" a cada 20s
@@ -1019,9 +1019,24 @@ setInterval(flushCritical, 5000);
 // Tenta na volta da rede
 window.addEventListener('online', flushCritical);
 
-// Listener direto no nó dos chamados — fonte da verdade
+// ============================================================================
+// ⚠ 04/09/2026 — "os apps de colab dizem que nao tem base para descarregar".
+// Esta funcao registra DOIS listeners: chamados E bases. Ela e chamada UMA VEZ, la no .then() que
+// carrega o SDK do Firebase do gstatic.com dentro do createSync(). Se aquele script nao carrega
+// (motorista no 4G ruim, que e a regra e nao a excecao), o .then() nunca roda, NENHUM dos dois
+// listeners e registrado, e o `bases` fica {} pra sempre — sem nova tentativa e SEM AVISO. O app
+// sobe normal, com os chamados do cache local, e o motorista so descobre na hora de descarregar,
+// lendo "Nenhuma base cadastrada ainda", que e uma mensagem FALSA: as 6 bases estao la no banco.
+// Gatilho provavel: o deploy do SW v89 forcou todo mundo na rua a rebaixar o app de uma vez.
+// Agora: o guard abaixo AGENDA nova tentativa em vez de desistir, e _listenersOk deixa o vigia
+// (ver "VIGIA DE LISTENERS") saber se precisa insistir.
+// ============================================================================
+let _listenersOk = false;
 function setupChamadosListener(){
-  if(typeof firebase === 'undefined' || !firebase.apps.length) return;
+  if(typeof firebase === 'undefined' || !firebase.apps.length){
+    console.warn('[colab] Firebase ainda nao pronto — listeners NAO registrados; vigia vai tentar de novo');
+    return;
+  }
   const ref = firebase.database().ref('vammo/chamados');
   ref.on('value', snap => {
     const data = snap.val() || {};
@@ -1031,8 +1046,10 @@ function setupChamadosListener(){
   // Bases Vammo (fixas no mapa)
   firebase.database().ref('vammo/bases').on('value', snap => {
     bases = snap.val() || {};
+    try { localStorage.setItem('vammo_bases_cache', JSON.stringify(bases)); } catch(_){}   // sobrevive a partida sem rede
     renderBaseMarkers();
   });
+  _listenersOk = true;
   // ESCUTA o próprio turno: quando a torre adiciona/remove moto manualmente,
   // o colab precisa sincronizar pra refletir no slotsbtn + payload dos próximos heartbeats
   if(me){
@@ -1134,7 +1151,18 @@ function setupChamadosListener(){
       setTimeout(() => location.reload(), 800);
     });
   }
-  // Configurações globais (range pra iniciar, etc.) — gestor altera na torre, propaga em real-time
+  // ===== VIGIA DE LISTENERS (04/09/2026) =====
+// Rede de seguranca pro caso acima: enquanto os listeners nao estiverem de pe, tenta de novo a cada
+// 5s, carregando o SDK se preciso. Sem isto, uma unica falha de download do gstatic no momento da
+// abertura deixava o motorista o TURNO INTEIRO sem bases e sem sync de chamados.
+(function vigiaListeners(){
+  setInterval(async () => {
+    if(_listenersOk) return;
+    try { await ensureFb(); setupChamadosListener(); } catch(e){ console.warn('[colab] vigia:', e && e.message); }
+  }, 5000);
+})();
+
+// Configurações globais (range pra iniciar, etc.) — gestor altera na torre, propaga em real-time
   firebase.database().ref('vammo/settings').on('value', snap => {
     const s = snap.val() || {};
     if(s.rangeInicioM && s.rangeInicioM !== RANGE_INICIO_M){
@@ -1150,7 +1178,9 @@ function setupChamadosListener(){
 }
 
 // ============== BASES VAMMO no mapa ==============
-let bases = {};
+// Ultimo `bases` conhecido. O no vammo/bases muda RARISSIMO (6 bases fixas), entao servir do cache
+// numa partida sem rede e melhor que uma tela dizendo que nao existe base — que e mentira.
+let bases = (() => { try { return JSON.parse(localStorage.getItem('vammo_bases_cache') || '{}') || {}; } catch(_){ return {}; } })();
 let baseMarkers = {};
 const VAMMO_V_SVG = '<svg viewBox="0 0 134 147" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M78 140H54L3 7H36L67 96 99 7H131Z"/></svg>';
 
@@ -4121,7 +4151,16 @@ function abrirModalBase(autoFull){
   const list = document.getElementById('baseList');
   const ativas = Object.values(bases).filter(b => b.ativo !== false && b.lat != null);
   if(ativas.length === 0){
-    list.innerHTML = `<div style="text-align:center;color:var(--txt2);padding:20px;font-size:12px">Nenhuma base cadastrada ainda.<br>Fale com a torre.</div>`;
+    // NAO dizer "nao existe base": quase sempre e o app que nao conseguiu carregar (SDK do Firebase
+    // que nao baixou), nao o cadastro que esta vazio. Dizer a verdade e oferecer a acao que resolve.
+    list.innerHTML = `<div style="text-align:center;color:var(--txt2);padding:20px;font-size:12px">
+      ${_listenersOk
+        ? 'Nenhuma base cadastrada ainda.<br>Fale com a torre.'
+        : '<b style="color:#fbbf24">Sem conexão com o servidor</b><br>As bases não carregaram — <b>não</b> quer dizer que não existem.<br>Cheque o sinal e toque em recarregar.'}
+      <div style="margin-top:12px"><button id="baseRecarregar" style="padding:9px 16px;background:var(--acc);color:#001823;border:none;border-radius:9px;font-weight:800;font-size:12px">🔄 Recarregar</button></div>
+    </div>`;
+    const _br = document.getElementById('baseRecarregar');
+    if(_br) _br.onclick = async () => { try { await ensureFb(); setupChamadosListener(); } catch(_){} setTimeout(() => abrirModalBase(autoFull), 900); };
   } else {
     const _pb = posConhecida();
     const comDist = ativas.map(b => ({

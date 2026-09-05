@@ -1,6 +1,6 @@
 // Service Worker do Vammo Colaborador
 // Faz cache dos assets pra abrir offline + sobreviver a quedas de rede
-const CACHE_VERSION = 'vammo-colab-v89';   // v89: reconciliacao de slots (motorista destravado por reload)
+const CACHE_VERSION = 'vammo-colab-v90';   // v90: precacheia o SDK do Firebase (sem ele: 'nao tem base')
 const CORE_ASSETS = [
   '/',
   '/colab',
@@ -15,10 +15,22 @@ const LEAFLET_CDN = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
+// ⚠ 04/09/2026 — o SDK do Firebase e a dependencia MAIS critica do app (sem ele nao ha listener de
+// chamados NEM de bases) e era a unica grande que NAO era precacheada: o Leaflet estava aqui, o
+// Firebase nao. Motorista no 4G ruim que abrisse o app sem conseguir baixar isto ficava o turno
+// inteiro sem bases ("nao tem base para descarregar") e sem sync. Agora entra no precache.
+const FIREBASE_CDN = [
+  'https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js'
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE_VERSION).then(c => c.addAll(CORE_ASSETS.concat(LEAFLET_CDN))).then(() => self.skipWaiting())
+    caches.open(CACHE_VERSION).then(c => Promise.all(
+      // addAll e tudo-ou-nada: um CDN fora do ar abortaria o install INTEIRO e o SW nunca ativaria.
+      // Um a um, com falha tolerada, garante que o que der pra cachear seja cacheado.
+      CORE_ASSETS.concat(LEAFLET_CDN).concat(FIREBASE_CDN).map(u => c.add(u).catch(e => console.warn('[sw] nao cacheou', u, e)))
+    )).then(() => self.skipWaiting())
   );
 });
 
