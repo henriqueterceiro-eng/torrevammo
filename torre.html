@@ -230,6 +230,10 @@ body.selmode .card .mcheck{display:flex}
 .cm-icon .pin .head::after{content:'';position:absolute;top:2.5px;left:3.5px;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.72)}
 .cm-icon .pin .head.hasnum::after{display:none}
 .cm-icon .pin .head .qn{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;font-family:'IBM Plex Mono',monospace;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.6)}
+/* Cifrao de inadimplencia DENTRO da cabeca: herda a cor de status, o anel de selecao e o pulso de SLA. */
+.cm-icon .pin .head .cif{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;font-family:'IBM Plex Mono',monospace;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.65)}
+/* Quando ja ha numero de fila na cabeca, o numero fica e o cifrao vira selo verde no canto. */
+.cm-icon .pin .cifb{position:absolute;top:11px;left:12px;width:14px;height:14px;border-radius:50%;background:#16a34a;border:1.5px solid #fff;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;font-family:'IBM Plex Mono',monospace;line-height:1;box-shadow:0 1px 2px rgba(0,0,0,0.5)}
 .cm-icon.sel .pin .head{box-shadow:0 0 0 3px var(--acc),0 0 0 5px #fff}
 .cm-icon.warn .pin .head::before{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid #f59e0b;opacity:0.75;animation:pulse 1.6s infinite}
 .cm-icon.crit .pin .head::before{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--novo);animation:pulse 0.8s infinite}
@@ -1013,7 +1017,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v95 · 2026-09-04'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v122 · 2026-09-03';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v123 · 2026-09-04';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1719,6 +1723,17 @@ function fmtElapsed(ts){
 function ico(motivo){
   if(!motivo) return '🔧';
   const m = motivo.toLowerCase();
+  // 💲 INADIMPLÊNCIA ANTES DE TUDO (pedido do Terceiro, 04/09/2026): "diferenciar esses chamados
+  // dos demais". Consulta o MESMO classificador que alimenta o chip de filtro, e não uma lista
+  // paralela de motivos — se as duas divergirem, o pino e o filtro passam a discordar.
+  //
+  // A ordem importa e era o defeito real: as regras abaixo são testadas em sequência, e
+  // `m.includes('contrato')` vinha ANTES de `m.includes('inadimpl')`. "Quebra de Contrato" — o
+  // motivo mais comum do grupo, 253 dos 388 chamados — nunca chegava na regra de inadimplência e
+  // saía como 📄. Medido em 04/09 sobre os motivos reais de produção, o grupo estava espalhado em
+  // QUATRO ícones: 📄 253 · 💸 87 · 📦 26 · 🔧 22. Ou seja, só 22% pareciam ser sobre dinheiro, e
+  // 22 chamados saíam com a chave inglesa genérica, iguais a qualquer socorro.
+  if(categoriaDoMotivo(motivo) === 'recolhimento') return '💲';
   if(m.includes('acidente')) return '🚨';
   if(m.includes('contrato')) return '📄';
   if(m.includes('não liga') || m.includes('nao liga')) return '🔌';
@@ -2520,7 +2535,19 @@ function renderChamadoMarkers(){
     const ord = orderMap[c.id];
     const qn = (ord && ord.total >= 2) ? ord.order : null;
     // Pushpin pequeno e limpo: cabeça (cor = status) + agulha. Nº da fila quando em rota c/ várias paradas.
-    const html = `<div class="pin"><span class="needle"></span><span class="head${qn?' hasnum':''}" style="background:${color}">${qn?`<b class="qn">${qn}</b>`:''}</span>${prio?'<span class="agu">🙋</span>':''}</div>`;
+    // 💲 CIFRAO NO PINO (pedido do Terceiro, 04/09/2026): chamado de cobranca tem que ser
+    // reconhecivel no mapa sem clicar. Usa o MESMO classificador do card e do chip de filtro, e nao
+    // uma lista paralela de motivos — se divergirem, pino e filtro passam a discordar.
+    //
+    // O cifrao vai DENTRO da cabeca, e nao no lugar do pino inteiro, de proposito: todo o CSS de
+    // estado mira `.head` — `.sel` (selecionado), `.warn` e `.crit` (anel que PULSA quando estoura
+    // o SLA) e `.aguard` (anel verde de cliente esperando). Trocar a cabeca por um glifo solto
+    // apagaria o pulso do chamado urgente, que e justamente o que nao pode sumir do mapa.
+    //
+    // Quando o chamado ja tem posicao na fila do colab, o NUMERO continua mandando dentro da cabeca
+    // (e informacao de rota) e o cifrao vira selo verde no canto — nada se perde.
+    const _inad = categoriaDoMotivo(c.motivo) === 'recolhimento';
+    const html = `<div class="pin"><span class="needle"></span><span class="head${(qn||_inad)?' hasnum':''}" style="background:${color}">${qn?`<b class="qn">${qn}</b>`:(_inad?'<b class="cif">$</b>':'')}</span>${(_inad&&qn)?'<span class="cifb">$</span>':''}${prio?'<span class="agu">🙋</span>':''}</div>`;
     const icon = L.divIcon({ className: cls, html, iconSize:[22,34], iconAnchor:[11,33] });
     if(chamadoMarkers[c.id]){
       chamadoMarkers[c.id].setIcon(icon);
@@ -8986,12 +9013,13 @@ function init(){
 }
 
 // ====================== NOVIDADES DA VERSÃO (1x por operador) ======================
-const NOV_VER_TORRE = 'v84-aguardando';
+const NOV_VER_TORRE = 'v123-cifrao-inadimplencia';
 const NOV_ITENS_TORRE = [
-  { ic:'🙋', t:'Spot distinto no mapa', d:'Chamado com <b>cliente aguardando no local</b> ganha um pino com <b>anel verde + 🙋</b> — você acha na hora, no meio de todos os outros.' },
-  { ic:'🧭', t:'Sempre prioritário na rota', d:'Cliente aguardando entra <b>na frente</b> na fila e na roteirização do colaborador, sempre — nunca fica atrás de chamado comum.' },
-  { ic:'⏱️', t:'Velocidade de atribuição COBRADA', d:'Enquanto estiver <b>sem motorista</b>, aparece um cronômetro <b>"⏱ p/ atribuir"</b> no card e no mapa; passando do SLA (2 min por padrão, ajustável em ⚙), dispara um <b>alerta de prioridade máxima</b> pra você atribuir na hora.' },
-  { ic:'📊', t:'Fica registrado quem atribui rápido', d:'O tempo que o controlador levou pra atribuir cada cliente aguardando é <b>gravado</b> e aparece no relatório de Chamados (verde = no prazo, vermelho ⚠ = estourou).' }
+  { ic:'💲', t:'Inadimplência agora tem cara própria', d:'Todo chamado de <b>cobrança</b> passa a usar o <b>💲</b> — no card, na fila, no detalhe e <b>no pino do mapa</b>. Bateu o olho, você sabe que aquele atendimento é sobre dinheiro, sem precisar clicar nem ler o motivo.' },
+  { ic:'📍', t:'No mapa, dentro do pino', d:'O cifrão vai <b>dentro da cabeça do pino</b>, então ele continua com a <b>cor do status</b>, o <b>anel de seleção</b> e o <b>pulso de SLA estourado</b> — nada disso se perde. Se o chamado já tem <b>posição na fila</b> do colaborador, o número continua mandando na cabeça e o cifrão vira um <b>selo verde</b> no canto.' },
+  { ic:'🧩', t:'O grupo INTEIRO, não só um motivo', d:'Vale pra <b>Quebra de Contrato</b>, <b>Recolhimento por inadimplência</b>, <b>Devolução a pedido</b>, <b>Remoção de pátio</b> e <b>Congelamento</b> — os cinco entram no mesmo ícone.' },
+  { ic:'🔎', t:'O que estava errado antes', d:'Esses chamados apareciam com <b>quatro ícones diferentes</b> (📄 📦 💸 🔧) porque cada motivo caía numa regra distinta. Só 22% pareciam ser de cobrança, e alguns saíam com a <b>chave inglesa genérica</b>, iguais a um socorro comum — o mais frequente do grupo, "Quebra de Contrato", era um deles.' },
+  { ic:'🔧', t:'Combina com o filtro lateral', d:'O ícone usa a <b>mesma regra</b> do chip <b>💸 Inadimplente</b> da barra de filtros. O que o filtro mostra é exatamente o que aparece com 💲 — pino e filtro nunca discordam.' }
 ];
 // Mensagem de DIA DOS PAIS pro time da torre — SÓ aparece hoje (09/08/2026), 1x por operador.
 // Retorna true se exibiu (aí o init não mostra a novidades da versão em cima).
