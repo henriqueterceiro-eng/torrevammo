@@ -1,5 +1,11 @@
 # Vammo · Fase 1 — Torre + App do Colaborador
 
+> 📋 **Integrando esta plataforma? Leia o [HANDOFF.md](HANDOFF.md) primeiro.**
+> Ele tem a arquitetura atual (6 apps), o fluxo de deploy, as armadilhas do modelo de dados,
+> as pendências conhecidas e — importante — a seção de segurança com dois itens que
+> provavelmente são impeditivos. Este README abaixo é de 27/05/2026 e cobre só torre + colab.
+
+
 App de 2 lados que se comunicam em tempo real:
 
 - **torre.html** — painel do gestor: lista de chamados, mapa Leaflet real, atribuição de chamados aos colaboradores
