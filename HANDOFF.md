@@ -399,6 +399,43 @@ houver comentário longo, ele existe porque alguém pagou caro pela lição.
 
 ---
 
+## 13. Transferência total de propriedade
+
+O objetivo é o autor **sair do caminho por completo**: propriedade, credenciais e operação passam
+ao Tech. Estado de cada item e o que falta:
+
+| Ativo | Como transfere | Estado |
+|---|---|---|
+| Repositório GitHub | *Settings → Danger Zone → Transfer ownership* → org da Vammo. Histórico, ruleset e PRs vão juntos; a URL antiga redireciona | ⬜ ação do autor |
+| Projeto Firebase/GCP `vammo-torre` (banco, auth, GMAPS_KEY) | IAM → adicionar Owner corporativo → novo Owner remove o autor. Nada de migrar dados | ⬜ ação do autor |
+| Cloudflare (hospedagem + Functions + secrets) | Convite como Super Administrator na conta. **Ver armadilha abaixo antes de recriar qualquer coisa** | ⬜ ação do autor |
+| TomTom key | Registrada em conta pessoal — **gerar chave própria** e trocar (está hardcoded em `colab.html`/`torre.html`/`track.html`) | ⬜ Tech |
+| CARTO key | Sem conta, gratuita (carto.com/basemaps/apikey) — gerar outra e trocar **uma linha** em `tiles.js` | ⬜ Tech |
+| Apps Script (`apps-script-*.gs`) | Implantado sob conta Google do autor — reimplantar sob conta corporativa (`update-apps-script.*` no repo) | ⬜ Tech |
+| Billing Google Maps (`018886-9D19E6-CB4BF6`) | Confirmar titularidade; caps configurados: Directions 2.500/dia, Matrix 1.000 elementos/dia, Geocoding 500/dia | ⬜ Tech |
+
+### ⚠️ A armadilha da hospedagem: `torrevammo.pages.dev` não se transfere
+
+O subdomínio `*.pages.dev` é amarrado ao projeto **na conta Cloudflare do autor**. Não existe
+transferência de projeto Pages entre contas. Se o Tech recriar o projeto em outra conta, **a URL
+muda — e toda a frota aponta para a URL antiga**: o PWA instalado não muda de origem, e o APK
+(pasta `native/`) tem a URL embutida.
+
+Sequência correta (projeto do Tech, sem pressa):
+1. Apontar um domínio corporativo (ex.: `torre.vammo.com`) para o projeto Pages **atual**.
+2. Um último deploy migrando os apps para o domínio novo (inclui bump de `CACHE_VERSION` do SW e
+   janela de virada de turno — ver seção 4).
+3. Frota confirmada no domínio novo → aí sim recriar a hospedagem onde quiserem; o domínio vai junto.
+Até o passo 3, a conta antiga continua servindo, com o Tech como admin.
+
+### Depois da transferência
+
+- Remover o bypass "Repository admin – for pull requests only" do ruleset assim que houver 2+
+  pessoas (ele existiu só porque o autor era o único colaborador e não podia aprovar o próprio PR).
+- Rotacionar TomTom e CARTO **depois** de fechar as Security Rules ou privar o repo (seção 10) —
+  antes disso a chave nova volta a ficar exposta no mesmo lugar.
+- O item da seção 10.1 (banco aberto com PII) passa a ser o primeiro trabalho de verdade do Tech.
+
 ## Contato
 
 **Henrique Terceiro** — henrique.terceiro@vammo.com
