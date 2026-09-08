@@ -1017,7 +1017,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v95 · 2026-09-04'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v124 · 2026-09-08';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v125 · 2026-09-08';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1684,11 +1684,13 @@ async function gravarEmLotes(updates, teto){
 // porque `.on('child_added')` sem limite dispara para cada filho existente. O metadado é pequeno;
 // o peso é foto. Aqui a foto sai do vivo e o valor vira FOTO_ARQUIVADA — o relatório continua
 // contando a evidência e o popup busca a imagem sob demanda.
-// Corte de 7 dias: a semana corrente fica inline, que é o que se consulta com frequência.
+// Corte de 1 DIA. Comecei com 7, medi, e 7 estava errado: a semana inline eram 100 MB pra evitar
+// um fetch sob demanda de ~300 KB no popup — que ja acontece de qualquer jeito quando ha marcador.
+// A tabela do relatorio nunca precisa da imagem, so do marcador. So o DIA CORRENTE fica inline.
 // ============================================================================
 async function faxinaFotosCorridas(diasCorte){
   if(typeof firebase === 'undefined' || !firebase.apps?.length) return 0;
-  const corte = Date.now() - (diasCorte || 7) * 24 * 60 * 60 * 1000;
+  const corte = Date.now() - (diasCorte || 1) * 24 * 60 * 60 * 1000;
   const updates = {};
   let n = 0;
   for(const id in corridas){
@@ -1714,7 +1716,7 @@ async function faxinaFotosCorridas(diasCorte){
   }
   if(!n) return 0;
   await gravarEmLotes(updates);
-  try { logTorre('faxina_fotos_corridas', { corridas: n, diasCorte: diasCorte || 7 }); } catch(_){}
+  try { logTorre('faxina_fotos_corridas', { corridas: n, diasCorte: diasCorte || 1 }); } catch(_){}
   return n;
 }
 // Roda 1x por dia (trava via transaction em config/lastChamadoSweep → só uma torre executa).
