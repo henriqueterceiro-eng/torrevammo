@@ -1017,7 +1017,7 @@ const SYNC_CHANNEL = 'vammo-fase1';
 const REFRESH = 5 * 60 * 1000;
 const MOTORISTA_TTL_MS = 180 * 1000;       // 180s sem update = visualmente "offline" (folga maior p/ hiccups de rede/sync e tela bloqueada)
 const LATEST_COLAB_VERSION = 'v95 · 2026-09-04'; // Última versão lançada do colab.html — bumpa junto com o APP_VERSION lá
-const TORRE_VERSION = 'v123 · 2026-09-04';     // Versão da torre — bumpa a cada deploy; mostrada no header
+const TORRE_VERSION = 'v124 · 2026-09-08';     // Versão da torre — bumpa a cada deploy; mostrada no header
 // Espelho do KIT_CONSUMIVEIS do colab — torre usa pra mostrar nomes amigáveis no popup
 // e detectar incompatibilidade colab×chamado (servicoTipo é regex do motivo do chamado)
 const KIT_CONSUMIVEIS_TORRE = [
@@ -1655,9 +1655,67 @@ async function faxinaChamados(manual){
     updates['chamados/' + c.id] = null;
     // chamados_fechados (livro-razão) é mantido de propósito: rede de segurança se o id reaparecer.
   }
-  await firebase.database().ref('vammo').update(updates);
+  // EM LOTES. Um update() unico com centenas de chamados carrega dezenas de MB (a foto vai junto)
+  // e simplesmente falha — foi o que travou a faxina por dias. Fatiado, cada write é pequeno.
+  await gravarEmLotes(updates);
   try { logTorre('faxina_chamados', { qtd: alvos.length, manual: !!manual }); } catch(_){}
   return alvos.length;
+}
+
+// Escreve um mapa multi-path do Firebase em pedaços de no máximo ~2 MB por write.
+async function gravarEmLotes(updates, teto){
+  const TETO = teto || 2 * 1024 * 1024;
+  const db = firebase.database();
+  let lote = {}, tam = 0, n = 0;
+  for(const k in updates){
+    const peso = k.length + (updates[k] == null ? 4 : JSON.stringify(updates[k]).length);
+    if(tam + peso > TETO && Object.keys(lote).length){
+      await db.ref('vammo').update(lote); n++; lote = {}; tam = 0;
+    }
+    lote[k] = updates[k]; tam += peso;
+  }
+  if(Object.keys(lote).length){ await db.ref('vammo').update(lote); n++; }
+  return n;
+}
+
+// ============================================================================
+// FAXINA DE FOTOS DAS CORRIDAS — tira o base64 do nó vivo e deixa no _arquivo.
+// O nó `corridas` é o maior da base (295,6 MB em 08/09/2026) e a torre o baixa INTEIRO no load,
+// porque `.on('child_added')` sem limite dispara para cada filho existente. O metadado é pequeno;
+// o peso é foto. Aqui a foto sai do vivo e o valor vira FOTO_ARQUIVADA — o relatório continua
+// contando a evidência e o popup busca a imagem sob demanda.
+// Corte de 7 dias: a semana corrente fica inline, que é o que se consulta com frequência.
+// ============================================================================
+async function faxinaFotosCorridas(diasCorte){
+  if(typeof firebase === 'undefined' || !firebase.apps?.length) return 0;
+  const corte = Date.now() - (diasCorte || 7) * 24 * 60 * 60 * 1000;
+  const updates = {};
+  let n = 0;
+  for(const id in corridas){
+    const c = corridas[id];
+    if(!c) continue;
+    const t = c.completedTs || c.assignedTs || 0;
+    if(!t || t > corte) continue;
+    const rs = c.rotinaSteps || {};
+    const fotos = Object.keys(rs).filter(k => ehFotoViva(rs[k]));
+    const temAss = ehFotoViva(c.assinatura);
+    if(!fotos.length && !temAss) continue;
+    for(const k of fotos){
+      updates['corridas_arquivo/' + id + '/rotinaSteps/' + k] = rs[k];   // salva no arquivo
+      updates['corridas/' + id + '/rotinaSteps/' + k] = FOTO_ARQUIVADA;  // e marca no vivo
+      rs[k] = FOTO_ARQUIVADA;                                            // reflete na memória local
+    }
+    if(temAss){
+      updates['corridas_arquivo/' + id + '/assinatura'] = c.assinatura;
+      updates['corridas/' + id + '/assinatura'] = FOTO_ARQUIVADA;
+      c.assinatura = FOTO_ARQUIVADA;
+    }
+    n++;
+  }
+  if(!n) return 0;
+  await gravarEmLotes(updates);
+  try { logTorre('faxina_fotos_corridas', { corridas: n, diasCorte: diasCorte || 7 }); } catch(_){}
+  return n;
 }
 // Roda 1x por dia (trava via transaction em config/lastChamadoSweep → só uma torre executa).
 async function faxinaDiaria(){
@@ -1666,8 +1724,19 @@ async function faxinaDiaria(){
     const hoje = _hojeStr();
     const res = await firebase.database().ref('vammo/config/lastChamadoSweep').transaction(cur => (cur === hoje) ? undefined : hoje);
     if(!res || !res.committed) return;   // outra torre já fez a faxina hoje (ou já era hoje)
-    const n = await faxinaChamados(false);
-    if(n) console.log('[torre] faxina diária: arquivados', n, 'chamado(s) finalizado(s)/zumbi(s)');
+    // ⚠ A trava acima RESERVA o dia ANTES do trabalho. Se o trabalho falhar, o dia fica queimado e
+    // ela só tenta amanhã — com MAIS volume, o que a faz falhar de novo. Foi essa espiral que
+    // deixou vammo/chamados chegar a 80,8 MB (08/09/2026). Agora o catch DEVOLVE o dia.
+    try {
+      const n = await faxinaChamados(false);
+      if(n) console.log('[torre] faxina diária: arquivados', n, 'chamado(s) finalizado(s)/zumbi(s)');
+      const m = await faxinaFotosCorridas();
+      if(m) console.log('[torre] faxina diária: fotos arquivadas de', m, 'corrida(s)');
+    } catch(err){
+      console.warn('[torre] faxina falhou — devolvendo o dia pra tentar de novo:', err);
+      try { await firebase.database().ref('vammo/config/lastChamadoSweep').set(null); } catch(_){}
+      throw err;
+    }
   } catch(e){ console.warn('[torre] faxina diária falhou:', e); }
 }
 setTimeout(faxinaDiaria, 25000);
@@ -6281,7 +6350,9 @@ function resumoDesfecho(src){
   const pago = !!((ride && ride.pagamentoNoLocal) || (ch && ch.pagamentoNoLocal) || desf === 'pago_no_local');
   const ausente = !!((ride && ride.clienteAusente) || (ch && ch.clienteAusente) || rs.cliente_local === false);
   const assinado = !!((ride && ride.assinatura) || (ch && ch.assinatura));
-  const temFoto = (k) => typeof rs[k] === 'string' && rs[k].startsWith('data:');
+  // Conta o marcador tambem: a foto EXISTE, so nao esta inline. Sem isto, arquivar apagaria a
+  // coluna de evidencias do relatorio inteiro.
+  const temFoto = (k) => ehFotoRef(rs[k]);
   let principal;
   if(desf === 'nao_encontrada' || rs.moto_encontrada === false) principal = { icon:'🔍', txt:'Moto não encontrada', cor:'#dc2626' };
   else if(desf === 'recolhido' || rs.moto_recolhida === true) principal = { icon:'📦', txt: descargaBase ? ('Recolhida → descarregada na ' + descargaBase) : 'Moto recolhida', cor:'#00B4E5' };
@@ -6350,11 +6421,32 @@ function execInfoDaCorrida(r){
   if(dLat != null && dLng != null){ diff = haversine({lat:dLat,lng:dLng}, {lat:eLat,lng:eLng}) > 150; }
   return { diff, lat: eLat, lng: eLng, url: `https://www.google.com/maps?q=${eLat},${eLng}` };
 }
+// ============================================================================
+// FOTO ARQUIVADA (08/09/2026) — as fotos saem do no vivo e ficam so no _arquivo.
+//
+// PORQUE: vammo/corridas estava com 295,6 MB e vammo/chamados com 80,8 MB, quase tudo base64 de
+// foto dentro de rotinaSteps. A torre baixa os DOIS inteiros no load (`chamados` com .on('value')
+// e `corridas` com .on('child_added') sem limite, que dispara pra cada filho existente) — ~376 MB
+// por carregamento. Era a causa da lentidao pra atribuir chamado.
+//
+// O desenho certo ja existia no openFotosCorrida ("as fotos foram movidas pros nos de ARQUIVO pra
+// aliviar o load — busca sob demanda"), mas nada movia as fotos. Agora move de verdade, e o valor
+// no no vivo vira este marcador: o METADADO fica (o relatorio le dele), a FOTO vai pro arquivo.
+//
+// ⚠ Nao apagar a chave, so trocar o VALOR. Os booleanos do desfecho (moto_recolhida, cliente_local,
+// resolveu...) moram no MESMO rotinaSteps e continuam vivos — o relatorio depende deles.
+const FOTO_ARQUIVADA = 'arquivada';
+const ehFotoViva = (v) => typeof v === 'string' && v.startsWith('data:');
+const ehFotoRef  = (v) => v === FOTO_ARQUIVADA || ehFotoViva(v);
+
 const FOTO_LABELS = { foto_reparada:'🔧 Moto reparada', foto_placa:'🔢 Placa', foto_embarcada:'📦 Moto embarcada', foto_chave:'🔑 Chave', foto_local_vazio:'📍 Local (sem moto)', foto_danos:'💥 Danos', foto_comprovante:'💵 Comprovante de pagamento' };
 async function openFotosCorrida(r){
   let rs = Object.assign({}, r.rotinaSteps || {});
   const ch0 = chamados.find(x => x.id === r.chamadoId) || {};
-  let ass = r.assinatura || ch0.assinatura || null;
+  // So aceita imagem DE VERDADE aqui. Se o vivo tem o marcador, `ass` fica null pra que a busca no
+  // arquivo aconteca — senao o marcador (que e truthy) passaria por assinatura e o popup tentaria
+  // renderizar a string 'arquivada' como imagem.
+  let ass = (ehFotoViva(r.assinatura) ? r.assinatura : null) || (ehFotoViva(ch0.assinatura) ? ch0.assinatura : null);
   let assNome = r.assinaturaNome || ch0.assinaturaNome || '';
   // As fotos foram movidas pros nós de ARQUIVO pra aliviar o load — busca sob demanda se não tiver inline.
   const temFoto0 = Object.keys(rs).some(k => typeof rs[k] === 'string' && rs[k].startsWith('data:'));
@@ -6365,7 +6457,18 @@ async function openFotosCorrida(r){
       if(r.id) tasks.push(firebase.database().ref('vammo/corridas_arquivo/' + r.id).once('value').then(s => s.val()).catch(() => null));
       if(r.chamadoId) tasks.push(firebase.database().ref('vammo/chamados_arquivo/' + r.chamadoId).once('value').then(s => s.val()).catch(() => null));
       const arqs = await Promise.all(tasks);
-      for(const a of arqs){ if(a){ if(a.rotinaSteps) rs = Object.assign({}, a.rotinaSteps, rs); if(a.assinatura && !ass) ass = a.assinatura; if(a.assinaturaNome && !assNome) assNome = a.assinaturaNome; } }
+      for(const a of arqs){
+        if(!a) continue;
+        if(a.rotinaSteps){
+          // O VIVO vence no geral (booleanos e texto sao a versao corrente), mas onde o vivo tem so
+          // o MARCADOR quem vale e o arquivo — e la que a imagem esta.
+          const juntos = Object.assign({}, a.rotinaSteps, rs);
+          for(const k in juntos){ if(juntos[k] === FOTO_ARQUIVADA && ehFotoViva(a.rotinaSteps[k])) juntos[k] = a.rotinaSteps[k]; }
+          rs = juntos;
+        }
+        if(ehFotoViva(a.assinatura) && !ass) ass = a.assinatura;
+        if(a.assinaturaNome && !assNome) assNome = a.assinaturaNome;
+      }
     } catch(_){}
   }
   const fotos = Object.keys(rs).filter(k => typeof rs[k] === 'string' && rs[k].startsWith('data:')).map(k => ({ label: FOTO_LABELS[k] || k, src: rs[k] }));
