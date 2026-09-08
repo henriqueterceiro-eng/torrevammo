@@ -1,7 +1,7 @@
 # Handoff técnico — Plataforma de Guinchos (Torre Vammo)
 
 > Documento para o time de Tech que vai integrar esta plataforma ao sistema oficial da Vammo.
-> Autor: Henrique Terceiro (henrique.terceiro@vammo.com) · Última atualização: 07/09/2026
+> Autor: Henrique Terceiro (henrique.terceiro@vammo.com) · Última atualização: 08/09/2026
 >
 > **Leia a seção [⚠️ Segurança](#️-segurança--leia-antes-de-integrar) antes de qualquer coisa.**
 > Existem dois itens que provavelmente são impeditivos para integração, e eles estão mapeados aqui
@@ -23,7 +23,7 @@ Cobre três operações:
 | **Rastreio** | Cliente final | Link público de acompanhamento |
 
 Volume de referência: **~55 chamados/dia**, 9–14 colaboradores em campo, ~410 km rodados/dia.
-1.500 chamados no histórico, 363 ativos no momento desta escrita.
+~1.900 chamados no histórico; o nó vivo carrega só o dia corrente (~50).
 
 ---
 
@@ -93,8 +93,12 @@ Todas têm **guarda de mesma-origem** (`referer.host === host`, senão 403) — 
 ## 4. Deploy
 
 ```
-git push origin main   →   Cloudflare Pages faz build e publica
+branch → pull request → aprovação → merge na main → Cloudflare Pages publica
 ```
+
+Desde 08/09/2026 a `main` é protegida por ruleset (`protege-main`): **push direto é recusado**
+(`GH013`), todo merge exige PR com 1 aprovação, force push e deleção bloqueados. Secret scanning +
+push protection ligados — push contendo chave detectável é barrado na porta.
 
 ### ⚠️ Não existe staging. `main` é produção.
 
@@ -123,15 +127,17 @@ Nós principais, todos sob `vammo/`:
 
 | Nó | O que guarda | Cuidado |
 |---|---|---|
-| `chamados` | Chamados ativos (novo, em_rota, concluído recente) | Fonte da verdade do despacho |
-| `chamados_hist` | Arquivo (faxina diária move para cá) | **~159 MB** — tem base64 inline; `json.loads` estoura |
+| `chamados` | Chamados ativos (novo, em_rota, concluído de hoje) | Fonte da verdade do despacho; a faxina diária o mantém em ~3 MB |
+| `chamados_hist` | Arquivo (faxina diária move para cá) | **~240 MB** — tem base64 inline; `json.loads` estoura, parse por streaming |
+| `chamados_arquivo` | Fotos/assinatura de chamado, sob demanda | Só o popup de evidências lê |
+| `corridas_arquivo` | Fotos/assinatura de corrida, sob demanda | Idem — é o destino da faxina de fotos |
 | `colaboradores` | Cadastro (nome, e-mail, papel) | — |
 | `motoristas` | Telemetria ao vivo (GPS, velocidade, modo) | Escrito a cada ping |
 | `turnos` | Turno em andamento, **um por colaborador** | Ver armadilha abaixo |
 | `veiculos` | Frota (carro, carreta, slots, `atribuidoA`) | Ver armadilha abaixo |
 | `bases` | 6 bases fixas (lat/lng) | Muda raríssimo |
 | `queues` | Ordem da fila de cada colaborador | A torre manda; o app respeita |
-| `corridas` | Log de corrida (km, duração, trajeto) | Base do relatório |
+| `corridas` | Log de corrida (km, duração, trajeto) | **Base do relatório** (`calcRep`). Foto de +1 dia vira marcador `arquivada`; a imagem mora no `corridas_arquivo` |
 | `logs_torre` | Auditoria de override/intervenção | Toda ação manual grava aqui |
 | `config` | Flags ajustáveis sem deploy | Ver seção 8 |
 
@@ -157,6 +163,20 @@ primeiro — ver o padrão em `confirmarDescarga` (`colab.html`).
 veículo marcado; e como o app só deixa o **próprio dono** retomar (`atribuidoA === me.id`), o carro
 fica invisível para todos os outros. Aconteceu duas vezes em 24h. A torre tem botão de liberar
 veículo (`torre.html`, ~linha 4943).
+
+**Foto no nó vivo é marcador, não imagem.** Desde a torre v124/v125 (08/09/2026), o base64 das
+fotos sai do nó vivo com mais de 1 dia e vai para `corridas_arquivo`/`chamados_arquivo`; no vivo o
+valor vira a string `arquivada` (`FOTO_ARQUIVADA`). A coluna Evidências conta o marcador, e o popup
+busca a imagem sob demanda. **Não apagar a chave nem "limpar" valores `arquivada`** — e os
+booleanos do desfecho (`moto_recolhida`, `cliente_local`, `resolveu`) moram no MESMO `rotinaSteps`
+e ficam vivos para sempre: o relatório depende deles.
+
+Contexto de por que isso existe: em 08/09 os nós vivos somavam **376 MB** (`chamados` 80,8 +
+`corridas` 295,6, 99% em base64) e a torre baixava os dois inteiros por load — 2.730× mais dado do
+que usa. Após a migração: **42,6 MB**. A faxina diária (`faxinaDiaria` → `faxinaChamados` +
+`faxinaFotosCorridas`) mantém assim; ela grava em lotes de 2 MB (`gravarEmLotes`) e devolve o dia
+(`lastChamadoSweep = null`) quando falha — antes ela reservava o dia ANTES de trabalhar, a escrita
+única de 78 MB falhava e o nó crescia numa espiral até travar a torre.
 
 **O check-in não é atômico.** `finalizarCheckIn` faz `update()` incondicional no `atribuidoA`, e a
 lista de veículos vem de um `once('value')` de quando o wizard abriu. Como o wizard leva minutos
@@ -344,12 +364,19 @@ Itens reais, com causa mapeada, não desejos:
 
 **Média**
 
-7. `chamados_hist` com ~159 MB de base64 inline. Fotos deveriam sair do nó de chamado.
+7. Fotos ainda são base64 no RTDB — só mudaram de nó (`_arquivo`/`_hist`, ~450 MB somados). O nó
+   vivo ficou leve, mas o certo estrutural é storage de verdade (Cloudflare R2/Firebase Storage)
+   com URL no registro. Enquanto for RTDB, o banco cresce ~180 MB/mês só de foto.
 8. `moto_lookup` usa `FINAL` em 3 tabelas juntadas no ClickHouse — lento, e `FINAL` em JOIN não
    deduplica de verdade. O padrão correto é `argMax(_peerdb_version) GROUP BY id`.
 9. Sem aviso na torre quando dois turnos ativos compartilham placa. Hoje se descobre por telefone.
 10. Filtro de status (pills) da torre não chega no mapa — a lista filtra, o mapa segue mostrando
     tudo. Dessincronia anterior ao filtro por motivo.
+11. Os listeners continuam sem limite: a torre baixa TODAS as ~1.900 corridas (metadado) via
+    `child_added`, e `cx.html`/`fleet.html` pior — `.on('value')` no nó inteiro. Com as fotos fora
+    são ~40 MB, tolerável; mas cresce sem teto. O fix é `limitToLast` + arquivar corrida antiga,
+    e exige mexer no `calcRep` (que lê `Object.values(corridas)` do vivo) na ordem certa: código
+    primeiro, migração depois.
 
 ---
 
