@@ -428,6 +428,15 @@ Sequência correta (projeto do Tech, sem pressa):
 3. Frota confirmada no domínio novo → aí sim recriar a hospedagem onde quiserem; o domínio vai junto.
 Até o passo 3, a conta antiga continua servindo, com o Tech como admin.
 
+### ⚠️ Ao aceitar a transferência do GitHub: o auto-deploy PARA (esperado, não é bug)
+
+O Cloudflare Pages está conectado ao repositório pelo GitHub App instalado na conta do autor.
+Quando a transferência é aceita, essa conexão se perde: **o site continua no ar** (o último deploy
+segue servindo), mas **merge novo deixa de publicar** até reconectarem — Cloudflare → projeto
+`torrevammo` → Settings → Builds & deployments → reconectar ao repo no novo dono. Tratem como um
+freio de segurança do período de transição: nada publica na frota por acidente até vocês estarem
+com a mão no volante.
+
 ### Depois da transferência
 
 - Remover o bypass "Repository admin – for pull requests only" do ruleset assim que houver 2+
